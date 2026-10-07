@@ -39,12 +39,14 @@ export function SessionScreen({
     }
   }, [state.phase, state.summary, onFinish]);
 
-  // A right answer moves on by itself; a wrong one waits, so there is time to
-  // take in what actually sounded.
+  // Feedback waits for a tap by default: it names the chord, spells it out and
+  // lists the notes that sounded, and that is the moment the learning happens.
+  // Only when the user has explicitly asked for speed does a correct answer
+  // move on by itself, and even then with long enough to read the answer.
   useEffect(() => {
     if (!settings.autoAdvance) return;
     if (state.phase !== 'feedback' || !state.outcome?.correct) return;
-    const timer = window.setTimeout(() => engine.next(), 1150);
+    const timer = window.setTimeout(() => engine.next(), 2000);
     return () => window.clearTimeout(timer);
   }, [state.phase, state.outcome, settings.autoAdvance, engine]);
 

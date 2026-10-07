@@ -59,7 +59,7 @@ export interface Profile {
   streak: { count: number; lastDay: string };
 }
 
-export const PROFILE_VERSION = 1;
+export const PROFILE_VERSION = 2;
 export const MAX_ATTEMPTS = 4000;
 export const MAX_SESSIONS = 400;
 

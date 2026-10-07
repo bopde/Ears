@@ -72,8 +72,11 @@ builds the app and deploys it on every push to `main`.
    b. Each question plays, you answer on a touch grid, and feedback appears
    immediately: right or wrong, what the answer was, and what actually sounded.
 
-   c. A correct answer moves on by itself after about a second. A wrong answer
-   waits, so there is time to replay it and hear what you missed.
+   c. Feedback stays up until you tap **Next**, whether you were right or
+   wrong. It names the chord, spells it out and lists the notes that sounded,
+   and the answer grid keeps its review colours, so there is time to replay it
+   and hear what you missed. Settings → Display → *Advance automatically* makes
+   correct answers move on by themselves instead.
 
    d. **Choose what to practise** opens the full settings: exercise types,
    duration, difficulty, keys, hints, and the chord, interval, mode and

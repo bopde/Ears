@@ -48,7 +48,13 @@ export interface PracticeSettings {
   accidental: Accidental;
 
   // Presentation.
-  /** Move on automatically after a correct answer. */
+  /**
+   * Move on automatically after a correct answer instead of waiting for a tap.
+   *
+   * Off by default: the feedback is the moment the learning happens, and a
+   * timer short enough to feel quick is too short to read a chord symbol, its
+   * name and the notes that sounded.
+   */
   autoAdvance: boolean;
   theme: 'auto' | 'dark' | 'light';
 }
@@ -77,7 +83,7 @@ export function defaultSettings(): PracticeSettings {
     volume: 0.85,
     reverb: 0.26,
     accidental: 'both',
-    autoAdvance: true,
+    autoAdvance: false,
     theme: 'auto',
   };
 }

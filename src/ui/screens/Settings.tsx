@@ -162,8 +162,8 @@ export function Settings({ onBack }: { onBack: () => void }) {
           />
         </div>
         <SwitchRow
-          label="Move on automatically"
-          hint="After a correct answer. Wrong answers always wait for you."
+          label="Advance automatically"
+          hint="Jump to the next question a couple of seconds after a correct answer. Off by default, so the answer stays up until you tap Next."
           on={settings.autoAdvance}
           onChange={(v) => updateSettings({ autoAdvance: v })}
         />

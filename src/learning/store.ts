@@ -1,7 +1,7 @@
 import {
   MAX_ATTEMPTS, MAX_SESSIONS, PROFILE_VERSION, emptyProfile, type Profile,
 } from './model';
-import { normaliseSettings } from '../session/settings';
+import { normaliseSettings, type PracticeSettings } from '../session/settings';
 
 const STORAGE_KEY = 'ears.profile';
 
@@ -63,6 +63,15 @@ function migrate(raw: Partial<Profile>): Profile {
     settings: raw.settings ?? {},
     streak: raw.streak ?? base.streak,
   };
+  // Version 1 moved on by itself a second after a correct answer, which was
+  // not long enough to take the answer in. Settings are stored in full once
+  // anything is changed, so flipping the default alone would not reach an
+  // existing profile — the stale value has to be cleared for the new default
+  // to apply. Anyone who wants it back can switch it on again.
+  if ((raw.version ?? 1) < 2) {
+    delete (profile.settings as Partial<PracticeSettings>).autoAdvance;
+  }
+
   // Drop malformed skill records rather than letting them poison selection.
   for (const [id, skill] of Object.entries(profile.skills)) {
     if (!skill || typeof skill.strength !== 'number' || Number.isNaN(skill.strength)) {

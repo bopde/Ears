@@ -5,6 +5,7 @@ import {
 } from './model';
 import { difficultyFor, eligibleConcepts, overallLevel, prioritiseConcepts } from './selector';
 import { overview, weakest } from './stats';
+import { importProfile } from './store';
 import { defaultSettings } from '../session/settings';
 import { chordConceptId } from '../music/chords';
 import { makeRng } from '../lib/rng';
@@ -241,5 +242,45 @@ describe('stats', () => {
     expect(stats.accuracy).toBe(0);
     expect(stats.attempts).toBe(0);
     expect(Number.isFinite(stats.hintRate)).toBe(true);
+  });
+});
+
+describe('profile migration', () => {
+  /** A profile as version 1 wrote it: settings stored in full. */
+  const v1 = (overrides: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      version: 1,
+      createdAt: 1,
+      skills: {},
+      sessions: [],
+      attempts: [],
+      streak: { count: 2, lastDay: '2026-01-01' },
+      settings: { durationMinutes: 20, autoAdvance: true, ...overrides },
+    });
+
+  it('clears the old auto-advance default so feedback waits for a tap', () => {
+    const migrated = importProfile(v1());
+    expect(migrated).not.toBeNull();
+    expect(migrated!.settings.autoAdvance, 'stale value dropped').toBe(false);
+  });
+
+  it('keeps everything else the profile was carrying', () => {
+    const migrated = importProfile(v1())!;
+    expect(migrated.settings.durationMinutes, 'unrelated settings survive').toBe(20);
+    expect(migrated.streak.count).toBe(2);
+    expect(migrated.version).toBe(2);
+  });
+
+  it('leaves a current profile alone, including a deliberate opt-in', () => {
+    const current = JSON.parse(v1()) as Record<string, unknown>;
+    current.version = 2;
+    const migrated = importProfile(JSON.stringify(current))!;
+    expect(migrated.settings.autoAdvance, 'a chosen setting is not overridden').toBe(true);
+  });
+
+  it('survives a profile with no settings at all', () => {
+    const migrated = importProfile(JSON.stringify({ version: 1, skills: {} }))!;
+    expect(migrated.settings.autoAdvance).toBe(false);
+    expect(migrated.skills).toEqual({});
   });
 });

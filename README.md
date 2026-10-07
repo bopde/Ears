@@ -35,14 +35,36 @@ No account, no server, no network calls. Practice history lives in the browser.
 
       ii. `npm run build` type-checks the whole project as part of the build.
 
-   e. Deploy.
+   e. On iOS, Share → Add to Home Screen installs it as a standalone app.
 
-      i. `dist/` is a static bundle with relative asset paths. Any static host
-      will serve it.
+## 2. Deploying
 
-      ii. On iOS, Share → Add to Home Screen installs it as a standalone app.
+The repository publishes itself to GitHub Pages. `.github/workflows/deploy.yml`
+builds the app and deploys it on every push to `main`.
 
-## 2. What a session looks like
+   a. One-time setup, in the repository on GitHub.
+
+      i. Settings → Pages → Build and deployment → Source → **GitHub Actions**.
+
+      ii. That is the whole setup. Do not pick "Deploy from a branch": Pages
+      would then serve the repository root, where `index.html` points at
+      `/src/main.tsx` — a file that only exists before the build — and the page
+      comes up blank.
+
+   b. Publishing.
+
+      i. Push to `main`. The Actions tab shows the run; it takes about a minute.
+
+      ii. The site appears at `https://<user>.github.io/<repo>/`.
+
+      iii. Actions → Deploy to GitHub Pages → Run workflow redeploys by hand
+      without pushing anything.
+
+   c. Any other static host works too. `npm run build` produces `dist/`, which
+   uses relative asset paths and hash-based routing, so it needs no server
+   configuration and can sit in a subdirectory.
+
+## 3. What a session looks like
 
    a. Pick a length on the home screen and tap **Today's practice**. That is the
    whole setup for a daily session.
@@ -60,7 +82,7 @@ No account, no server, no network calls. Practice history lives in the browser.
    e. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
    hint and `Enter` moves on.
 
-## 3. The exercises
+## 4. The exercises
 
    a. **Chord quality** — one chord sounds; name the quality.
 
@@ -82,7 +104,7 @@ No account, no server, no network calls. Practice history lives in the browser.
 
    g. **Chords in context** — a progression plays; name one chord from inside it.
 
-## 4. How difficulty works
+## 5. How difficulty works
 
 Difficulty is not playback speed. Each level changes what the ear actually has
 to do:
@@ -108,7 +130,7 @@ to do:
    working at level 5 on major 7ths and level 2 on altered dominants in the same
    session.
 
-## 5. The adaptive model
+## 6. The adaptive model
 
 Each concept — a chord quality, an interval, a mode, a progression, a key —
 carries one record in `src/learning/model.ts`:
@@ -146,7 +168,7 @@ The exercise type is then chosen by how much of that wish list it can actually
 serve — if the weak material is all altered dominants, the session leans toward
 chord questions without being told to.
 
-## 6. Architecture
+## 7. Architecture
 
    a. `src/music/` — pure theory. Note spelling, intervals, chord qualities,
    scales, progressions, voicing and phrase generation. No audio, no UI, no
@@ -175,7 +197,7 @@ chord questions without being told to.
    g. `src/ui/` — React screens and components, plus one stylesheet holding the
    design tokens.
 
-## 7. Extending it
+## 8. Extending it
 
 Everything the brief lists as future work attaches at an existing seam.
 
@@ -203,7 +225,7 @@ Everything the brief lists as future work attaches at an existing seam.
    standards can be matched to concepts and surfaced from feedback or the
    progress screen without the practice engine knowing it exists.
 
-## 8. Audio
+## 9. Audio
 
    a. The instruments are synthesised, so the app ships with no samples and
    works offline. The default voice is a two-operator FM electric piano: a 1:1
@@ -227,7 +249,7 @@ Everything the brief lists as future work attaches at an existing seam.
    playing, or the hardware mute switch silences Web Audio; both are handled in
    `src/audio/engine.ts`.
 
-## 9. Your data
+## 10. Your data
 
    a. Practice history is written to `localStorage` on this device and nowhere
    else.

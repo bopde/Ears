@@ -583,6 +583,54 @@ p { margin: 0; }
   border-radius: 2px 2px 0 0;
 }
 
+/* ── Daily strip ─────────────────────────────────────────────────────────── */
+
+.dailystrip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.dailystrip__cell {
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--bg-sunken);
+  padding: 0.4rem 0.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.dailystrip__cell--done {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.dailystrip__cell--today {
+  border-color: var(--accent);
+}
+
+.dailystrip__score {
+  font-size: 0.95rem;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--fg-faint);
+}
+
+.dailystrip__cell--done .dailystrip__score {
+  color: var(--accent);
+}
+
+.dailystrip__day {
+  font-size: 0.62rem;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
 /* ── Forms ───────────────────────────────────────────────────────────────── */
 
 .segmented {

@@ -78,11 +78,27 @@ builds the app and deploys it on every push to `main`.
    and hear what you missed. Settings → Display → *Advance automatically* makes
    correct answers move on by themselves instead.
 
-   d. **Choose what to practise** opens the full settings: exercise types,
+   d. **The Daily** is ten questions with no clock, and it is the same ten for
+   everyone who plays it that day.
+
+      i. The questions come from the date and nothing else. The vocabulary,
+      the difficulty ramp and the selection are fixed, and practice history is
+      ignored, so two people comparing scores are comparing the same ten
+      questions. Only presentation — instrument, note spelling, theme, whether
+      hints are offered — follows the user.
+
+      ii. The day rolls over at local midnight, so everyone gets their own
+      day's puzzle rather than one pinned to a timezone on the other side of
+      the world.
+
+      iii. It scores once. Replaying is good practice and leaves the day's
+      score alone.
+
+   e. **Choose what to practise** opens the full settings: exercise types,
    duration, difficulty, keys, hints, and the chord, interval, mode and
    progression vocabulary in play.
 
-   e. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
+   f. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
    hint and `Enter` moves on.
 
 ## 4. The exercises
@@ -195,7 +211,9 @@ chord questions without being told to.
 
    f. `src/session/` — the session state machine. Questions are generated one at
    a time, not queued up front, so the model reacts to answers *within* a
-   session.
+   session. `daily.ts` is the exception: it builds all ten up front from a
+   date-derived seed, and the engine plays that script instead of selecting
+   anything, which is what makes the Daily shared.
 
    g. `src/ui/` — React screens and components, plus one stylesheet holding the
    design tokens.

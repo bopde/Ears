@@ -7,6 +7,7 @@ import { Results } from './screens/Results';
 import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
 import type { SessionSummary } from '../session/engine';
+import { todayKey } from '../session/daily';
 
 export function App() {
   const [screen, navigate] = useRoute();
@@ -14,15 +15,22 @@ export function App() {
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   // Bumping this remounts the session screen, which is what starts a new one.
   const [runId, setRunId] = useState(0);
+  // Set for a Daily run; null for ordinary practice.
+  const [daily, setDaily] = useState<string | null>(null);
 
-  const start = useCallback(async () => {
-    // Safari only starts audio from inside a user gesture, so the unlock has to
-    // happen on the tap that begins the session rather than when it first plays.
-    await unlockAudio();
-    setSummary(null);
-    setRunId((n) => n + 1);
-    navigate('session');
-  }, [navigate, unlockAudio]);
+  const start = useCallback(
+    async (asDaily = false) => {
+      // Safari only starts audio from inside a user gesture, so the unlock has
+      // to happen on the tap that begins the session rather than when it first
+      // plays.
+      await unlockAudio();
+      setSummary(null);
+      setDaily(asDaily ? todayKey() : null);
+      setRunId((n) => n + 1);
+      navigate('session');
+    },
+    [navigate, unlockAudio],
+  );
 
   const finish = useCallback(
     (next: SessionSummary) => {
@@ -33,12 +41,25 @@ export function App() {
   );
 
   if (screen === 'session') {
-    return <SessionScreen key={runId} onFinish={finish} onExit={() => navigate('home', true)} />;
+    return (
+      <SessionScreen
+        key={runId}
+        daily={daily}
+        onFinish={finish}
+        onExit={() => navigate('home', true)}
+      />
+    );
   }
 
   return (
     <div className="app">
-      {screen === 'home' && <Home navigate={navigate} onStart={() => void start()} />}
+      {screen === 'home' && (
+        <Home
+          navigate={navigate}
+          onStart={() => void start()}
+          onStartDaily={() => void start(true)}
+        />
+      )}
       {screen === 'setup' && (
         <Setup onBack={() => navigate('home')} onStart={() => void start()} />
       )}
@@ -46,12 +67,16 @@ export function App() {
         (summary ? (
           <Results
             summary={summary}
-            onAgain={() => void start()}
+            onAgain={() => void start(summary.daily ? true : false)}
             onHome={() => navigate('home', true)}
             onProgress={() => navigate('progress')}
           />
         ) : (
-          <Home navigate={navigate} onStart={() => void start()} />
+          <Home
+            navigate={navigate}
+            onStart={() => void start()}
+            onStartDaily={() => void start(true)}
+          />
         ))}
       {screen === 'progress' && (
         <Progress onBack={() => navigate('home')} onStart={() => void start()} />

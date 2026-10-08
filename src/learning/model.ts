@@ -48,6 +48,16 @@ export interface SessionRecord {
   deltas: Record<string, number>;
 }
 
+/** The outcome of one Daily, kept so a day can only be scored once. */
+export interface DailyResult {
+  day: string;
+  correct: number;
+  total: number;
+  hints: number;
+  seconds: number;
+  completedAt: number;
+}
+
 export interface Profile {
   version: number;
   createdAt: number;
@@ -57,11 +67,14 @@ export interface Profile {
   attempts: Attempt[];
   settings: Partial<PracticeSettings>;
   streak: { count: number; lastDay: string };
+  /** Completed Dailies, keyed by day. Only the first attempt at a day counts. */
+  dailyResults: Record<string, DailyResult>;
 }
 
 export const PROFILE_VERSION = 2;
 export const MAX_ATTEMPTS = 4000;
 export const MAX_SESSIONS = 400;
+export const MAX_DAILY_RESULTS = 400;
 
 export function emptyProfile(): Profile {
   return {
@@ -72,6 +85,7 @@ export function emptyProfile(): Profile {
     attempts: [],
     settings: {},
     streak: { count: 0, lastDay: '' },
+    dailyResults: {},
   };
 }
 

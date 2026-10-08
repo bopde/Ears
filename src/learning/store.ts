@@ -1,5 +1,5 @@
 import {
-  MAX_ATTEMPTS, MAX_SESSIONS, PROFILE_VERSION, emptyProfile, type Profile,
+  MAX_ATTEMPTS, MAX_DAILY_RESULTS, MAX_SESSIONS, PROFILE_VERSION, emptyProfile, type Profile,
 } from './model';
 import { normaliseSettings, type PracticeSettings } from '../session/settings';
 
@@ -43,10 +43,13 @@ export function clearProfile(): Profile {
 
 /** Keeps the stored blob bounded; skill records carry the long-term summary. */
 function trim(profile: Profile): Profile {
+  // Day keys sort chronologically as strings, so the newest are simply the last.
+  const days = Object.keys(profile.dailyResults).sort().slice(-MAX_DAILY_RESULTS);
   return {
     ...profile,
     attempts: profile.attempts.slice(-MAX_ATTEMPTS),
     sessions: profile.sessions.slice(-MAX_SESSIONS),
+    dailyResults: Object.fromEntries(days.map((day) => [day, profile.dailyResults[day]])),
   };
 }
 
@@ -62,6 +65,8 @@ function migrate(raw: Partial<Profile>): Profile {
     attempts: Array.isArray(raw.attempts) ? raw.attempts : [],
     settings: raw.settings ?? {},
     streak: raw.streak ?? base.streak,
+    // Added after version 2; absent simply means no Daily has been played.
+    dailyResults: raw.dailyResults ?? {},
   };
   // Version 1 moved on by itself a second after a correct answer, which was
   // not long enough to take the answer in. Settings are stored in full once

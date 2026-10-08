@@ -7,6 +7,7 @@ import { REASON_LABEL, focusAreas } from '../../learning/selector';
 import { sessionBreakdown } from '../../learning/stats';
 import { makeRng } from '../../lib/rng';
 import { formatClock, pct } from '../../lib/util';
+import { dailyLabel, dailyNumber } from '../../session/daily';
 
 export function Results({
   summary,
@@ -47,7 +48,18 @@ export function Results({
 
   return (
     <div className="stack">
-      <TopBar title="Session complete" onBack={onHome} />
+      <TopBar title={summary.daily ? 'Daily complete' : 'Session complete'} onBack={onHome} />
+
+      {summary.daily && (
+        <div className="row row--between">
+          <span className="badge badge--accent">Daily No. {dailyNumber(summary.daily)}</span>
+          <span className="small faint">
+            {summary.dailyRecorded
+              ? `${dailyLabel(summary.daily)} · score saved`
+              : 'Replay · today\u2019s score is unchanged'}
+          </span>
+        </div>
+      )}
 
       <section className="card stack">
         <div>
@@ -139,7 +151,7 @@ export function Results({
 
       <div className="stack stack--tight">
         <Button variant="primary" size="lg" block onClick={onAgain}>
-          Practise again
+          {summary.daily ? 'Play it again' : 'Practise again'}
         </Button>
         <div className="row" style={{ gap: '0.5rem' }}>
           <Button block onClick={onProgress}>

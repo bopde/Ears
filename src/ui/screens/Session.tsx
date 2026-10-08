@@ -1,26 +1,34 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useApp } from '../state';
 import { SessionEngine, type SessionSummary } from '../../session/engine';
+import { buildDailyQuestions, dailyNumber, dailySettings } from '../../session/daily';
 import { AnswerGrid } from '../components/AnswerGrid';
 import { Button, TopBar } from '../components/ui';
 import { CheckIcon, CrossIcon, HintIcon, NextIcon, ReplayIcon } from '../components/Icons';
 import { formatClock } from '../../lib/util';
 
 export function SessionScreen({
+  daily,
   onFinish,
   onExit,
 }: {
+  /** Day key when this run is the Daily, otherwise null. */
+  daily: string | null;
   onFinish: (summary: SessionSummary) => void;
   onExit: () => void;
 }) {
   const { settings, profile, performer, setProfile, audioReady, unlockAudio } = useApp();
   const engineRef = useRef<SessionEngine | null>(null);
   if (!engineRef.current) {
+    // The Daily is built from the date alone, under its own fixed settings, so
+    // that everyone playing today works through exactly the same ten questions.
+    const script = daily ? buildDailyQuestions(daily, settings) : null;
     engineRef.current = new SessionEngine({
-      settings,
+      settings: daily ? dailySettings(settings) : settings,
       profile,
       performer,
       onProfileChange: setProfile,
+      ...(script && daily ? { script, daily } : {}),
     });
   }
   const engine = engineRef.current;
@@ -107,15 +115,23 @@ export function SessionScreen({
 
   const question = state.question;
   const revealed = state.phase === 'feedback';
-  const total = settings.questionLimit ?? state.plannedQuestions;
-  const progress = settings.questionLimit
-    ? state.asked / Math.max(1, settings.questionLimit)
+  const total = state.untimed
+    ? state.plannedQuestions
+    : (settings.questionLimit ?? state.plannedQuestions);
+  const progress = state.untimed || settings.questionLimit
+    ? state.asked / Math.max(1, total)
     : 1 - state.remainingSeconds / Math.max(1, settings.durationMinutes * 60);
 
   return (
     <div className="app app--session">
       <TopBar
-        title={question ? `Question ${state.index + 1}` : 'Practice'}
+        title={
+          state.daily
+            ? `Daily No. ${dailyNumber(state.daily)}`
+            : question
+              ? `Question ${state.index + 1}`
+              : 'Practice'
+        }
         right={
           <Button size="sm" variant="ghost" onClick={quit}>
             End
@@ -134,13 +150,14 @@ export function SessionScreen({
           <div className="session__meta">
             <span>
               {state.index + 1}
-              {total ? ` / ~${total}` : ''}
+              {total ? ` / ${state.untimed ? total : `~${total}`}` : ''}
             </span>
             <span className="grow" />
             <span>
               {state.correct}/{state.asked} correct
             </span>
-            <span>{formatClock(state.remainingSeconds)}</span>
+            {/* No countdown on the Daily — it is untimed by design. */}
+            {!state.untimed && <span>{formatClock(state.remainingSeconds)}</span>}
           </div>
         </div>
 

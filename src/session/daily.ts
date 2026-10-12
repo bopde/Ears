@@ -111,6 +111,7 @@ export function dailySettings(user?: PracticeSettings): PracticeSettings {
     reverb: user?.reverb ?? base.reverb,
     autoAdvance: user?.autoAdvance ?? base.autoAdvance,
     theme: user?.theme ?? base.theme,
+    answerDelay: user?.answerDelay ?? base.answerDelay,
   };
 }
 

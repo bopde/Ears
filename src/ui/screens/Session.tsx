@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../state';
 import { SessionEngine, type SessionSummary } from '../../session/engine';
 import { buildDailyQuestions, dailyNumber, dailySettings } from '../../session/daily';
@@ -58,6 +58,44 @@ export function SessionScreen({
     return () => window.clearTimeout(timer);
   }, [state.phase, state.outcome, settings.autoAdvance, engine]);
 
+  // Holding the answers back: with the options on screen you can narrow a
+  // question down by reading rather than by listening, which is the opposite
+  // of the exercise. Keyed by question id so a new question hides them again
+  // without needing a reset effect.
+  const delay = settings.answerDelay;
+  const [shownFor, setShownFor] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const questionId = state.question?.id ?? null;
+  const answersShown =
+    state.phase === 'feedback' || delay === 0 || (questionId !== null && shownFor === questionId);
+
+  // Whether this question has been heard at all yet, for the 'audio' setting.
+  const playback = useRef<{ id: string | null; heard: boolean }>({ id: null, heard: false });
+  if (playback.current.id !== questionId) playback.current = { id: questionId, heard: false };
+  useEffect(() => {
+    if (state.playing) playback.current.heard = true;
+  }, [state.playing]);
+
+  // A fixed wait, counted from the moment the question starts.
+  useEffect(() => {
+    if (answersShown || questionId === null) return;
+    if (typeof delay !== 'number' || delay <= 0) return;
+    const endsAt = Date.now() + delay * 1000;
+    setCountdown(Math.ceil(delay));
+    const tick = window.setInterval(() => {
+      const left = endsAt - Date.now();
+      setCountdown(Math.max(0, Math.ceil(left / 1000)));
+      if (left <= 0) setShownFor(questionId);
+    }, 200);
+    return () => window.clearInterval(tick);
+  }, [answersShown, delay, questionId]);
+
+  // Or wait for the question to finish sounding, which scales with its length.
+  useEffect(() => {
+    if (answersShown || delay !== 'audio' || questionId === null) return;
+    if (playback.current.heard && !state.playing) setShownFor(questionId);
+  }, [answersShown, delay, questionId, state.playing]);
+
   const quit = useCallback(() => {
     if (state.asked > 0) engine.finish();
     else {
@@ -87,6 +125,11 @@ export function SessionScreen({
         return;
       }
       if (state.phase !== 'question' || !state.question) return;
+      if (!answersShown) {
+        // Nothing to pick yet; let the listener bring them up early instead.
+        if (key === 's') setShownFor(state.question.id);
+        return;
+      }
       const digit = Number(key);
       if (!Number.isInteger(digit) || digit < 1) return;
       const field =
@@ -97,7 +140,7 @@ export function SessionScreen({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [engine, state.phase, state.question, state.answers]);
+  }, [engine, state.phase, state.question, state.answers, answersShown]);
 
   if (state.error) {
     return (
@@ -197,24 +240,40 @@ export function SessionScreen({
 
             <div className="answers">
               <div className="answers__inner">
-                {question.fields.map((field, fieldIndex) => (
-                  <AnswerGrid
-                    key={field.key}
-                    field={field}
-                    selected={state.answers[field.key]}
-                    revealed={revealed}
-                    correctId={question.correct[field.key]}
-                    onSelect={(optionId) => engine.select(field.key, optionId)}
-                    note={
-                      !revealed &&
-                      question.fields.length > 1 &&
-                      question.fields.findIndex((f) => state.answers[f.key] === undefined) ===
-                        fieldIndex
-                        ? 'Choose'
-                        : undefined
-                    }
-                  />
-                ))}
+                {answersShown ? (
+                  question.fields.map((field, fieldIndex) => (
+                    <AnswerGrid
+                      key={field.key}
+                      field={field}
+                      selected={state.answers[field.key]}
+                      revealed={revealed}
+                      correctId={question.correct[field.key]}
+                      onSelect={(optionId) => engine.select(field.key, optionId)}
+                      note={
+                        !revealed &&
+                        question.fields.length > 1 &&
+                        question.fields.findIndex((f) => state.answers[f.key] === undefined) ===
+                          fieldIndex
+                          ? 'Choose'
+                          : undefined
+                      }
+                    />
+                  ))
+                ) : (
+                  <button
+                    type="button"
+                    className="answerhold"
+                    onClick={() => questionId && setShownFor(questionId)}
+                  >
+                    <span className="answerhold__label">Listen first</span>
+                    <span className="answerhold__sub">
+                      {delay === 'audio'
+                        ? 'The answers arrive when it finishes'
+                        : `The answers arrive in ${countdown}s`}
+                    </span>
+                    <span className="answerhold__hint">Tap to show them now</span>
+                  </button>
+                )}
               </div>
             </div>
 

@@ -6,7 +6,7 @@ import {
 import { difficultyFor, eligibleConcepts, overallLevel, prioritiseConcepts } from './selector';
 import { overview, weakest } from './stats';
 import { importProfile } from './store';
-import { defaultSettings } from '../session/settings';
+import { ANSWER_DELAY_OPTIONS, defaultSettings, normaliseSettings } from '../session/settings';
 import { chordConceptId } from '../music/chords';
 import { makeRng } from '../lib/rng';
 
@@ -282,5 +282,30 @@ describe('profile migration', () => {
     const migrated = importProfile(JSON.stringify({ version: 1, skills: {} }))!;
     expect(migrated.settings.autoAdvance).toBe(false);
     expect(migrated.skills).toEqual({});
+  });
+});
+
+describe('answer delay setting', () => {
+  it('holds the options back by default', () => {
+    expect(defaultSettings().answerDelay).toBe(3);
+  });
+
+  it('accepts every offered choice and rejects nonsense', () => {
+    for (const option of ANSWER_DELAY_OPTIONS) {
+      expect(normaliseSettings({ answerDelay: option.value }).answerDelay).toBe(option.value);
+    }
+    for (const bad of [-1, NaN, Infinity, 'soon', null, undefined]) {
+      expect(
+        normaliseSettings({ answerDelay: bad as never }).answerDelay,
+        `${String(bad)} falls back`,
+      ).toBe(defaultSettings().answerDelay);
+    }
+  });
+
+  it('survives a stored profile that predates it', () => {
+    const migrated = importProfile(
+      JSON.stringify({ version: 2, skills: {}, settings: { durationMinutes: 20 } }),
+    )!;
+    expect(migrated.settings.answerDelay).toBe(defaultSettings().answerDelay);
   });
 });

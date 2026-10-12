@@ -166,8 +166,10 @@ describe('daily settings', () => {
       autoAdvance: true,
       hintsEnabled: false,
       volume: 0.3,
+      answerDelay: 'audio' as const,
     };
     const settings = dailySettings(user);
+    expect(settings.answerDelay, 'when the options appear is not part of the puzzle').toBe('audio');
     expect(settings.instrument).toBe('vibes');
     expect(settings.accidental).toBe('flat');
     expect(settings.theme).toBe('light');

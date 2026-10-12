@@ -57,7 +57,24 @@ export interface PracticeSettings {
    */
   autoAdvance: boolean;
   theme: 'auto' | 'dark' | 'light';
+  /**
+   * How long the answer options stay hidden once a question starts.
+   *
+   * Seeing the choices before you have listened lets you work backwards from
+   * them — narrowing four plausible modes down by reading rather than by ear.
+   * 0 shows them straight away; 'audio' holds them until the question has
+   * finished sounding, which suits the longer exercises better than a fixed
+   * count does.
+   */
+  answerDelay: number | 'audio';
 }
+
+export const ANSWER_DELAY_OPTIONS: Array<{ value: number | 'audio'; label: string }> = [
+  { value: 0, label: 'Straight away' },
+  { value: 3, label: 'After 3s' },
+  { value: 5, label: 'After 5s' },
+  { value: 'audio', label: 'When it finishes' },
+];
 
 export const DURATION_OPTIONS = [5, 10, 20, 30] as const;
 
@@ -85,6 +102,7 @@ export function defaultSettings(): PracticeSettings {
     accidental: 'both',
     autoAdvance: false,
     theme: 'auto',
+    answerDelay: 3,
   };
 }
 
@@ -106,5 +124,12 @@ export function normaliseSettings(partial: Partial<PracticeSettings> | null | un
     progressions: nonEmpty(merged.progressions, base.progressions),
     intervalDirections: nonEmpty(merged.intervalDirections, base.intervalDirections),
     durationMinutes: Math.min(120, Math.max(1, merged.durationMinutes || base.durationMinutes)),
+    answerDelay:
+      merged.answerDelay === 'audio' ||
+      (typeof merged.answerDelay === 'number' &&
+        Number.isFinite(merged.answerDelay) &&
+        merged.answerDelay >= 0)
+        ? merged.answerDelay
+        : base.answerDelay,
   };
 }

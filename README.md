@@ -98,8 +98,15 @@ builds the app and deploys it on every push to `main`.
    duration, difficulty, keys, hints, and the chord, interval, mode and
    progression vocabulary in play.
 
-   f. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
-   hint and `Enter` moves on.
+   f. The answer options are held back for the first three seconds, because
+   with them on screen you can narrow a question down by reading rather than by
+   listening. Tap the panel to bring them up early, or change it under
+   Settings → Display → *Show answers*: straight away, after three or five
+   seconds, or when the question has finished sounding — which suits the longer
+   exercises better than a fixed count.
+
+   g. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
+   hint and `Enter` moves on. `S` shows held-back answers early.
 
 ## 4. The exercises
 

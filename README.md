@@ -127,6 +127,10 @@ builds the app and deploys it on every push to `main`.
    Aeolian phrase with no right answer.
 
    f. **Chord changes** — a progression plays; name the harmonic movement.
+   Every option offered has the same number of chords as the answer: each one
+   shows its roman numerals, so options of other lengths could be discarded by
+   counting the changes rather than by listening to them. The library carries
+   at least three progressions at every length so the match can always be made.
 
    g. **Chords in context** — a progression plays; name one chord from inside it.
 

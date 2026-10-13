@@ -13,7 +13,69 @@ import { voiceProgression } from '../music/voicing';
 import { Performer } from '../audio/performer';
 import { pcNameDual } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
+import type { Rng } from '../lib/rng';
 import { clamp, mod } from '../lib/util';
+
+/**
+ * Wrong answers must have the same number of chords as the right one.
+ *
+ * Each option carries its roman numerals, so a listener can count the changes
+ * they heard and throw away every option of a different length — which often
+ * leaves exactly one. Matching the length first makes the count worthless as a
+ * clue and forces the question to be answered by ear.
+ *
+ * The tolerance widens a step at a time, but only if the pool cannot fill the
+ * options: the library carries at least three progressions at every length, so
+ * this stays at zero unless the user has disabled most of them.
+ */
+function sameLengthDistractors(
+  rng: Rng,
+  target: ProgressionDef,
+  pool: readonly ProgressionDef[],
+  wanted: number,
+  difficulty: number,
+): ProgressionDef[] {
+  const size = (p: ProgressionDef) => p.chords.length;
+  const chosen: ProgressionDef[] = [];
+  const taken = new Set<string>([target.id]);
+
+  for (let tolerance = 0; tolerance <= 12 && chosen.length < wanted; tolerance++) {
+    const band = pool.filter(
+      (p) => !taken.has(p.id) && Math.abs(size(p) - size(target)) === tolerance,
+    );
+    if (!band.length) continue;
+    for (const pick of pickDistractors(
+      rng,
+      target,
+      band,
+      wanted - chosen.length,
+      difficulty,
+      nearestProgressions,
+    )) {
+      chosen.push(pick);
+      taken.add(pick.id);
+    }
+  }
+  return chosen;
+}
+
+/**
+ * How many options to offer.
+ *
+ * Capped by how many same-length alternatives exist: a question with three
+ * believable options is a better question than one with eight, five of which
+ * announce themselves as wrong by their shape.
+ */
+function progressionOptionCount(
+  difficulty: number,
+  target: ProgressionDef,
+  pool: readonly ProgressionDef[],
+): number {
+  const sameLength = pool.filter(
+    (p) => p.id !== target.id && p.chords.length === target.chords.length,
+  ).length;
+  return Math.max(3, Math.min(optionCount(difficulty, pool.length), sameLength + 1));
+}
 
 function enabledProgressions(settings: PracticeSettings): ProgressionDef[] {
   const allowed = new Set(settings.progressions);
@@ -73,8 +135,8 @@ export const progressionExercise: ExerciseType = {
     const tonic = chooseKey(ctx);
     const changes = buildChanges(ctx, def, tonic);
 
-    const n = optionCount(ctx.difficulty, pool.length);
-    const distractors = pickDistractors(ctx.rng, def, pool, n - 1, ctx.difficulty, nearestProgressions);
+    const n = progressionOptionCount(ctx.difficulty, def, pool);
+    const distractors = sameLengthDistractors(ctx.rng, def, pool, n - 1, ctx.difficulty);
 
     const symbols = changes.realised.map((r) => chordLabel(r.chord, ctx.settings)).join('  |  ');
 

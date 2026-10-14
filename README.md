@@ -72,15 +72,41 @@ builds the app and deploys it on every push to `main`.
    b. Each question plays, you answer on a touch grid, and feedback appears
    immediately: right or wrong, what the answer was, and what actually sounded.
 
-   c. A correct answer moves on by itself after about a second. A wrong answer
-   waits, so there is time to replay it and hear what you missed.
+   c. Feedback stays up until you tap **Next**, whether you were right or
+   wrong. It names the chord, spells it out and lists the notes that sounded,
+   and the answer grid keeps its review colours, so there is time to replay it
+   and hear what you missed. Settings → Display → *Advance automatically* makes
+   correct answers move on by themselves instead.
 
-   d. **Choose what to practise** opens the full settings: exercise types,
+   d. **The Daily** is ten questions with no clock, and it is the same ten for
+   everyone who plays it that day.
+
+      i. The questions come from the date and nothing else. The vocabulary,
+      the difficulty ramp and the selection are fixed, and practice history is
+      ignored, so two people comparing scores are comparing the same ten
+      questions. Only presentation — instrument, note spelling, theme, whether
+      hints are offered — follows the user.
+
+      ii. The day rolls over at local midnight, so everyone gets their own
+      day's puzzle rather than one pinned to a timezone on the other side of
+      the world.
+
+      iii. It scores once. Replaying is good practice and leaves the day's
+      score alone.
+
+   e. **Choose what to practise** opens the full settings: exercise types,
    duration, difficulty, keys, hints, and the chord, interval, mode and
    progression vocabulary in play.
 
-   e. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
-   hint and `Enter` moves on.
+   f. The answer options are held back for the first three seconds, because
+   with them on screen you can narrow a question down by reading rather than by
+   listening. Tap the panel to bring them up early, or change it under
+   Settings → Display → *Show answers*: straight away, after three or five
+   seconds, or when the question has finished sounding — which suits the longer
+   exercises better than a fixed count.
+
+   g. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
+   hint and `Enter` moves on. `S` shows held-back answers early.
 
 ## 4. The exercises
 
@@ -101,6 +127,10 @@ builds the app and deploys it on every push to `main`.
    Aeolian phrase with no right answer.
 
    f. **Chord changes** — a progression plays; name the harmonic movement.
+   Every option offered has the same number of chords as the answer: each one
+   shows its roman numerals, so options of other lengths could be discarded by
+   counting the changes rather than by listening to them. The library carries
+   at least three progressions at every length so the match can always be made.
 
    g. **Chords in context** — a progression plays; name one chord from inside it.
 
@@ -192,7 +222,9 @@ chord questions without being told to.
 
    f. `src/session/` — the session state machine. Questions are generated one at
    a time, not queued up front, so the model reacts to answers *within* a
-   session.
+   session. `daily.ts` is the exception: it builds all ten up front from a
+   date-derived seed, and the engine plays that script instead of selecting
+   anything, which is what makes the Daily shared.
 
    g. `src/ui/` — React screens and components, plus one stylesheet holding the
    design tokens.

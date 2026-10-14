@@ -4,6 +4,7 @@ import { Button, Chip, Segmented, Slider, SwitchRow, TopBar } from '../component
 import { PlayIcon } from '../components/Icons';
 import { SELECTABLE_INSTRUMENTS } from '../../audio/instruments';
 import { exportProfile, importProfile, saveProfile } from '../../learning/store';
+import { ANSWER_DELAY_OPTIONS } from '../../session/settings';
 import { realiseProgression, requireProgression } from '../../music/progressions';
 import { voiceProgression } from '../../music/voicing';
 import { Performer } from '../../audio/performer';
@@ -161,9 +162,31 @@ export function Settings({ onBack }: { onBack: () => void }) {
             onChange={(v) => updateSettings({ accidental: v })}
           />
         </div>
+        <div className="field">
+          <div className="field__label">
+            <span>Show answers</span>
+          </div>
+          <div className="row row--wrap" style={{ gap: '0.35rem' }}>
+            {ANSWER_DELAY_OPTIONS.map((option) => (
+              <Chip
+                key={String(option.value)}
+                on={settings.answerDelay === option.value}
+                onClick={() => updateSettings({ answerDelay: option.value })}
+              >
+                {option.label}
+              </Chip>
+            ))}
+          </div>
+          <p className="small faint" style={{ marginTop: '0.35rem' }}>
+            {settings.answerDelay === 0
+              ? 'The options are on screen from the start, so you can narrow a question down by reading them rather than by listening.'
+              : 'The options are held back so you have to form an impression first. Tap the panel to bring them up early.'}
+          </p>
+        </div>
+
         <SwitchRow
-          label="Move on automatically"
-          hint="After a correct answer. Wrong answers always wait for you."
+          label="Advance automatically"
+          hint="Jump to the next question a couple of seconds after a correct answer. Off by default, so the answer stays up until you tap Next."
           on={settings.autoAdvance}
           onChange={(v) => updateSettings({ autoAdvance: v })}
         />

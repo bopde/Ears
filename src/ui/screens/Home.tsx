@@ -3,18 +3,48 @@ import { useApp, type Screen } from '../state';
 import { Button, Chip, HeroButton, Meter, Stat } from '../components/ui';
 import { ChartIcon, ClockIcon, FlameIcon, NoteIcon, TuneIcon } from '../components/Icons';
 import { DURATION_OPTIONS } from '../../session/settings';
+import {
+  DAILY_QUESTION_COUNT, dailyLabel, dailyNumber, dailyWeekday, todayKey,
+} from '../../session/daily';
+import { dayKey, type DailyResult } from '../../learning/model';
 import { REASON_LABEL, focusAreas } from '../../learning/selector';
 import { overview } from '../../learning/stats';
 import { CONCEPTS } from '../../music/catalog';
 import { makeRng } from '../../lib/rng';
 import { formatClock, pct } from '../../lib/util';
 
+/** The last seven days at a glance, so the Daily reads as a habit. */
+function DailyStrip({ results }: { results: Record<string, DailyResult> }) {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const day = dayKey(Date.now() - (6 - i) * 86_400_000);
+    return { day, result: results[day] };
+  });
+  return (
+    <div className="dailystrip" aria-label="Last seven days">
+      {days.map(({ day, result }, i) => (
+        <div
+          key={day}
+          className={`dailystrip__cell${result ? ' dailystrip__cell--done' : ''}${
+            i === days.length - 1 ? ' dailystrip__cell--today' : ''
+          }`}
+          title={result ? `${dailyLabel(day)}: ${result.correct}/${result.total}` : dailyLabel(day)}
+        >
+          <span className="dailystrip__score">{result ? result.correct : '·'}</span>
+          <span className="dailystrip__day">{dailyWeekday(day)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Home({
   navigate,
   onStart,
+  onStartDaily,
 }: {
   navigate: (screen: Screen) => void;
-  onStart: (adaptive: boolean) => void;
+  onStart: () => void;
+  onStartDaily: () => void;
 }) {
   const { profile, settings, updateSettings } = useApp();
   const stats = useMemo(() => overview(profile), [profile]);
@@ -27,6 +57,8 @@ export function Home({
 
   const lastSession = profile.sessions[profile.sessions.length - 1];
   const isNew = stats.attempts === 0;
+  const today = todayKey();
+  const todaysDaily = profile.dailyResults[today];
 
   return (
     <div className="stack">
@@ -59,6 +91,46 @@ export function Home({
         </div>
       </header>
 
+      <section className="card stack stack--tight">
+        <div className="row row--between">
+          <span className="eyebrow">Daily · No. {dailyNumber(today)}</span>
+          <span className="small faint">{dailyLabel(today)}</span>
+        </div>
+
+        {todaysDaily ? (
+          <>
+            <div className="row" style={{ gap: '0.6rem', alignItems: 'baseline' }}>
+              <span className="display" style={{ fontSize: '2rem' }}>
+                {todaysDaily.correct}
+                <span className="faint" style={{ fontSize: '1.1rem' }}>/{todaysDaily.total}</span>
+              </span>
+              <span className="grow small muted">
+                Today&rsquo;s ten, done
+                {todaysDaily.hints > 0
+                  ? ` · ${todaysDaily.hints} hint${todaysDaily.hints === 1 ? '' : 's'}`
+                  : ''}
+              </span>
+            </div>
+            <Button block onClick={onStartDaily}>
+              Play it again
+            </Button>
+            <p className="small faint">A replay will not change today&rsquo;s score.</p>
+          </>
+        ) : (
+          <>
+            <p className="small muted">
+              {DAILY_QUESTION_COUNT} questions, no clock — the same {DAILY_QUESTION_COUNT} for
+              everyone playing today.
+            </p>
+            <Button variant="primary" size="lg" block onClick={onStartDaily}>
+              Play today&rsquo;s ten
+            </Button>
+          </>
+        )}
+
+        <DailyStrip results={profile.dailyResults} />
+      </section>
+
       <section className="stack stack--tight">
         <div className="field__label">
           <span>Session length</span>
@@ -82,14 +154,17 @@ export function Home({
         </div>
       </section>
 
+      {/* The Daily above is the one accented call to action; this keeps its
+          own prominence without two amber buttons shouting at once. */}
       <HeroButton
+        variant="default"
         title="Today’s practice"
         sub={
           isNew
             ? `${settings.durationMinutes} min · starts broad, then follows what you miss`
             : `${settings.durationMinutes} min · chosen from your history`
         }
-        onClick={() => onStart(true)}
+        onClick={onStart}
       />
 
       <Button block onClick={() => navigate('setup')}>

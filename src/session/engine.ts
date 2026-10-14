@@ -31,6 +31,10 @@ export interface SessionState {
   elapsedSeconds: number;
   remainingSeconds: number;
   plannedQuestions: number;
+  /** No clock: the session ends when the questions run out. */
+  untimed: boolean;
+  /** The day, when this session is the Daily. */
+  daily: string | null;
   playing: boolean;
   summary: SessionSummary | null;
   /** Set when the settings leave nothing to ask. */
@@ -50,6 +54,10 @@ export interface SessionSummary {
   /** Per-concept results, keyed by concept id. */
   outcomes: Record<string, ConceptOutcome>;
   promotions: string[];
+  /** The day, when this was the Daily. */
+  daily?: string;
+  /** False when the Daily had already been scored before this run. */
+  dailyRecorded?: boolean;
 }
 
 export interface SessionDeps {
@@ -59,6 +67,14 @@ export interface SessionDeps {
   /** Called whenever the profile changes so the host can persist it. */
   onProfileChange: (profile: Profile) => void;
   seed?: number;
+  /**
+   * A fixed list of questions to work through, in order. Supplying one turns
+   * off adaptive selection and the clock, which is what makes the Daily the
+   * same for everybody.
+   */
+  script?: Question[];
+  /** The day key, when the script is a Daily. Its result is recorded once. */
+  daily?: string;
 }
 
 type Listener = () => void;
@@ -78,6 +94,8 @@ export class SessionEngine {
   private readonly settings: PracticeSettings;
   private readonly performer: Performer;
   private readonly onProfileChange: (profile: Profile) => void;
+  private readonly script: Question[] | null;
+  private readonly dailyDay: string | null;
 
   private startedAt = 0;
   private questionReadyAt = 0;
@@ -95,6 +113,8 @@ export class SessionEngine {
     this.profile = deps.profile;
     this.performer = deps.performer;
     this.onProfileChange = deps.onProfileChange;
+    this.script = deps.script ?? null;
+    this.dailyDay = deps.daily ?? null;
     this.rng = makeRng(deps.seed ?? timeSeed());
     this.state = {
       phase: 'ready',
@@ -109,6 +129,8 @@ export class SessionEngine {
       elapsedSeconds: 0,
       remainingSeconds: this.settings.durationMinutes * 60,
       plannedQuestions: this.planQuestionCount(),
+      untimed: this.script !== null,
+      daily: deps.daily ?? null,
       playing: false,
       summary: null,
       error: null,
@@ -135,8 +157,9 @@ export class SessionEngine {
     return this.settings.durationMinutes * 60;
   }
 
-  /** Rough question count, used only for the progress bar. */
+  /** Question count. Exact for a script, an estimate for the progress bar otherwise. */
   private planQuestionCount(): number {
+    if (this.script) return this.script.length;
     const types = this.enabledTypes();
     if (!types.length) return 0;
     const avg = types.reduce((n, t) => n + t.baseSeconds, 0) / types.length;
@@ -177,6 +200,7 @@ export class SessionEngine {
   }
 
   private get outOfTime(): boolean {
+    if (this.script) return this.state.asked >= this.script.length;
     if (this.settings.questionLimit) return this.state.asked >= this.settings.questionLimit;
     return (Date.now() - this.startedAt) / 1000 >= this.durationSeconds;
   }
@@ -216,6 +240,12 @@ export class SessionEngine {
    * session leans toward chord questions without being told to.
    */
   private generate(): Question | null {
+    if (this.script) {
+      const question = this.script[this.state.asked];
+      if (!question) return null;
+      this.typeCounts[question.type] = (this.typeCounts[question.type] ?? 0) + 1;
+      return question;
+    }
     const types = this.enabledTypes();
     if (!types.length) return null;
 
@@ -427,11 +457,32 @@ export class SessionEngine {
       deltas: this.deltas,
     };
 
+    // A Daily counts only when it was played all the way through, and only
+    // the first time: replaying is useful practice but must not rewrite the
+    // score for the day.
+    const completedDaily =
+      this.dailyDay !== null && this.script !== null && record.asked >= this.script.length;
+    const alreadyScored = this.dailyDay !== null && !!this.profile.dailyResults[this.dailyDay];
+    const recordDaily = completedDaily && !alreadyScored;
+
     if (record.asked > 0) {
       this.profile = {
         ...this.profile,
         sessions: [...this.profile.sessions, record],
         streak: bumpStreak(this.profile.streak, now),
+        dailyResults: recordDaily
+          ? {
+              ...this.profile.dailyResults,
+              [this.dailyDay!]: {
+                day: this.dailyDay!,
+                correct: record.correct,
+                total: record.asked,
+                hints: record.hints,
+                seconds: record.seconds,
+                completedAt: now,
+              },
+            }
+          : this.profile.dailyResults,
       };
       this.onProfileChange(this.profile);
     }
@@ -445,6 +496,7 @@ export class SessionEngine {
         deltas: this.deltas,
         outcomes: this.outcomes,
         promotions: this.promotions,
+        ...(this.dailyDay ? { daily: this.dailyDay, dailyRecorded: recordDaily } : {}),
       },
     });
   }

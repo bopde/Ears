@@ -91,7 +91,14 @@ export const modeExercise: ExerciseType = {
       keyPc: tonic,
       prompt: {
         title: 'Which mode is this?',
-        sub: useScaleRun ? 'Vamp, then the scale' : 'Vamp, then a line over it',
+        // Say what will actually be heard. "Vamp" is the right word for the
+        // chords, but a prompt's job is to tell you what is coming, not to
+        // assume the vocabulary.
+        sub: `${vampChords.length > 1 ? 'Two chords set' : 'A chord sets'} the tonic, then ${
+          useScaleRun
+            ? 'the scale'
+            : `a line over ${vampChords.length > 1 ? 'them' : 'it'}`
+        }`,
       },
       fields: [
         {
@@ -126,8 +133,13 @@ export const modeExercise: ExerciseType = {
       },
       reveal: {
         heading: `${pcNameDual(tonic)} ${scale.name}`,
-        detail: scale.spelling,
-        notes: characteristic ? `Listen for the ${characteristic}` : scale.blurb,
+        // Each mode's blurb describes it against the scale you already know —
+        // "minor with a natural 6th", "major with a flat 7th" — which is more
+        // use when you are orienting than the degree string on its own.
+        detail: scale.blurb ?? scale.spelling,
+        notes: characteristic
+          ? `${scale.spelling}   ·   listen for the ${characteristic}`
+          : scale.spelling,
       },
       estimatedSeconds: 20 + ctx.difficulty * 2,
     };

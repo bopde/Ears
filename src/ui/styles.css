@@ -463,6 +463,49 @@ p { margin: 0; }
   padding-bottom: 0.4rem;
 }
 
+/* ── Held-back answers ───────────────────────────────────────────────────── */
+
+.answerhold {
+  width: 100%;
+  min-height: 11rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.answerhold:active {
+  background: var(--bg-elev);
+  border-color: var(--accent-line);
+}
+
+.answerhold__label {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--fg-dim);
+  letter-spacing: -0.01em;
+}
+
+.answerhold__sub {
+  font-size: 0.86rem;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.answerhold__hint {
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--fg-faint);
+  opacity: 0.75;
+}
+
 /* ── Feedback ────────────────────────────────────────────────────────────── */
 
 .feedback {
@@ -581,6 +624,54 @@ p { margin: 0; }
   inset: auto 0 0 0;
   background: var(--accent);
   border-radius: 2px 2px 0 0;
+}
+
+/* ── Daily strip ─────────────────────────────────────────────────────────── */
+
+.dailystrip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.dailystrip__cell {
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--bg-sunken);
+  padding: 0.4rem 0.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.dailystrip__cell--done {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.dailystrip__cell--today {
+  border-color: var(--accent);
+}
+
+.dailystrip__score {
+  font-size: 0.95rem;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--fg-faint);
+}
+
+.dailystrip__cell--done .dailystrip__score {
+  color: var(--accent);
+}
+
+.dailystrip__day {
+  font-size: 0.62rem;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
 }
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */

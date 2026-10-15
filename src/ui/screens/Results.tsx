@@ -8,6 +8,8 @@ import { sessionBreakdown } from '../../learning/stats';
 import { makeRng } from '../../lib/rng';
 import { formatClock, pct } from '../../lib/util';
 import { dailyLabel, dailyNumber } from '../../session/daily';
+import { marksToSquares } from '../../session/share';
+import { ShareDaily } from '../components/ShareDaily';
 
 export function Results({
   summary,
@@ -22,6 +24,9 @@ export function Results({
 }) {
   const { profile, settings } = useApp();
   const { record } = summary;
+  // The stored result is the day's score — a replay does not rewrite it, so
+  // that is what gets shared.
+  const dailyResult = summary.daily ? profile.dailyResults[summary.daily] : undefined;
   const accuracy = record.asked ? record.correct / record.asked : 0;
 
   const breakdown = useMemo(
@@ -51,14 +56,20 @@ export function Results({
       <TopBar title={summary.daily ? 'Daily complete' : 'Session complete'} onBack={onHome} />
 
       {summary.daily && (
-        <div className="row row--between">
-          <span className="badge badge--accent">Daily No. {dailyNumber(summary.daily)}</span>
-          <span className="small faint">
-            {summary.dailyRecorded
-              ? `${dailyLabel(summary.daily)} · score saved`
-              : 'Replay · today\u2019s score is unchanged'}
-          </span>
-        </div>
+        <section className="card stack stack--tight">
+          <div className="row row--between">
+            <span className="badge badge--accent">Daily No. {dailyNumber(summary.daily)}</span>
+            <span className="small faint">
+              {summary.dailyRecorded
+                ? `${dailyLabel(summary.daily)} \u00b7 score saved`
+                : 'Replay \u00b7 today\u2019s score is unchanged'}
+            </span>
+          </div>
+          {dailyResult?.marks && (
+            <div className="sharegrid">{marksToSquares(dailyResult.marks)}</div>
+          )}
+          {dailyResult && <ShareDaily result={dailyResult} block />}
+        </section>
       )}
 
       <section className="card stack">

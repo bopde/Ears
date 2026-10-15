@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
 import { useApp, type Screen } from '../state';
 import { Button, Chip, HeroButton, Meter, Stat } from '../components/ui';
-import { ChartIcon, ClockIcon, FlameIcon, NoteIcon, TuneIcon } from '../components/Icons';
+import { BookIcon, ChartIcon, ClockIcon, FlameIcon, NoteIcon, TuneIcon } from '../components/Icons';
 import { DURATION_OPTIONS } from '../../session/settings';
 import {
   DAILY_QUESTION_COUNT, dailyLabel, dailyNumber, dailyWeekday, todayKey,
 } from '../../session/daily';
 import { dayKey, type DailyResult } from '../../learning/model';
+import { marksToSquares } from '../../session/share';
+import { ShareDaily } from '../components/ShareDaily';
 import { REASON_LABEL, focusAreas } from '../../learning/selector';
 import { overview } from '../../learning/stats';
 import { CONCEPTS } from '../../music/catalog';
@@ -75,6 +77,14 @@ export function Home({
           <button
             type="button"
             className="iconbtn"
+            onClick={() => navigate('reference')}
+            aria-label="Cheat sheet"
+          >
+            <BookIcon />
+          </button>
+          <button
+            type="button"
+            className="iconbtn"
             onClick={() => navigate('progress')}
             aria-label="Progress"
           >
@@ -111,6 +121,10 @@ export function Home({
                   : ''}
               </span>
             </div>
+            {todaysDaily.marks && (
+              <div className="sharegrid">{marksToSquares(todaysDaily.marks)}</div>
+            )}
+            <ShareDaily result={todaysDaily} block />
             <Button block onClick={onStartDaily}>
               Play it again
             </Button>

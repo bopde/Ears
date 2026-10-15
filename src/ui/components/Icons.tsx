@@ -95,6 +95,21 @@ export const ClockIcon = ({ size = 18 }: IconProps) => (
   </svg>
 );
 
+export const ShareIcon = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M12 3v12" />
+    <path d="m8 6.5 4-3.5 4 3.5" />
+    <path d="M5 13v6a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-6" />
+  </svg>
+);
+
+export const BookIcon = ({ size = 22 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2.5 2.5 0 0 1 2 1 2.5 2.5 0 0 1 2-1h4.5A1.5 1.5 0 0 1 20 5.5v12a1.5 1.5 0 0 1-1.5 1.5H14a2.5 2.5 0 0 0-2 1 2.5 2.5 0 0 0-2-1H5.5A1.5 1.5 0 0 1 4 17.5Z" />
+    <path d="M12 6v14" />
+  </svg>
+);
+
 export const NoteIcon = ({ size = 22 }: IconProps) => (
   <svg {...base(size)}>
     <path d="M9 18V6l10-2.5V15" />

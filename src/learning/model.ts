@@ -48,6 +48,15 @@ export interface SessionRecord {
   deltas: Record<string, number>;
 }
 
+/** How one question of a Daily went. */
+export type DailyMark =
+  /** Right, cold. */
+  | 'c'
+  /** Right, after a hint. */
+  | 'h'
+  /** Wrong. */
+  | 'x';
+
 /** The outcome of one Daily, kept so a day can only be scored once. */
 export interface DailyResult {
   day: string;
@@ -56,6 +65,11 @@ export interface DailyResult {
   hints: number;
   seconds: number;
   completedAt: number;
+  /**
+   * One character per question, in order — the grid a shared result shows.
+   * Absent on results recorded before sharing existed.
+   */
+  marks?: string;
 }
 
 export interface Profile {

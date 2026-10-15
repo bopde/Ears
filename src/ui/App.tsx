@@ -5,6 +5,7 @@ import { Setup } from './screens/Setup';
 import { SessionScreen } from './screens/Session';
 import { Results } from './screens/Results';
 import { Progress } from './screens/Progress';
+import { Reference } from './screens/Reference';
 import { Settings } from './screens/Settings';
 import type { SessionSummary } from '../session/engine';
 import { todayKey } from '../session/daily';
@@ -81,6 +82,7 @@ export function App() {
       {screen === 'progress' && (
         <Progress onBack={() => navigate('home')} onStart={() => void start()} />
       )}
+      {screen === 'reference' && <Reference onBack={() => navigate('home')} />}
       {screen === 'settings' && <Settings onBack={() => navigate('home')} />}
     </div>
   );

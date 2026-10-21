@@ -128,7 +128,14 @@ export function useApp(): AppValue {
   return value;
 }
 
-export type Screen = 'home' | 'setup' | 'session' | 'results' | 'progress' | 'settings';
+export type Screen =
+  | 'home'
+  | 'setup'
+  | 'session'
+  | 'results'
+  | 'progress'
+  | 'reference'
+  | 'settings';
 
 /**
  * Hash routing, so the iPhone back gesture and the browser back button work
@@ -137,7 +144,9 @@ export type Screen = 'home' | 'setup' | 'session' | 'results' | 'progress' | 'se
 export function useRoute(): [Screen, (screen: Screen, replace?: boolean) => void] {
   const read = (): Screen => {
     const hash = window.location.hash.replace('#/', '').replace('#', '');
-    const screens: Screen[] = ['home', 'setup', 'session', 'results', 'progress', 'settings'];
+    const screens: Screen[] = [
+      'home', 'setup', 'session', 'results', 'progress', 'reference', 'settings',
+    ];
     return (screens as string[]).includes(hash) ? (hash as Screen) : 'home';
   };
   const [screen, setScreen] = useState<Screen>(read);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHORD_QUALITIES, makeChord, nearestQualities } from './chords';
+import { CHORD_GROUP_ORDER, CHORD_QUALITIES, makeChord, nearestQualities } from './chords';
 import { INTERVALS, nearestIntervals } from './intervals';
 import { SCALES, scalePitchClasses } from './scales';
 import { PROGRESSIONS, progressionBeats, realiseProgression } from './progressions';
@@ -32,6 +32,21 @@ describe('chord definitions', () => {
       // Two qualities sharing every pitch class would be indistinguishable by ear.
       if (existing) throw new Error(`${q.id} is enharmonically identical to ${existing}`);
       sets.set(key, q.id);
+    }
+  });
+
+  it('are all reachable through the group order, so nothing is hidden', () => {
+    // The cheat sheet and the settings screen both walk CHORD_GROUP_ORDER; a
+    // quality in a group nobody lists would silently vanish from the app.
+    const listed = CHORD_QUALITIES.filter((q) =>
+      (CHORD_GROUP_ORDER as readonly string[]).includes(q.group),
+    );
+    expect(listed.length, 'every quality sits in a listed group').toBe(CHORD_QUALITIES.length);
+    for (const group of CHORD_GROUP_ORDER) {
+      expect(
+        CHORD_QUALITIES.some((q) => q.group === group),
+        `${group} is not empty`,
+      ).toBe(true);
     }
   });
 

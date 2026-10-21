@@ -67,6 +67,8 @@ export interface PracticeSettings {
    * count does.
    */
   answerDelay: number | 'audio';
+  /** Key the cheat sheet last demonstrated things in. */
+  referenceKey: number;
 }
 
 export const ANSWER_DELAY_OPTIONS: Array<{ value: number | 'audio'; label: string }> = [
@@ -103,6 +105,7 @@ export function defaultSettings(): PracticeSettings {
     autoAdvance: false,
     theme: 'auto',
     answerDelay: 3,
+    referenceKey: 0,
   };
 }
 
@@ -131,5 +134,12 @@ export function normaliseSettings(partial: Partial<PracticeSettings> | null | un
         merged.answerDelay >= 0)
         ? merged.answerDelay
         : base.answerDelay,
+    referenceKey:
+      typeof merged.referenceKey === 'number' &&
+      Number.isInteger(merged.referenceKey) &&
+      merged.referenceKey >= 0 &&
+      merged.referenceKey < 12
+        ? merged.referenceKey
+        : base.referenceKey,
   };
 }

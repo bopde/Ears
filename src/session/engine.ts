@@ -105,6 +105,8 @@ export class SessionEngine {
   private deltas: Record<string, number> = {};
   private outcomes: Record<string, ConceptOutcome> = {};
   private promotions: string[] = [];
+  /** One mark per answered question, for the shareable Daily grid. */
+  private marks: string[] = [];
   private ticker: number | null = null;
   private playTimer: number | null = null;
 
@@ -398,6 +400,7 @@ export class SessionEngine {
       ms: outcome.ms,
     };
     this.attempts.push(attempt);
+    this.marks.push(outcome.correct ? (outcome.hintUsed ? 'h' : 'c') : 'x');
 
     const skills = { ...this.profile.skills };
     for (const conceptId of question.conceptIds) {
@@ -480,6 +483,7 @@ export class SessionEngine {
                 hints: record.hints,
                 seconds: record.seconds,
                 completedAt: now,
+                marks: this.marks.join(''),
               },
             }
           : this.profile.dailyResults,

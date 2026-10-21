@@ -94,6 +94,11 @@ builds the app and deploys it on every push to `main`.
       iii. It scores once. Replaying is good practice and leaves the day's
       score alone.
 
+      iv. A finished Daily can be shared as a grid — one square per question,
+      green for right, amber for right after a hint, red for missed — with the
+      score and a link, and nothing that gives the questions away. It goes to
+      the system share sheet on a phone, and to the clipboard elsewhere.
+
    e. **Choose what to practise** opens the full settings: exercise types,
    duration, difficulty, keys, hints, and the chord, interval, mode and
    progression vocabulary in play.
@@ -105,7 +110,14 @@ builds the app and deploys it on every push to `main`.
    seconds, or when the question has finished sounding — which suits the longer
    exercises better than a fixed count.
 
-   g. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
+   g. **The cheat sheet** (the book icon on the home screen) lists everything
+   the exercises draw on — every progression, chord quality, interval and mode
+   — in whichever of the twelve keys you choose, each with a play button. It
+   shows the concrete chords or notes in that key alongside the roman numerals
+   or degrees, so it works both for checking what something sounds like and for
+   playing along with it.
+
+   h. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
    hint and `Enter` moves on. `S` shows held-back answers early.
 
 ## 4. The exercises

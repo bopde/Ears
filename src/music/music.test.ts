@@ -112,7 +112,7 @@ describe('progressions', () => {
       expect(progressionBeats(p), `${p.id} is not absurdly long`).toBeLessThanOrEqual(32);
       for (const c of p.chords) {
         expect(CHORD_QUALITIES.some((q) => q.id === c.quality), `${p.id}: ${c.quality}`).toBe(true);
-        expect(c.roman.length, `${p.id} roman label`).toBeGreaterThan(0);
+        expect(c.numeral.length, `${p.id} numeral`).toBeGreaterThan(0);
       }
     }
   });

@@ -18,6 +18,7 @@ const KIND_TITLE: Record<ConceptKind, string> = {
   mode: 'Modes',
   progression: 'Progressions',
   key: 'Tonal centres',
+  inversion: 'Inversions',
 };
 
 export function Progress({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {
@@ -50,7 +51,9 @@ export function Progress({ onBack, onStart }: { onBack: () => void; onStart: () 
     );
   }
 
-  const kinds: ConceptKind[] = ['chord', 'interval', 'mode', 'progression', 'key'];
+  const kinds: ConceptKind[] = [
+    'chord', 'inversion', 'interval', 'mode', 'progression', 'key',
+  ];
 
   return (
     <div className="stack">

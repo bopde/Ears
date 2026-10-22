@@ -1,5 +1,6 @@
 import type { ExerciseType } from './types';
 import { chordFullExercise, chordQualityExercise } from './chord';
+import { inversionExercise } from './inversion';
 import { intervalExercise } from './interval';
 import { keyExercise } from './key';
 import { modeExercise } from './mode';
@@ -16,6 +17,7 @@ import { progressionChordExercise, progressionExercise } from './progression';
 export const EXERCISE_TYPES: ExerciseType[] = [
   chordQualityExercise,
   chordFullExercise,
+  inversionExercise,
   intervalExercise,
   keyExercise,
   modeExercise,

@@ -127,24 +127,32 @@ builds the app and deploys it on every push to `main`.
    b. **Chord, root and quality** — name both. A reference pitch is available as
    a hint so the root can be found by ear rather than by absolute pitch.
 
-   c. **Intervals** — ascending, descending or harmonic, simple or compound.
+   c. **Inversions** — a triad or seventh sounds with one of its notes in the
+   bass. Name the inversion. The answer is written as a slash chord, and the
+   chord exercises do the same whenever their voicing turned the chord over, so
+   a reveal never reports less than the ear was given.
 
-   d. **Tonal centre** — music plays; find the note that feels like home. Up to
+   d. **Intervals** — ascending, descending or harmonic, simple or compound.
+
+   e. **Tonal centre** — music plays; find the note that feels like home. Up to
    level 3 a reference pitch sounds first; above that it is only available as a
    hint, which the model records.
 
-   e. **Modes** — a vamp establishes a tonic, then a line is played over it.
-   Generated lines are guaranteed to sound the degrees that distinguish the
-   mode, because a Dorian phrase that never touches the natural 6th is just an
-   Aeolian phrase with no right answer.
+   f. **Modes** — one or two chords establish a tonic, then a line is played
+   over them. Generated lines are guaranteed to sound the degrees that
+   distinguish the mode, because a Dorian phrase that never touches the natural
+   6th is just an Aeolian phrase with no right answer. The feedback names the
+   mode against the scale you already know — "minor with a natural 6th" — and
+   points at the degree that gave it away.
 
-   f. **Chord changes** — a progression plays; name the harmonic movement.
+   g. **Chord changes** — a progression plays; name the harmonic movement.
    Every option offered has the same number of chords as the answer: each one
    shows its roman numerals, so options of other lengths could be discarded by
    counting the changes rather than by listening to them. The library carries
    at least three progressions at every length so the match can always be made.
 
-   g. **Chords in context** — a progression plays; name one chord from inside it.
+   h. **Chords in context** — a progression plays; name one chord from inside
+   it.
 
 ## 5. How difficulty works
 
@@ -213,8 +221,10 @@ chord questions without being told to.
 ## 7. Architecture
 
    a. `src/music/` — pure theory. Note spelling, intervals, chord qualities,
-   scales, progressions, voicing and phrase generation. No audio, no UI, no
-   React.
+   inversions, scales, progressions, voicing and phrase generation. No audio,
+   no UI, no React. Roman numerals are derived from the chord quality rather
+   than written out by hand, so a progression that plays a ninth is written as
+   V9 and cannot drift back to V7.
 
    b. `src/music/concept.ts` — the seam the brief asks for. A **Concept** is one
    trainable idea with a stable id. Exercises declare which concepts a question

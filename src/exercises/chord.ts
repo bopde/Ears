@@ -3,9 +3,12 @@ import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, pitchClassField, questionId,
 } from './support';
 import {
-  CHORD_QUALITIES, chordConceptId, chordFullName, chordSymbol, makeChord, nearestQualities,
-  qualityLabel, type ChordQuality,
+  CHORD_QUALITIES, chordConceptId, chordFullName, makeChord, nearestQualities,
+  qualityLabel, slashSymbol, type Chord, type ChordQuality,
 } from '../music/chords';
+import { inversionByIndex } from '../music/inversions';
+import { inversionIndex } from '../music/voicing';
+import { mod } from '../lib/util';
 import { arpeggiate, voiceChord, type VoicingStyle } from '../music/voicing';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
@@ -95,8 +98,28 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
   };
 }
 
-function chordNotesLine(voicing: ReturnType<typeof voiceChord>, accidental: PracticeSettings['accidental']): string {
-  return voicing.all.map((m) => midiName(m, accidental)).join('  ');
+/**
+ * What actually sounded.
+ *
+ * Several of the voicing styles turn the chord over, so the heading uses slash
+ * notation and the detail names the inversion — otherwise the reveal reports
+ * less than the ear was given.
+ */
+function revealFor(
+  chord: Chord,
+  voicing: ReturnType<typeof voiceChord>,
+  accidental: PracticeSettings['accidental'],
+) {
+  const bassPc = mod(voicing.all[0], 12);
+  const inverted = inversionByIndex(inversionIndex(chord, voicing));
+  const named = inverted && inverted.index > 0 ? inverted : undefined;
+  return {
+    heading: slashSymbol(chord, bassPc, accidental),
+    detail: named
+      ? `${chordFullName(chord, accidental)}  \u00b7  ${named.name}`
+      : chordFullName(chord, accidental),
+    notes: voicing.all.map((m) => midiName(m, accidental)).join('  '),
+  };
 }
 
 export const chordQualityExercise: ExerciseType = {
@@ -143,11 +166,7 @@ export const chordQualityExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: {
-        heading: chordSymbol(chord, ctx.settings.accidental),
-        detail: chordFullName(chord, ctx.settings.accidental),
-        notes: chordNotesLine(material.voicing, ctx.settings.accidental),
-      },
+      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
       estimatedSeconds: 11 + ctx.difficulty,
     };
   },
@@ -199,11 +218,7 @@ export const chordFullExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: {
-        heading: chordSymbol(chord, ctx.settings.accidental),
-        detail: chordFullName(chord, ctx.settings.accidental),
-        notes: chordNotesLine(material.voicing, ctx.settings.accidental),
-      },
+      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
       estimatedSeconds: 15 + ctx.difficulty,
     };
   },

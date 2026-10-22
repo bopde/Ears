@@ -10,7 +10,13 @@
  * library, theory notes, or transcription examples attach to a concept id
  * without the practice engine knowing anything about them.
  */
-export type ConceptKind = 'chord' | 'interval' | 'mode' | 'progression' | 'key';
+export type ConceptKind =
+  | 'chord'
+  | 'interval'
+  | 'mode'
+  | 'progression'
+  | 'key'
+  | 'inversion';
 
 export interface Concept {
   /** Namespaced and stable — it is the key for stored practice history. */

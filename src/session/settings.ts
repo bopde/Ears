@@ -9,6 +9,7 @@ import { DEFAULT_INSTRUMENT } from '../audio/instruments';
 export const EXERCISE_TYPE_IDS = [
   'chord-quality',
   'chord-full',
+  'chord-inversion',
   'interval',
   'key',
   'mode',
@@ -82,7 +83,9 @@ export const DURATION_OPTIONS = [5, 10, 20, 30] as const;
 
 export function defaultSettings(): PracticeSettings {
   return {
-    exerciseTypes: ['chord-quality', 'chord-full', 'interval', 'key', 'mode', 'progression'],
+    exerciseTypes: [
+      'chord-quality', 'chord-full', 'chord-inversion', 'interval', 'key', 'mode', 'progression',
+    ],
     durationMinutes: 10,
     difficulty: 'adaptive',
     keys: 'all',

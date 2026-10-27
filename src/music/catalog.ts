@@ -3,6 +3,7 @@ import { CHORD_QUALITIES, chordConcept } from './chords';
 import { INTERVALS, intervalConcept } from './intervals';
 import { SCALES, scaleConcept } from './scales';
 import { PROGRESSIONS, progressionConcept } from './progressions';
+import { INVERSIONS, inversionConcept } from './inversions';
 import { PITCH_CLASSES, pcNameDual, type PitchClass } from './pitch';
 
 /** Keys get concepts too, so the model can tell C major from G♭ major. */
@@ -34,6 +35,7 @@ export function buildCatalog(): ConceptRegistry {
     ...INTERVALS.map(intervalConcept),
     ...SCALES.map(scaleConcept),
     ...PROGRESSIONS.map(progressionConcept),
+    ...INVERSIONS.map(inversionConcept),
     ...PITCH_CLASSES.map(keyConcept),
   ]);
 }

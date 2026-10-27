@@ -3,13 +3,17 @@ import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, pitchClassField, questionId,
 } from './support';
 import {
-  CHORD_QUALITIES, chordConceptId, chordFullName, chordSymbol, makeChord, nearestQualities,
-  qualityLabel, type ChordQuality,
+  CHORD_QUALITIES, chordConceptId, chordFullName, makeChord, nearestQualities,
+  qualityLabel, qualityPitchClasses, samePitchClasses, slashSymbol,
+  type Chord, type ChordQuality,
 } from '../music/chords';
+import { inversionByIndex } from '../music/inversions';
+import { inversionIndex } from '../music/voicing';
+import { mod } from '../lib/util';
 import { arpeggiate, voiceChord, type VoicingStyle } from '../music/voicing';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
-import { midiName, pcName, pcNameDual } from '../music/pitch';
+import { PITCH_CLASSES, midiName, pcName, pcNameDual, type PitchClass } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import type { Rng } from '../lib/rng';
 import { clamp } from '../lib/util';
@@ -47,6 +51,33 @@ function voicingPlan(difficulty: number, rng: Rng): { style: VoicingStyle; bass:
     default:
       return { style: rng.pick<VoicingStyle>(['rootless', 'drop2']), bass: false, maxNotes: 5 };
   }
+}
+
+/** The pitch classes the voicing actually sounds, root included or not. */
+function soundingPitchClasses(voicing: ReturnType<typeof voiceChord>): Set<PitchClass> {
+  return new Set(voicing.all.map((m) => mod(m, 12)));
+}
+
+/**
+ * Drops the wrong answers that would in fact be right.
+ *
+ * A voicing that leaves the root out can land exactly on another chord: a
+ * rootless Em7♭5 is a G minor triad note for note, and D sus2 and A sus4 are
+ * the same three notes read from different roots. Offering both gives the
+ * listener nothing to decide on, so any quality that reproduces what sounded —
+ * from any root — is kept out of the running.
+ */
+function unambiguous(
+  pool: ChordQuality[],
+  target: ChordQuality,
+  sounding: Set<PitchClass>,
+): ChordQuality[] {
+  const matchesEar = (q: ChordQuality) =>
+    PITCH_CLASSES.some((root) => samePitchClasses(qualityPitchClasses(q, root), sounding));
+  const kept = pool.filter((q) => q === target || !matchesEar(q));
+  // Two options is the least a question can offer; below that, take the pool
+  // as it stands rather than hand back something unanswerable.
+  return kept.length >= 2 ? kept : pool;
 }
 
 function qualityOption(q: ChordQuality) {
@@ -95,8 +126,28 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
   };
 }
 
-function chordNotesLine(voicing: ReturnType<typeof voiceChord>, accidental: PracticeSettings['accidental']): string {
-  return voicing.all.map((m) => midiName(m, accidental)).join('  ');
+/**
+ * What actually sounded.
+ *
+ * Several of the voicing styles turn the chord over, so the heading uses slash
+ * notation and the detail names the inversion — otherwise the reveal reports
+ * less than the ear was given.
+ */
+function revealFor(
+  chord: Chord,
+  voicing: ReturnType<typeof voiceChord>,
+  accidental: PracticeSettings['accidental'],
+) {
+  const bassPc = mod(voicing.all[0], 12);
+  const inverted = inversionByIndex(inversionIndex(chord, voicing));
+  const named = inverted && inverted.index > 0 ? inverted : undefined;
+  return {
+    heading: slashSymbol(chord, bassPc, accidental),
+    detail: named
+      ? `${chordFullName(chord, accidental)}  \u00b7  ${named.name}`
+      : chordFullName(chord, accidental),
+    notes: voicing.all.map((m) => midiName(m, accidental)).join('  '),
+  };
 }
 
 export const chordQualityExercise: ExerciseType = {
@@ -113,8 +164,9 @@ export const chordQualityExercise: ExerciseType = {
     const rootPc = chooseKey(ctx);
     const material = buildMaterial(ctx, quality, rootPc);
 
-    const n = optionCount(ctx.difficulty, pool.length);
-    const distractors = pickDistractors(ctx.rng, quality, pool, n - 1, ctx.difficulty, nearestQualities);
+    const offered = unambiguous(pool, quality, soundingPitchClasses(material.voicing));
+    const n = optionCount(ctx.difficulty, offered.length);
+    const distractors = pickDistractors(ctx.rng, quality, offered, n - 1, ctx.difficulty, nearestQualities);
     const chord = makeChord(rootPc, quality.id);
 
     return {
@@ -143,11 +195,7 @@ export const chordQualityExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: {
-        heading: chordSymbol(chord, ctx.settings.accidental),
-        detail: chordFullName(chord, ctx.settings.accidental),
-        notes: chordNotesLine(material.voicing, ctx.settings.accidental),
-      },
+      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
       estimatedSeconds: 11 + ctx.difficulty,
     };
   },
@@ -167,8 +215,9 @@ export const chordFullExercise: ExerciseType = {
     const rootPc = chooseKey(ctx);
     const material = buildMaterial(ctx, quality, rootPc);
 
-    const n = optionCount(ctx.difficulty, pool.length);
-    const distractors = pickDistractors(ctx.rng, quality, pool, n - 1, ctx.difficulty, nearestQualities);
+    const offered = unambiguous(pool, quality, soundingPitchClasses(material.voicing));
+    const n = optionCount(ctx.difficulty, offered.length);
+    const distractors = pickDistractors(ctx.rng, quality, offered, n - 1, ctx.difficulty, nearestQualities);
     const chord = makeChord(rootPc, quality.id);
 
     return {
@@ -199,11 +248,7 @@ export const chordFullExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: {
-        heading: chordSymbol(chord, ctx.settings.accidental),
-        detail: chordFullName(chord, ctx.settings.accidental),
-        notes: chordNotesLine(material.voicing, ctx.settings.accidental),
-      },
+      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
       estimatedSeconds: 15 + ctx.difficulty,
     };
   },

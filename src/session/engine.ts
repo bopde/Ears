@@ -358,13 +358,6 @@ export class SessionEngine {
     }
   }
 
-  clearField(fieldKey: string): void {
-    if (this.state.phase !== 'question') return;
-    const answers = { ...this.state.answers };
-    delete answers[fieldKey];
-    this.set({ answers });
-  }
-
   private submit(answers: FieldAnswers): void {
     const question = this.state.question;
     if (!question) return;
@@ -428,13 +421,6 @@ export class SessionEngine {
   /** Moves on from feedback. */
   next(): void {
     if (this.state.phase !== 'feedback') return;
-    this.nextQuestion();
-  }
-
-  /** Abandons the current question without answering it. */
-  skip(): void {
-    if (this.state.phase !== 'question') return;
-    this.performer.stop();
     this.nextQuestion();
   }
 

@@ -56,6 +56,9 @@ export const modeExercise: ExerciseType = {
     const vampBeats = 2;
     const vampLength = vampBeats * Math.max(1, vampChords.length);
     const bedVoicing = voiceChord(vampChords[0], { style: 'rootless', maxNotes: 4 });
+    // Locrian has no perfect fifth, so droning one underneath would sound a
+    // note the mode does not contain, a semitone against its own ♭5.
+    const droneFifth = scale.degrees.includes(7) ? 7 : null;
     const lineBeats = phraseDurationBeats(line);
 
     const play = (perf: Performer) => {
@@ -70,7 +73,7 @@ export const modeExercise: ExerciseType = {
         velocity: 0.3,
         roll: 0.02,
       });
-      perf.drone(tonic, origin + (lineStart * 60) / perf.tempo, lineBeats + 1, 0.22);
+      perf.drone(tonic, origin + (lineStart * 60) / perf.tempo, lineBeats + 1, 0.22, droneFifth);
       perf.melody(line, origin, lineStart + 0.5);
       return ((lineStart + lineBeats + 1.5) * 60) / perf.tempo;
     };

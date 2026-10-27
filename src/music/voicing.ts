@@ -36,6 +36,8 @@ export interface VoicingOptions {
   maxNotes?: number;
   /** Forces the lowest chord tone to a given pitch class (used for inversions). */
   bottomPc?: number;
+  /** Pitch class for the bass note. Defaults to the root. */
+  bassPc?: number;
 }
 
 export interface Voicing {
@@ -186,8 +188,11 @@ export function voiceChord(chord: Chord, opts: VoicingOptions = {}): Voicing {
     if (dropped[0] >= lo - 12) best = dropped;
   }
 
+  // An inversion is only an inversion if the bass agrees with the stack, so
+  // the bass note follows bassPc when one is given rather than always the root.
+  const bassPitch = mod(opts.bassPc ?? chord.rootPc, 12);
   const bass = opts.bass
-    ? foldInto(chord.rootPc + 48, REGISTER.bass.lo, Math.min(REGISTER.bass.hi, best[0] - 7))
+    ? foldInto(bassPitch + 48, REGISTER.bass.lo, Math.min(REGISTER.bass.hi, best[0] - 7))
     : undefined;
 
   return {
@@ -211,6 +216,15 @@ export function voiceProgression(
     prev = v.notes;
   }
   return out;
+}
+
+/**
+ * Which chord tone is sounding lowest: 0 the root, 1 the third, 2 the fifth,
+ * 3 the seventh. -1 when the lowest note is not a chord tone at all.
+ */
+export function inversionIndex(chord: Chord, voicing: Voicing): number {
+  const bassPc = mod(voicing.all[0], 12);
+  return chord.quality.intervals.findIndex((i) => mod(chord.rootPc + i, 12) === bassPc);
 }
 
 /** Ascending arpeggio of the chord, for the "what you heard" replay. */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../state';
 import { Chip, Segmented, TopBar, clsx } from '../components/ui';
 import { PlayIcon } from '../components/Icons';
@@ -95,7 +95,16 @@ export function Reference({ onBack }: { onBack: () => void }) {
   const key = settings.referenceKey;
   const accidental = settings.accidental;
 
-  useEffect(() => () => performer.stop(), [performer]);
+  // One pending timer at a time, cancelled on the way out so a demo started
+  // just before leaving the cheat sheet cannot set state on a gone screen.
+  const clearTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      performer.stop();
+      if (clearTimer.current !== null) window.clearTimeout(clearTimer.current);
+    },
+    [performer],
+  );
 
   const play = async (id: string, run: (perf: Performer) => number) => {
     // Safari will not start audio outside a gesture, and this is the gesture.
@@ -108,7 +117,8 @@ export function Reference({ onBack }: { onBack: () => void }) {
     });
     const seconds = run(performer);
     setPlaying(id);
-    window.setTimeout(
+    if (clearTimer.current !== null) window.clearTimeout(clearTimer.current);
+    clearTimer.current = window.setTimeout(
       () => setPlaying((current) => (current === id ? null : current)),
       Math.max(300, seconds * 1000),
     );

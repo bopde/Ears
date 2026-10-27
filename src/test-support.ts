@@ -1,6 +1,7 @@
-import type { NotePlayOptions, Performer } from './audio/performer';
+import { bassLine, type BassChord, type NotePlayOptions, type Performer } from './audio/performer';
 import type { Voicing } from './music/voicing';
 import type { PhraseNote } from './music/phrase';
+import { REGISTER, foldInto } from './music/pitch';
 
 export interface RecordedNote {
   midi: number;
@@ -18,6 +19,8 @@ export class FakePerformer {
   chords: Voicing[] = [];
   melodies: PhraseNote[][] = [];
   progressions: number[] = [];
+  /** The bass line underneath a progression, in schedule order. */
+  bass: Array<{ midi: number; beat: number; time: number }> = [];
   drones = 0;
   stops = 0;
   tempo = 120;
@@ -82,21 +85,42 @@ export class FakePerformer {
     return end;
   }
 
-  drone(_rootPc: number, origin: number, beats: number): void {
+  drone(
+    rootPc: number,
+    origin: number,
+    beats: number,
+    velocity = 0.5,
+    fifth: number | null = 7,
+  ): void {
     if (origin < 0) throw new Error('Drone scheduled in the past');
     this.drones += 1;
     this.progressions.push(beats);
+    // Recorded as notes as well as counted: a drone is audible material, and
+    // anything checking what a question sounds has to be able to see it.
+    const root = foldInto(rootPc + 36, REGISTER.drone.lo, REGISTER.drone.hi);
+    const seconds = beats * this.beatSeconds;
+    this.note(root, origin, seconds, velocity);
+    if (fifth !== null) this.note(root + fifth, origin, seconds, velocity * 0.8);
   }
 
   progression(
-    chords: readonly { voicing: Voicing; beats: number; rootPc: number }[],
+    chords: readonly (BassChord & { voicing: Voicing })[],
     origin: number,
+    opts: { style?: 'sustained' | 'comp' } = {},
   ): number {
+    // One entry per chord, whatever the style: `chords` is what the question
+    // claims to be playing, not how many times the comping hits it.
     let beat = 0;
-    for (const c of chords) {
+    for (let i = 0; i < chords.length; i++) {
+      const c = chords[i];
       this.chords.push(c.voicing);
       for (const midi of c.voicing.notes) {
         this.note(midi, origin + beat * this.beatSeconds, c.beats * this.beatSeconds);
+      }
+      // The same bass line the real performer plays, from the same function.
+      for (const b of bassLine(c, chords[i + 1], opts.style ?? 'sustained', beat)) {
+        const time = this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity);
+        this.bass.push({ midi: b.midi, beat: b.beat, time });
       }
       beat += c.beats;
     }

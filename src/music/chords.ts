@@ -208,6 +208,18 @@ export function requireChordQuality(id: string): ChordQuality {
 
 export const qualityLabel = (q: ChordQuality): string => q.short ?? q.symbol ?? q.name;
 
+/**
+ * The suffix a roman numeral carries for this quality.
+ *
+ * A lowercase numeral already says minor, so the leading "m" of a minor
+ * symbol would say it twice: ii7, not iim7. Everything else — the extensions,
+ * the alterations, the ø and the ° — is kept, so the numeral states what is
+ * actually played rather than rounding it down to a seventh.
+ */
+export function romanSuffix(quality: ChordQuality): string {
+  return quality.symbol.startsWith('m') ? quality.symbol.slice(1) : quality.symbol;
+}
+
 // ── Chord instances ────────────────────────────────────────────────────────
 
 export interface Chord {
@@ -223,6 +235,23 @@ export function chordSymbol(chord: Chord, pref: Accidental = 'both'): string {
   return `${pcName(chord.rootPc, pref)}${chord.quality.symbol}`;
 }
 
+/**
+ * The chord as written when a tone other than the root is in the bass.
+ *
+ * Several voicing styles invert the chord, and a reveal that says "C∆7" when
+ * an E is underneath is telling you less than it heard.
+ */
+export function slashSymbol(
+  chord: Chord,
+  bassPc: PitchClass,
+  pref: Accidental = 'both',
+): string {
+  const bass = mod(bassPc, 12);
+  return bass === chord.rootPc
+    ? chordSymbol(chord, pref)
+    : `${chordSymbol(chord, pref)}/${pcName(bass, pref)}`;
+}
+
 export function chordFullName(chord: Chord, pref: Accidental = 'both'): string {
   return `${pcName(chord.rootPc, pref)} ${chord.quality.name}`;
 }
@@ -234,6 +263,30 @@ export function chordTones(chord: Chord, rootMidi: Midi): Midi[] {
 
 export function chordPitchClasses(chord: Chord): PitchClass[] {
   return chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12));
+}
+
+/** The pitch classes a quality sounds, rooted on `root`. */
+export function qualityPitchClasses(quality: ChordQuality, root: PitchClass = 0): Set<PitchClass> {
+  return new Set(quality.intervals.map((i) => mod(root + i, 12)));
+}
+
+export function samePitchClasses(a: Set<PitchClass>, b: Set<PitchClass>): boolean {
+  return a.size === b.size && [...a].every((pc) => b.has(pc));
+}
+
+/**
+ * True when transposing the chord by one of its own intervals reproduces it.
+ *
+ * Diminished sevenths, augmented triads and 7♭5 chords divide the octave
+ * evenly, so C+, E+ and G♯+ are the same three notes. Such a chord has no
+ * audible inversion: there is nothing in the sound to say which note is the
+ * root, so asking is a question with no answer.
+ */
+export function isSymmetrical(quality: ChordQuality): boolean {
+  const base = qualityPitchClasses(quality);
+  return quality.intervals
+    .filter((i) => mod(i, 12) !== 0)
+    .some((i) => samePitchClasses(qualityPitchClasses(quality, i), base));
 }
 
 // ── Similarity, for choosing distractors ──────────────────────────────────

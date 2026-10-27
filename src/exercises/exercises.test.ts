@@ -5,7 +5,12 @@ import { defaultSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
 import { CONCEPTS } from '../music/catalog';
-import { CHORD_QUALITIES, qualitySimilarity } from '../music/chords';
+import {
+  CHORD_QUALITIES, isSymmetrical, qualitySimilarity, requireChordQuality,
+} from '../music/chords';
+import { inversionsFor, requireInversion } from '../music/inversions';
+import { invertibleQualities } from './inversion';
+import { mod } from '../lib/util';
 import { SCALES, requireScale } from '../music/scales';
 import { CORE_PROGRESSIONS, PROGRESSIONS, requireProgression } from '../music/progressions';
 import { uniq } from '../lib/util';
@@ -286,5 +291,119 @@ describe('progression options cannot be counted out', () => {
       expect(def!.devices.length, `${id} names its devices`).toBeGreaterThan(0);
       expect(def!.blurb, `${id} explains itself`).toBeTruthy();
     }
+  });
+});
+
+describe('inversion questions sound what they claim', () => {
+  const type = EXERCISE_TYPES.find((t) => t.id === 'chord-inversion')!;
+
+  const dissect = (q: ReturnType<typeof type.generate>) => {
+    const question = q!;
+    const qualityId = question.conceptIds
+      .find((id) => id.startsWith('chord:'))!
+      .slice('chord:'.length);
+    return {
+      question,
+      quality: requireChordQuality(qualityId),
+      inversion: requireInversion(question.correct.inversion),
+    };
+  };
+
+  it('puts the tone it names in the bass', () => {
+    for (let difficulty = 1; difficulty <= 5; difficulty++) {
+      for (let seed = 0; seed < 40; seed++) {
+        const { question, quality, inversion } = dissect(
+          type.generate(context(difficulty, seed * 613 + difficulty)),
+        );
+        const perf = new FakePerformer();
+        question.play(perf.asPerformer());
+        const lowest = Math.min(...perf.notes.map((n) => n.midi));
+        const expected = mod(question.keyPc! + quality.intervals[inversion.index], 12);
+        expect(
+          mod(lowest, 12),
+          `d${difficulty} seed ${seed}: ${quality.id} ${inversion.id}`,
+        ).toBe(expected);
+      }
+    }
+  });
+
+  it('offers only the inversions that chord has, and always the right one', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const { question, quality, inversion } = dissect(type.generate(context(3, seed * 97 + 5)));
+      const offered = question.fields[0].options.map((o) => o.id);
+      expect(offered.sort()).toEqual(
+        inversionsFor(quality.intervals.length)
+          .map((i) => i.id)
+          .sort(),
+      );
+      expect(offered).toContain(inversion.id);
+      expect(inversion.index, 'the chord is big enough for it').toBeLessThan(
+        quality.intervals.length,
+      );
+    }
+  });
+
+  it('writes it as a slash chord unless it is in root position', () => {
+    let inverted = 0;
+    for (let seed = 0; seed < 80; seed++) {
+      const { question, inversion } = dissect(type.generate(context(3, seed * 31 + 11)));
+      if (inversion.index === 0) {
+        expect(question.reveal.heading, 'root position needs no slash').not.toContain('/');
+      } else {
+        inverted++;
+        expect(question.reveal.heading, `${inversion.id} is a slash chord`).toContain('/');
+        expect(question.reveal.detail).toContain(inversion.name);
+      }
+    }
+    expect(inverted, 'inversions do come up').toBeGreaterThan(20);
+  });
+
+  it('sticks to triads and sevenths, which can still be heard turned over', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const { quality } = dissect(type.generate(context(5, seed * 17 + 2)));
+      expect(quality.intervals.length, quality.id).toBeLessThanOrEqual(4);
+      expect(quality.intervals.every((i) => i < 12), quality.id).toBe(true);
+    }
+  });
+
+  it('never asks about a chord that sounds the same whichever way up it is', () => {
+    // An augmented triad, a diminished seventh and a 7♭5 divide the octave
+    // evenly: turn one over and the notes are unchanged, so no answer to
+    // "which inversion is this?" is more right than any other.
+    for (const quality of invertibleQualities(settings)) {
+      expect(isSymmetrical(quality), `${quality.id} is symmetrical`).toBe(false);
+    }
+    expect(['aug', 'dim7', '7b5'].map((id) => isSymmetrical(requireChordQuality(id))))
+      .toEqual([true, true, true]);
+    for (let seed = 0; seed < 200; seed++) {
+      const { quality } = dissect(type.generate(context(4, seed * 31 + 5)));
+      expect(isSymmetrical(quality), quality.id).toBe(false);
+    }
+  });
+});
+
+describe('chord reveals report the voicing they used', () => {
+  it('writes a slash chord whenever the voicing inverted it', () => {
+    const chordTypes = EXERCISE_TYPES.filter((t) => t.id.startsWith('chord-') && t.id !== 'chord-inversion');
+    let slashes = 0;
+    for (const type of chordTypes) {
+      for (let difficulty = 1; difficulty <= 5; difficulty++) {
+        for (let seed = 0; seed < 30; seed++) {
+          const q = type.generate(context(difficulty, seed * 379 + difficulty))!;
+          const perf = new FakePerformer();
+          q.play(perf.asPerformer());
+          const lowest = Math.min(...perf.notes.map((n) => n.midi));
+          const rootPc = q.keyPc!;
+          const heading = q.reveal.heading;
+          if (mod(lowest, 12) === rootPc) {
+            expect(heading, `${type.id} root position`).not.toMatch(/\/[A-G]/);
+          } else {
+            slashes++;
+            expect(heading, `${type.id} inverted`).toMatch(/\/[A-G]/);
+          }
+        }
+      }
+    }
+    expect(slashes, 'the harder voicings really do invert').toBeGreaterThan(0);
   });
 });

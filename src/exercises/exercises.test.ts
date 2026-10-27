@@ -5,8 +5,11 @@ import { defaultSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
 import { CONCEPTS } from '../music/catalog';
-import { CHORD_QUALITIES, qualitySimilarity, requireChordQuality } from '../music/chords';
+import {
+  CHORD_QUALITIES, isSymmetrical, qualitySimilarity, requireChordQuality,
+} from '../music/chords';
 import { inversionsFor, requireInversion } from '../music/inversions';
+import { invertibleQualities } from './inversion';
 import { mod } from '../lib/util';
 import { SCALES, requireScale } from '../music/scales';
 import { CORE_PROGRESSIONS, PROGRESSIONS, requireProgression } from '../music/progressions';
@@ -360,6 +363,21 @@ describe('inversion questions sound what they claim', () => {
       const { quality } = dissect(type.generate(context(5, seed * 17 + 2)));
       expect(quality.intervals.length, quality.id).toBeLessThanOrEqual(4);
       expect(quality.intervals.every((i) => i < 12), quality.id).toBe(true);
+    }
+  });
+
+  it('never asks about a chord that sounds the same whichever way up it is', () => {
+    // An augmented triad, a diminished seventh and a 7♭5 divide the octave
+    // evenly: turn one over and the notes are unchanged, so no answer to
+    // "which inversion is this?" is more right than any other.
+    for (const quality of invertibleQualities(settings)) {
+      expect(isSymmetrical(quality), `${quality.id} is symmetrical`).toBe(false);
+    }
+    expect(['aug', 'dim7', '7b5'].map((id) => isSymmetrical(requireChordQuality(id))))
+      .toEqual([true, true, true]);
+    for (let seed = 0; seed < 200; seed++) {
+      const { quality } = dissect(type.generate(context(4, seed * 31 + 5)));
+      expect(isSymmetrical(quality), quality.id).toBe(false);
     }
   });
 });

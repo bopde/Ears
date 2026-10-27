@@ -1,7 +1,8 @@
 import type { ExerciseType, Question } from './types';
 import { buildOptions, chooseKey, chooseTarget, questionId } from './support';
 import {
-  CHORD_QUALITIES, chordConceptId, chordFullName, makeChord, slashSymbol, type ChordQuality,
+  CHORD_QUALITIES, chordConceptId, chordFullName, isSymmetrical, makeChord, slashSymbol,
+  type ChordQuality,
 } from '../music/chords';
 import { inversionConceptId, inversionsFor, type InversionDef } from '../music/inversions';
 import { voiceChord, type VoicingStyle } from '../music/voicing';
@@ -15,11 +16,19 @@ import { clamp, mod } from '../lib/util';
  * draws on triads and sevenths — chords whose tones you can still count by ear
  * once they are turned over. A 13th chord has an inversion in theory and
  * nothing recognisable in practice.
+ *
+ * Symmetrical chords are left out for a stronger reason: an augmented triad or
+ * a diminished seventh turned over is the very same set of notes, so no
+ * listener could name its inversion and no answer would be more right than
+ * another.
  */
-function invertibleQualities(settings: PracticeSettings): ChordQuality[] {
+export function invertibleQualities(settings: PracticeSettings): ChordQuality[] {
   const allowed = new Set(settings.chordQualities);
   const usable = (q: ChordQuality) =>
-    q.intervals.length >= 3 && q.intervals.length <= 4 && q.intervals.every((i) => i < 12);
+    q.intervals.length >= 3 &&
+    q.intervals.length <= 4 &&
+    q.intervals.every((i) => i < 12) &&
+    !isSymmetrical(q);
   const pool = CHORD_QUALITIES.filter((q) => allowed.has(q.id) && usable(q));
   return pool.length ? pool : CHORD_QUALITIES.filter(usable);
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DailyResult } from '../../learning/model';
 import { dailyShareText, shareText, type ShareOutcome } from '../../session/share';
 import { Button } from './ui';
@@ -20,11 +20,23 @@ export function ShareDaily({
 }) {
   const [outcome, setOutcome] = useState<ShareOutcome | null>(null);
   const text = dailyShareText(result);
+  // The confirmation clears itself, but the button often sits on a screen the
+  // user leaves straight after sharing, so the timer is cancelled on unmount.
+  const resetTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
+    },
+    [],
+  );
 
   const send = async () => {
     const next = await shareText(text);
     setOutcome(next);
-    if (next === 'copied') window.setTimeout(() => setOutcome(null), 2500);
+    if (next === 'copied') {
+      if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
+      resetTimer.current = window.setTimeout(() => setOutcome(null), 2500);
+    }
   };
 
   return (

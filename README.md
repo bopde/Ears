@@ -154,6 +154,51 @@ builds the app and deploys it on every push to `main`.
    h. **Chords in context** — a progression plays; name one chord from inside
    it.
 
+### 4.1 Questions it will not ask
+
+A multiple-choice question is only fair if exactly one of the options accounts
+for what was heard. Two kinds of question fail that test no matter how well the
+rest of the app works, so they are filtered out before the options are built.
+Both filters are enforced by the sweep in `src/exercises/audit.test.ts`, which
+generates several thousand questions and fails the build if either reappears.
+
+   a. **Chords that sound the same whichever way up they are** are never used
+   for inversion training.
+
+   i. An augmented triad, a diminished seventh and a 7♭5 divide the octave
+   evenly. C+, E+ and G♯+ are the same three notes; turn one over and nothing
+   about the sound changes. There is no cue in the audio to say which note is
+   the root, so "which inversion is this?" has no answer a listener could
+   reach, and four of the options are as defensible as the one marked correct.
+
+   ii. `isSymmetrical()` in `src/music/chords.ts` detects this by transposing
+   the quality by each of its own intervals and checking whether the pitch
+   classes come back unchanged; `invertibleQualities()` keeps those chords out
+   of the pool. They remain available everywhere else — naming an augmented
+   triad by ear is a perfectly good question, and still asked.
+
+   b. **Wrong answers that are in fact right** are dropped from the options.
+
+   i. Above level 3 the voicing may leave the root out, and a rootless chord
+   can land exactly on a different chord: a rootless Em7♭5 is a G minor triad,
+   note for note, and D sus2 and A sus4 are the same three notes read from
+   different roots. Offering both leaves nothing to decide by ear, and the
+   adaptive model would then record a defensible answer as a failure and keep
+   drilling it.
+
+   ii. Each chord question compares the pitch classes it is about to sound
+   against every quality in the pool, rooted on all twelve degrees, and removes
+   any that reproduces the set exactly. Only the quality that was actually
+   played survives. The answer itself is never filtered out, and if the pool
+   were ever reduced below two the unfiltered pool is used instead.
+
+   c. **One ambiguity is deliberately kept.** Aeolian and Phrygian differ in a
+   single note — the second degree — and a generated line that happens not to
+   touch it fits both. Narrowing the phrase generator until every modal line
+   always sounds its distinguishing degree would make the modal exercise
+   predictable, and the pairing is one worth meeting. The audit test asserts
+   that this remains the *only* pair of modes a phrase can fail to separate.
+
 ## 5. How difficulty works
 
 Difficulty is not playback speed. Each level changes what the ear actually has
@@ -302,6 +347,20 @@ Everything the brief lists as future work attaches at an existing seam.
    on the tap that begins a session. iOS also needs a silent media element
    playing, or the hardware mute switch silences Web Audio; both are handled in
    `src/audio/engine.ts`.
+
+   e. The accompaniment takes its notes from the harmony rather than assuming
+   them. Both cases matter because the bass and the drone sit underneath
+   everything, which is exactly where a wrong note is least forgivable.
+
+   i. The bass line plays the fifth the chord actually holds — diminished
+   under a half-diminished chord, augmented under an altered dominant — and
+   holds the root through the bar when the chord has no fifth at all. Walking
+   it a perfect fifth under a m7♭5 would put a semitone against the ♭5 the
+   chord is named for.
+
+   ii. The modal drone sounds the tonic alone when the mode has no perfect
+   fifth. A drone is a held note, so a natural 5 under a Locrian line would
+   contradict its ♭5 for the whole phrase — and that ♭5 is the answer.
 
 ## 10. Your data
 

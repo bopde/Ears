@@ -265,6 +265,30 @@ export function chordPitchClasses(chord: Chord): PitchClass[] {
   return chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12));
 }
 
+/** The pitch classes a quality sounds, rooted on `root`. */
+export function qualityPitchClasses(quality: ChordQuality, root: PitchClass = 0): Set<PitchClass> {
+  return new Set(quality.intervals.map((i) => mod(root + i, 12)));
+}
+
+export function samePitchClasses(a: Set<PitchClass>, b: Set<PitchClass>): boolean {
+  return a.size === b.size && [...a].every((pc) => b.has(pc));
+}
+
+/**
+ * True when transposing the chord by one of its own intervals reproduces it.
+ *
+ * Diminished sevenths, augmented triads and 7♭5 chords divide the octave
+ * evenly, so C+, E+ and G♯+ are the same three notes. Such a chord has no
+ * audible inversion: there is nothing in the sound to say which note is the
+ * root, so asking is a question with no answer.
+ */
+export function isSymmetrical(quality: ChordQuality): boolean {
+  const base = qualityPitchClasses(quality);
+  return quality.intervals
+    .filter((i) => mod(i, 12) !== 0)
+    .some((i) => samePitchClasses(qualityPitchClasses(quality, i), base));
+}
+
 // ── Similarity, for choosing distractors ──────────────────────────────────
 
 /**

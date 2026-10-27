@@ -33,6 +33,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [audioReady, setAudioReady] = useState(false);
   const storageOk = useMemo(storageAvailable, []);
   const saveTimer = useRef<number | null>(null);
+  // The flush listeners are registered once and read the profile from here, so
+  // that a session's worth of answers does not leave a listener per question.
+  const latestProfile = useRef(profile);
+  latestProfile.current = profile;
 
   const settings = useMemo(() => normaliseSettings(profile.settings), [profile.settings]);
 
@@ -78,14 +82,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         window.clearTimeout(saveTimer.current);
         saveTimer.current = null;
       }
-      saveProfile(profile);
+      saveProfile(latestProfile.current);
+    };
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flush();
     };
     window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flush();
-    });
-    return () => window.removeEventListener('pagehide', flush);
-  }, [profile]);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, []);
 
   useEffect(() => {
     engine.setVolume(settings.volume);

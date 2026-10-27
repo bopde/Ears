@@ -36,6 +36,86 @@ export interface ChordPlayOptions {
 
 const LOOKAHEAD = 0.09;
 
+export interface BassNote {
+  /** Absolute beat, measured the same way the chord above it is. */
+  beat: number;
+  beats: number;
+  midi: number;
+  velocity: number;
+}
+
+/**
+ * The bass line underneath one chord of a progression.
+ *
+ * Pulled out of the performer so that the test double can sound exactly what
+ * the real one sounds. A bass note that only the browser ever hears is a bass
+ * note no test can check, and the bass is where the root of every chord in a
+ * progression is stated.
+ */
+export interface BassChord {
+  beats: number;
+  rootPc: number;
+  /** Every pitch class the chord holds, so the bass can agree with it. */
+  pcs: readonly number[];
+}
+
+/**
+ * The interval above the root the chord uses for a given scale degree.
+ *
+ * Which fifth a chord has is not a given: a half-diminished chord has a ♭5
+ * and an altered dominant a ♯5, and a bass walking a perfect fifth under
+ * either lands a semitone from the note that defines the chord — in the
+ * register where a clash is least forgivable.
+ */
+function ownTone(rootPc: number, pcs: readonly number[], prefer: readonly number[]): number | null {
+  const held = new Set(pcs.map((pc) => mod(pc, 12)));
+  return prefer.find((offset) => held.has(mod(rootPc + offset, 12))) ?? null;
+}
+
+export function bassLine(
+  chord: BassChord,
+  next: { rootPc: number } | undefined,
+  style: 'sustained' | 'comp',
+  startBeat: number,
+): BassNote[] {
+  const { beats, rootPc, pcs } = chord;
+  const root = foldInto(rootPc + 36, REGISTER.bass.lo, REGISTER.bass.hi);
+  // Diminished, perfect or augmented, whichever this chord actually holds.
+  const fifth = ownTone(rootPc, pcs, [7, 6, 8]);
+  // Seventh, sixth or diminished seventh, in that order of preference. A
+  // triad has none, and then the third stands in, so the walking line stays
+  // inside the harmony rather than implying a seventh the chord has not got.
+  const third = ownTone(rootPc, pcs, [3, 4]);
+  const seventh = ownTone(rootPc, pcs, [10, 11, 9]) ?? third;
+
+  if (style !== 'comp') {
+    const out: BassNote[] = [{ beat: startBeat, beats, midi: root, velocity: 0.74 }];
+    // A long chord gets its fifth halfway through, which keeps a whole bar of
+    // one harmony from going static. A chord with no fifth holds the root.
+    if (beats >= 4 && fifth !== null) {
+      out.push({
+        beat: startBeat + 2,
+        beats: beats - 2,
+        midi: pcAtOrAbove(mod(rootPc + fifth, 12), root + 1),
+        velocity: 0.6,
+      });
+    }
+    return out;
+  }
+
+  // Walking quarter notes from one root to the next: root, fifth, the seventh,
+  // then a half step into the following root.
+  const nextRoot = foldInto((next?.rootPc ?? rootPc) + 36, REGISTER.bass.lo, REGISTER.bass.hi);
+  const steps: Array<[number, number]> = [[0, root]];
+  if (beats >= 2) steps.push([1, pcAtOrAbove(mod(rootPc + (fifth ?? third ?? 0), 12), root - 5)]);
+  if (beats >= 3) steps.push([2, pcAtOrAbove(mod(rootPc + (seventh ?? 0), 12), root - 2)]);
+  if (beats >= 4) steps.push([3, nextRoot + (nextRoot >= root ? -1 : 1)]);
+  return steps
+    .filter(([b]) => b < beats)
+    .map(([b, midi]) => ({ beat: startBeat + b, beats: 1, midi, velocity: 0.72 }));
+}
+
+
 /**
  * Level trim for a texture of `voices` simultaneous notes.
  *
@@ -182,11 +262,22 @@ export class Performer {
   }
 
   /** Sustained drone for modal exercises. */
-  drone(rootPc: number, origin: number, beats: number, velocity = 0.5): void {
+  drone(
+    rootPc: number,
+    origin: number,
+    beats: number,
+    velocity = 0.5,
+    fifth: number | null = 7,
+  ): void {
     const root = foldInto(rootPc + 36, REGISTER.drone.lo, REGISTER.drone.hi);
     const seconds = beats * this.beatSeconds;
     this.note(root, origin, seconds, velocity, { instrument: PAD_INSTRUMENT, gain: 0.7 });
-    this.note(root + 7, origin, seconds, velocity * 0.8, { instrument: PAD_INSTRUMENT, gain: 0.7 });
+    // The fifth is an argument because not every mode has a perfect one: a
+    // drone sounding a natural 5 under a Locrian line contradicts the ♭5 that
+    // is the whole point of the mode. Pass null and the root drones alone.
+    if (fifth !== null) {
+      this.note(root + fifth, origin, seconds, velocity * 0.8, { instrument: PAD_INSTRUMENT, gain: 0.7 });
+    }
   }
 
   /**
@@ -197,7 +288,7 @@ export class Performer {
    * is clearer when the point is to pick the chords apart.
    */
   progression(
-    chords: readonly { voicing: Voicing; beats: number; rootPc: number }[],
+    chords: readonly (BassChord & { voicing: Voicing })[],
     origin: number,
     opts: { style?: 'sustained' | 'comp'; startBeat?: number; velocity?: number } = {},
   ): number {
@@ -206,7 +297,7 @@ export class Performer {
     let beat = opts.startBeat ?? 0;
 
     for (let i = 0; i < chords.length; i++) {
-      const { voicing, beats, rootPc } = chords[i];
+      const { voicing, beats } = chords[i];
       const next = chords[i + 1];
       const stripped: Voicing = { ...voicing, bass: undefined, all: voicing.notes };
 
@@ -221,50 +312,29 @@ export class Performer {
             roll: 0.006,
           });
         });
-        for (const [b, midi] of this.walk(rootPc, next?.rootPc ?? rootPc, beats)) {
-          this.noteAtBeat(midi, origin, beat + b, 1, 0.72, { instrument: BASS_INSTRUMENT });
-        }
       } else {
         this.chord(stripped, origin, beat, { beats, velocity, roll: 0.012 });
-        const root = foldInto(rootPc + 36, REGISTER.bass.lo, REGISTER.bass.hi);
-        this.noteAtBeat(root, origin, beat, beats, 0.74, { instrument: BASS_INSTRUMENT });
-        if (beats >= 4) {
-          this.noteAtBeat(pcAtOrAbove(mod(rootPc + 7, 12), root + 1), origin, beat + 2, beats - 2, 0.6, {
-            instrument: BASS_INSTRUMENT,
-          });
-        }
+      }
+      for (const b of bassLine(chords[i], next, style, beat)) {
+        this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity, {
+          instrument: BASS_INSTRUMENT,
+        });
       }
       beat += beats;
     }
     return this.beatOffset(beat);
   }
 
-  /**
-   * Quarter-note bass line from one root to the next: root, fifth, a passing
-   * tone, then a half step into the following root.
-   */
-  private walk(rootPc: number, nextRootPc: number, beats: number): Array<[number, number]> {
-    const root = foldInto(rootPc + 36, REGISTER.bass.lo, REGISTER.bass.hi);
-    const nextRoot = foldInto(nextRootPc + 36, REGISTER.bass.lo, REGISTER.bass.hi);
-    const out: Array<[number, number]> = [[0, root]];
-    if (beats >= 2) out.push([1, pcAtOrAbove(mod(rootPc + 7, 12), root - 5)]);
-    if (beats >= 3) out.push([2, pcAtOrAbove(mod(rootPc + 10, 12), root - 2)]);
-    if (beats >= 4) {
-      const approach = nextRoot + (nextRoot >= root ? -1 : 1);
-      out.push([3, approach]);
-    }
-    return out.filter(([b]) => b < beats);
-  }
-
   /** Builds the chord list a progression needs, with voice leading threaded. */
   static changes(
     realised: readonly RealisedChord[],
     voicings: readonly Voicing[],
-  ): Array<{ voicing: Voicing; beats: number; rootPc: number }> {
+  ): Array<BassChord & { voicing: Voicing }> {
     return realised.map((r, i) => ({
       voicing: voicings[i],
       beats: r.beats,
       rootPc: r.chord.rootPc,
+      pcs: r.chord.quality.intervals.map((iv) => mod(r.chord.rootPc + iv, 12)),
     }));
   }
 }

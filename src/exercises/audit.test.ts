@@ -12,6 +12,7 @@ import { realiseProgression, requireProgression } from '../music/progressions';
 import { requireInversion } from '../music/inversions';
 import { BASS_GAP, PITCH_CLASSES, REGISTER } from '../music/pitch';
 import { BASS_INSTRUMENT } from '../audio/instruments';
+import { approachFromAbove } from './voicing-plan';
 import { mod } from '../lib/util';
 
 /**
@@ -262,6 +263,18 @@ function checkProgression(q: Question, perf: FakePerformer, where: string) {
     // chord. Everything before it belongs to the chord it is under — a bass
     // playing a perfect fifth below a half-diminished chord is a semitone from
     // the ♭5 the chord is named for, and the bass is where that hurts most.
+    // A root approached from a half step above is, note for note, the bass of
+    // a tritone substitution. While those questions are still being asked, a
+    // passing note that imitates one puts a second plausible answer in the
+    // audio, and the learner has no way to tell them apart.
+    if (!approachFromAbove(settings, q.difficulty)) {
+      const next = perf.bass.find((b) => b.beat === beat + r.beats && b.role === 'root');
+      const lead = under.find((b) => b.role === 'approach');
+      if (next && lead && lead.midi - next.midi === 1) {
+        flag('progression: the bass approached a root from a half step above',
+          `${where} ${def.id} into chord ${i + 2}: ${lead.midi} → ${next.midi}`);
+      }
+    }
     const lastBeat = beat + r.beats - 1;
     for (const b of under) {
       if (b.beat >= lastBeat && under.length > 1) continue;

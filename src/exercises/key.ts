@@ -1,4 +1,5 @@
 import type { ExerciseType, GenContext, Question } from './types';
+import { approachFromAbove, bassStyleFor } from './voicing-plan';
 import { allowedKeys, pitchClassField, questionId } from './support';
 import { keyConceptId } from '../music/catalog';
 import { pcName, pcNameDual } from '../music/pitch';
@@ -91,7 +92,8 @@ export const keyExercise: ExerciseType = {
         return offset + len + 0.6;
       }
       const len = perf.progression(changes, origin + offset, {
-        style: ctx.difficulty >= 4 ? 'comp' : 'sustained',
+        style: bassStyleFor(ctx.difficulty),
+        approachFromAbove: approachFromAbove(ctx.settings, ctx.difficulty),
       });
       return offset + len + 0.4;
     };
@@ -118,7 +120,7 @@ export const keyExercise: ExerciseType = {
         perf.note(tonic + 48, origin, 1.2, 0.6);
         perf.note(tonic + 60, origin, 1.2, 0.5);
         if (melodicOnly) return 1.4 + perf.melody(phrase, origin + 1.5);
-        return 1.5 + perf.progression(changes, origin + 1.5, { style: 'sustained' });
+        return 1.5 + perf.progression(changes, origin + 1.5, { style: 'root-fifth' });
       },
       hint: {
         label: `Reference ${pcName(REFERENCE_PC, ctx.settings.accidental)}`,

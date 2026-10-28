@@ -5,7 +5,7 @@ import {
   type Chord, type ChordQuality,
 } from '../music/chords';
 import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
-import { NAMEABLE_VOICINGS, voicingLabel } from './voicing-plan';
+import { NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingLabel } from './voicing-plan';
 import { Performer, polyphonyGain } from '../audio/performer';
 import { midiName, pcNameDual, type PitchClass } from '../music/pitch';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
@@ -275,14 +275,15 @@ export const guideToneExercise: ExerciseType = {
       play: (perf) => {
         perf.configure({ tempo: tempoFor(ctx, 108) });
         return perf.progression(changes, perf.origin(), {
-          style: level >= 4 ? 'comp' : 'sustained',
+          style: bassStyleFor(level),
+          approachFromAbove: approachFromAbove(ctx.settings, level),
         }) + 0.5;
       },
       playReveal: (perf) => {
         // The line alone, over the changes, so it can be heard as a melody.
         perf.configure({ tempo: Math.round(tempoFor(ctx, 108) * 0.85) });
         const seconds = perf.progression(changes, perf.origin(), {
-          style: 'sustained',
+          style: 'root-fifth',
           velocity: 0.42,
         });
         let beat = 0;

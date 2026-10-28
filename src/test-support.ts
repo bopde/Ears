@@ -1,5 +1,6 @@
 import {
-  bassLine, type BassChord, type BassStyle, type NotePlayOptions, type Performer,
+  progressionBass,
+  type BassChord, type BassRole, type BassStyle, type NotePlayOptions, type Performer,
 } from './audio/performer';
 import { BASS_INSTRUMENT } from './audio/instruments';
 import type { Voicing } from './music/voicing';
@@ -25,7 +26,7 @@ export class FakePerformer {
   melodies: PhraseNote[][] = [];
   progressions: number[] = [];
   /** The bass line underneath a progression, in schedule order. */
-  bass: Array<{ midi: number; beat: number; time: number }> = [];
+  bass: Array<{ midi: number; beat: number; time: number; role: BassRole }> = [];
   drones = 0;
   stops = 0;
   tempo = 120;
@@ -118,7 +119,7 @@ export class FakePerformer {
   progression(
     chords: readonly (BassChord & { voicing: Voicing })[],
     origin: number,
-    opts: { style?: BassStyle } = {},
+    opts: { style?: BassStyle; approachFromAbove?: boolean } = {},
   ): number {
     // One entry per chord, whatever the style: `chords` is what the question
     // claims to be playing, not how many times the comping hits it.
@@ -129,14 +130,16 @@ export class FakePerformer {
       for (const midi of c.voicing.notes) {
         this.note(midi, origin + beat * this.beatSeconds, c.beats * this.beatSeconds);
       }
-      // The same bass line the real performer plays, from the same function.
-      for (const b of bassLine(c, chords[i + 1], opts.style ?? 'sustained', beat)) {
-        const time = this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity, {
-          instrument: BASS_INSTRUMENT,
-        });
-        this.bass.push({ midi: b.midi, beat: b.beat, time });
-      }
       beat += c.beats;
+    }
+    // The same bass line the real performer plays, from the same function.
+    for (const b of progressionBass(chords, opts.style ?? 'root-fifth', {
+      approachFromAbove: opts.approachFromAbove,
+    })) {
+      const time = this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity, {
+        instrument: BASS_INSTRUMENT,
+      });
+      this.bass.push({ midi: b.midi, beat: b.beat, time, role: b.role });
     }
     return beat * this.beatSeconds;
   }

@@ -89,10 +89,15 @@ interface ChordMaterial {
 function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): ChordMaterial {
   const chord = makeChord(rootPc, quality.id);
   const plan = voicingPlan(ctx);
-  const voicing = voiceChord(chord, { style: plan.style, bass: plan.bass, maxNotes: plan.maxNotes });
+  const voicing = voiceChord(chord, {
+    style: plan.style,
+    bass: plan.bass,
+    maxNotes: plan.maxNotes,
+    rootPosition: plan.style === 'close',
+  });
   // The same chord stacked from its root with the root underneath: what the
   // voicing was dressing up, offered after the answer.
-  const plain = voiceChord(chord, { style: 'close', bottomPc: rootPc, bass: true, maxNotes: 5 });
+  const plain = voiceChord(chord, { style: 'close', rootPosition: true, bass: true, maxNotes: 5 });
   // A rolled chord at the easy end lets the ear walk up the stack; higher up
   // it is struck as a block, which is how you meet it on a bandstand.
   const roll = ctx.difficulty <= 1 ? 0.14 : ctx.difficulty <= 2 ? 0.045 : 0.012;

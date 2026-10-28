@@ -136,12 +136,17 @@ builds the app and deploys it on every push to `main`.
    3 5 7 9* says what a sentence about why would not. Tapping it plays the
    changes that way.
 
-   iv. The **Voicings** tab takes them one at a time: what each is, where a
+   iv. Beside the roman numerals is what the bass does — *Bass falls a fifth,
+   then rises a fourth* — read off the notes that are about to be scheduled
+   rather than off the numerals, so it describes the register they are played
+   in rather than the one they are written in.
+
+   v. The **Voicings** tab takes them one at a time: what each is, where a
    player reaches for it, the degrees it sounds over a set of changes that
    shows it off, and a *Compare with root position* button that plays those
    changes plainly and then in the voicing, back to back.
 
-   v. The notes on screen and the notes that sound come from one function,
+   vi. The notes on screen and the notes that sound come from one function,
    `referenceVoicings` in `src/audio/reference.ts`. The display cannot drift
    from the audio, because there is nowhere for it to drift to.
 
@@ -189,7 +194,10 @@ builds the app and deploys it on every push to `main`.
    four notes, and then there are two right answers.
 
    j. **Guide tones** — a progression plays; follow the line the 3rds and 7ths
-   make through it. The wrong answers are the same line with one or two notes
+   make through it. The reveal of a changes question also names the root
+   motion — *Bass falls a fifth, then rises a fourth* — taken from the bass
+   notes that were scheduled, so it cannot describe something other than what
+   played. The wrong answers are the same line with one or two notes
    moved to the other guide tone of that chord, so the only way to reject one
    is to have followed the voice the whole way.
 
@@ -258,13 +266,19 @@ to do:
    *Plain* is root position whatever the level, *Realistic* is rootless and
    drop 2 from the start, and *Mixed* is the curve.
 
-   d. **Fewer reference cues.** Reference pitches and stated keys disappear at
+   d. **More in the bass.** Levels 1 and 2 play one held root per chord, so
+   the root motion is all there is to hear. Level 3 adds the fifth. Levels 4
+   and 5 walk, by which point telling a passing note from a change is part of
+   the skill being tested. There is no setting for it — the level decides, as
+   it decides the voicing.
+
+   e. **Fewer reference cues.** Reference pitches and stated keys disappear at
    the higher levels.
 
-   e. **Harder harmony.** Sustained block chords give way to comping with a
+   f. **Harder harmony.** Sustained block chords give way to comping with a
    walking bass; progressions get longer, faster and more substituted.
 
-   f. In adaptive mode every concept carries its own level, so you can be
+   g. In adaptive mode every concept carries its own level, so you can be
    working at level 5 on major 7ths and level 2 on altered dominants in the same
    session.
 
@@ -350,7 +364,31 @@ chord questions without being told to.
    plays it, so the two always agree; `demo.ts` is the single-item playback the
    other cheat-sheet tabs use.
 
-   d. Seven voicing styles live in `src/music/voicing.ts`. Four are searched —
+   d. The bass has three styles and no setting, in `src/audio/performer.ts`.
+   **Root only** is one held root per chord. **Root and fifth** adds the fifth
+   halfway through a long chord. **Walking** is quarter notes — root, fifth,
+   seventh, then a step into the next root. Which one plays is never asked:
+   the cheat sheet takes it from the voicing already chosen (root position
+   gets roots alone, everything else gets the root and its fifth, and it never
+   walks), and a session takes it from the level, as part of the same curve
+   the voicings follow. Root motion is one of the main things a learner is
+   trying to hear, and anything the bass plays between the roots is in the way
+   of hearing it, so the early levels have nothing between them.
+
+   e. A walking line will not approach a root from a half step above while
+   tritone-substitution questions are still being asked, because that approach
+   is note for note the bass of one. It comes from a half step below or the
+   tone above instead. The point at which the rule lifts is read from the
+   progression library — the highest tier among enabled progressions whose
+   roots slide down a half step — rather than named in code, so it moves if
+   the library does.
+
+   f. Every bass note carries what it is doing: root, fifth, passing or
+   approach. Nothing in the audio says which is which, so the line says it and
+   the cheat sheet shows it — roots at full weight, everything between them
+   lighter and labelled.
+
+   g. Seven voicing styles live in `src/music/voicing.ts`. Four are searched —
    candidate stacks scored for spacing and voice leading. Three are fixed
    shapes, because the order of the notes is what makes them that voicing:
    rootless (3–5–♭7–9, or ♭7–9–3–5, alternating down a chain of fourths),
@@ -360,25 +398,25 @@ chord questions without being told to.
    chord is named for; where it cannot, the engine falls back rather than play
    something else under the name.
 
-   e. The 9th a pianist adds to every rootless voicing is off by default. It is
+   h. The 9th a pianist adds to every rootless voicing is off by default. It is
    right at a piano and wrong in a question — a rootless Dm7 voiced F A C E
    sounds a 9th, and "m7" stops being the only defensible answer — so the
    cheat sheet asks for it and the exercises do not.
 
-   f. `src/exercises/` — one module per exercise type, each implementing the
+   i. `src/exercises/` — one module per exercise type, each implementing the
    `ExerciseType` interface. A question carries its own audio, its own hint and
    its own reveal, so the session engine never special-cases a type.
 
-   g. `src/learning/` — the skill model, the adaptive selector, local
+   j. `src/learning/` — the skill model, the adaptive selector, local
    persistence and the statistics behind the progress screen.
 
-   h. `src/session/` — the session state machine. Questions are generated one at
+   k. `src/session/` — the session state machine. Questions are generated one at
    a time, not queued up front, so the model reacts to answers *within* a
    session. `daily.ts` is the exception: it builds all ten up front from a
    date-derived seed, and the engine plays that script instead of selecting
    anything, which is what makes the Daily shared.
 
-   i. `src/ui/` — React screens and components, plus one stylesheet holding the
+   l. `src/ui/` — React screens and components, plus one stylesheet holding the
    design tokens.
 
 ## 8. Extending it

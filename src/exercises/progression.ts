@@ -10,8 +10,9 @@ import {
   CHORD_QUALITIES, chordConceptId, chordSymbol, makeChord, nearestQualities, type Chord,
 } from '../music/chords';
 import { voiceChord, voiceProgression, type VoicingStyle } from '../music/voicing';
-import { chooseVoicing, voicingLabel } from './voicing-plan';
-import { Performer } from '../audio/performer';
+import { approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel } from './voicing-plan';
+import { Performer, progressionBass } from '../audio/performer';
+import { rootMotionLine } from '../audio/reference';
 import { pcNameDual } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import type { Rng } from '../lib/rng';
@@ -87,6 +88,8 @@ function enabledProgressions(settings: PracticeSettings): ProgressionDef[] {
 interface Changes {
   realised: RealisedChord[];
   voicingStyle: VoicingStyle;
+  /** One line naming the root motion, as the bass plays it. */
+  motion: string;
   play: (perf: Performer) => number;
   playReveal: (perf: Performer) => number;
   playPlain: (perf: Performer) => number;
@@ -98,35 +101,49 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
   const chords = realised.map((r) => r.chord);
   const level = clamp(Math.round(ctx.difficulty), 1, 5);
   // Rootless comping with a walking bass is how these changes are actually
-  // played; block voicings with the root on the bottom are the training wheels.
-  const style = level >= 3 ? ('comp' as const) : ('sustained' as const);
+  // played; a held root with block voicings over it is the training wheels.
+  const style = bassStyleFor(level);
+  const fromAbove = approachFromAbove(ctx.settings, level);
   // The same curve the chord questions use. Hearing a ii–V–I in close position
   // and missing it rootless is a gap in one direction, not two, so both kinds
   // of question have to be able to produce both.
   const voicingStyle = chooseVoicing(ctx.rng, ctx.settings.voicingMode, level, ctx.voicingFocus);
-  const voicings = voiceProgression(chords, { style: voicingStyle, maxNotes: 5 });
+  const voicings = voiceProgression(chords, {
+    style: voicingStyle,
+    maxNotes: 5,
+    // At the bottom of the curve "close" means root position, not merely
+    // the tones packed together: the root has to be the note underneath.
+    rootPosition: voicingStyle === 'close',
+  });
   const changes = Performer.changes(realised, voicings);
   // Root position over a root bass: the changes with nothing on top of them.
   const plain = Performer.changes(
     realised,
-    chords.map((chord) => voiceChord(chord, { style: 'close', bottomPc: chord.rootPc, maxNotes: 5 })),
+    chords.map((chord) => voiceChord(chord, { style: 'close', rootPosition: true, maxNotes: 5 })),
   );
   const totalBeats = realised.reduce((n, r) => n + r.beats, 0);
 
   return {
     realised,
     voicingStyle,
+    // The same call the performer makes, so the description and the audio are
+    // reading from one line rather than two that happen to agree.
+    motion: rootMotionLine(progressionBass(changes, style, { approachFromAbove: fromAbove })),
     play: (perf) => {
       perf.configure({ tempo: tempoFor(ctx, 118) });
-      return perf.progression(changes, perf.origin(), { style }) + 0.5;
+      return perf.progression(changes, perf.origin(), {
+        style,
+        approachFromAbove: fromAbove,
+      }) + 0.5;
     },
     playReveal: (perf) => {
       perf.configure({ tempo: Math.round(tempoFor(ctx, 118) * 0.82) });
-      return perf.progression(changes, perf.origin(), { style: 'sustained' }) + 0.5;
+      return perf.progression(changes, perf.origin(), { style: 'root-fifth' }) + 0.5;
     },
     playPlain: (perf) => {
       perf.configure({ tempo: Math.round(tempoFor(ctx, 118) * 0.82) });
-      return perf.progression(plain, perf.origin(), { style: 'sustained' }) + 0.5;
+      // Roots only, so the motion between them is all there is to hear.
+      return perf.progression(plain, perf.origin(), { style: 'root' }) + 0.5;
     },
     seconds: (tempo) => (totalBeats * 60) / tempo,
   };
@@ -191,7 +208,10 @@ export const progressionExercise: ExerciseType = {
       },
       reveal: {
         heading: def.name,
-        detail: `${romanLine(def)}  ·  in ${pcNameDual(tonic)}`,
+        // What to listen for next time: the motion between the roots, read off
+        // the bass notes that were actually scheduled rather than off the
+        // numerals, so it cannot describe something other than what played.
+        detail: `${romanLine(def)}  ·  ${changes.motion}`,
         notes: `${symbols}   —   ${voicingLabel(changes.voicingStyle)}`,
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 12,

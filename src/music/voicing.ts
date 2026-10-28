@@ -62,6 +62,11 @@ export interface VoicingOptions {
   maxNotes?: number;
   /** Forces the lowest chord tone to a given pitch class (used for inversions). */
   bottomPc?: number;
+  /**
+   * Pins each chord to its own root, which `bottomPc` cannot do across a
+   * progression because every chord's root is a different pitch class.
+   */
+  rootPosition?: boolean;
   /** Which rootless shape to use. Alternates through a progression when unset. */
   rootlessForm?: RootlessForm;
   /**
@@ -348,7 +353,10 @@ function spacingPenalty(notes: readonly Midi[]): number {
   return penalty;
 }
 
-export function voiceChord(chord: Chord, opts: VoicingOptions = {}): Voicing {
+export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing {
+  const opts: VoicingOptions = options.rootPosition
+    ? { ...options, bottomPc: chord.rootPc }
+    : options;
   const style = opts.style ?? 'close';
   const lo = opts.lo ?? REGISTER.voicing.lo;
   const hi = opts.hi ?? REGISTER.voicing.hi;

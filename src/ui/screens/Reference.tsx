@@ -8,7 +8,8 @@ import {
 } from '../../audio/demo';
 import {
   REFERENCE_VOICINGS, VOICING_LESSONS, modeForStyle, playComparison, playReference,
-  playReferenceChord, referenceDegrees, referenceNoteNames, referenceVoicings,
+  playReferenceChord, referenceBassCaption, referenceDegrees, referenceNoteNames,
+  referenceVoicings, rootMotionLine,
   type ReferenceChord, type ReferenceVoicing, type VoicingLesson,
 } from '../../audio/reference';
 import {
@@ -117,7 +118,13 @@ function ChordCard({
         ))}
       </span>
       <span className="refchord__bass">
-        {names.bass.join(' → ') || '—'}
+        {names.bass.length === 0 && '—'}
+        {names.bass.map((b, i) => (
+          <span key={i} className={clsx('refbass', b.role !== 'root' && 'refbass--passing')}>
+            {b.name}
+            {b.tag && <span className="refbass__tag">{b.tag}</span>}
+          </span>
+        ))}
       </span>
     </button>
   );
@@ -292,7 +299,8 @@ export function Reference({ onBack }: { onBack: () => void }) {
                     <Row
                       title={def.name}
                       concrete={chords.map((c) => c.symbol).join('  |  ')}
-                      detail={romanLine(def)}
+                      detail={`${romanLine(def)}   ·   ${
+                        rootMotionLine(chords.flatMap((c) => c.bass))}`}
                       blurb={def.blurb}
                       active={playing === def.id}
                       onPlay={() =>
@@ -320,6 +328,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
                         </span>
                       </button>
                     )}
+                    <p className="refbasscaption">{referenceBassCaption(voicing)}</p>
                     <div className="refchords">
                       {chords.map((item, i) => (
                         <ChordCard

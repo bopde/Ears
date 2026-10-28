@@ -36,12 +36,24 @@ export interface ChordPlayOptions {
 
 const LOOKAHEAD = 0.09;
 
+/**
+ * What a bass note is doing.
+ *
+ * Root motion is one of the main things a learner listens for when naming a
+ * progression — down a fifth in a ii–V–I, down a half step in a tritone
+ * substitution, up a tone from ♭VII in a backdoor. Every other note the bass
+ * plays sits between those, and nothing in the audio says which is which, so
+ * the line has to say it here and the display has to show it.
+ */
+export type BassRole = 'root' | 'fifth' | 'passing' | 'approach';
+
 export interface BassNote {
   /** Absolute beat, measured the same way the chord above it is. */
   beat: number;
   beats: number;
   midi: number;
   velocity: number;
+  role: BassRole;
 }
 
 /**
@@ -84,14 +96,62 @@ function placeRoot(rootPc: number, low: Midi): Midi {
 }
 
 /**
+ * The whole bass line under a set of changes, in one call.
+ *
+ * Shared by the performer that schedules it, the test double that records it,
+ * and the text that describes it, so none of the three can describe a
+ * different line from the other two.
+ */
+export function progressionBass(
+  chords: readonly BassChord[],
+  style: BassStyle,
+  opts: { startBeat?: number; approachFromAbove?: boolean } = {},
+): BassNote[] {
+  const out: BassNote[] = [];
+  // Where each root will land, worked out before the line is built, so a
+  // walking bar can aim at the note the next bar will really play.
+  const roots = chords.map((c) => placeRoot(c.rootPc, c.low));
+  let beat = opts.startBeat ?? 0;
+  for (let i = 0; i < chords.length; i++) {
+    out.push(...bassLine(chords[i], chords[i + 1], style, beat, {
+      approachFromAbove: opts.approachFromAbove,
+      nextRootMidi: roots[i + 1],
+    }));
+    beat += chords[i].beats;
+  }
+  return out;
+}
+
+/**
+ * The last beat of a walking bar, leading into the next chord's root.
+ *
+ * A half step above the target is a strong, idiomatic approach, and it is also
+ * exactly the bass of a tritone substitution: D♭ under a bar that resolves
+ * to C is the ♭II7 a learner is being taught to recognise. While those
+ * questions are still being asked, the line comes from below instead, or from
+ * the tone above, and a passing note can no longer be mistaken for a change.
+ */
+function approachNotes(nextRoot: Midi, from: Midi, fromAbove: boolean): Midi[] {
+  // Below by a half step, or above by a tone — whichever keeps the line closer
+  // to where the bass already is, with the other kept as a second choice.
+  const below = nextRoot - 1;
+  const above = nextRoot + 2;
+  const safe = Math.abs(below - from) <= Math.abs(above - from) ? [below, above] : [above, below];
+  if (!fromAbove && nextRoot < from) return safe;
+  return [nextRoot + (nextRoot >= from ? -1 : 1), ...safe];
+}
+
+/**
  * Moves a bass note by octaves until it is inside the register and clear of
  * the voicing, keeping it as close as it can to where it wanted to be.
  */
+function usableBass(midi: Midi, low: Midi): boolean {
+  return midi >= REGISTER.bass.lo && midi <= REGISTER.bass.hi && low - midi >= BASS_GAP.min;
+}
+
 function settle(midi: Midi, low: Midi, fallback: Midi): Midi {
-  const usable = (m: Midi) =>
-    m >= REGISTER.bass.lo && m <= REGISTER.bass.hi && low - m >= BASS_GAP.min;
   for (const candidate of [midi, midi - 12, midi + 12, midi - 24, midi + 24]) {
-    if (usable(candidate)) return candidate;
+    if (usableBass(candidate, low)) return candidate;
   }
   return fallback;
 }
@@ -110,18 +170,36 @@ function ownTone(rootPc: number, pcs: readonly number[], prefer: readonly number
 }
 
 /**
- * How the bass behaves under a progression.
+ * How the bass behaves under a progression. There are three, and no more.
  *
- * `root` is the teaching setting: one note, the root, doubled an octave under
- * the voicing and held. Nothing moves, so nothing competes with the chord.
+ * Which one plays is never a setting: the cheat sheet picks it from the
+ * voicing the learner has already chosen, and a session picks it from the
+ * level. A bass toggle would be one more thing to understand before you can
+ * practise, and the right answer at each point is not a matter of taste.
  */
-export type BassStyle = 'sustained' | 'comp' | 'root';
+export type BassStyle =
+  /** One note per chord — the root, held. Root motion and nothing else. */
+  | 'root'
+  /** The root, then its fifth halfway through a long chord. */
+  | 'root-fifth'
+  /** Quarter notes: root, fifth, seventh, then a step into the next root. */
+  | 'walking';
+
+export const BASS_STYLES: BassStyle[] = ['root', 'root-fifth', 'walking'];
+
+/** What the bass is doing, for the caption under a set of changes. */
+export const BASS_STYLE_CAPTION: Record<BassStyle, string> = {
+  root: 'Bass: roots only.',
+  'root-fifth': 'Bass: the root, then its fifth.',
+  walking: 'Bass: walking — root, fifth, seventh, then a step into the next root.',
+};
 
 export function bassLine(
   chord: BassChord,
   next: { rootPc: number } | undefined,
   style: BassStyle,
   startBeat: number,
+  opts: { approachFromAbove?: boolean; nextRootMidi?: Midi } = {},
 ): BassNote[] {
   const { beats, rootPc, pcs, low } = chord;
   const root = placeRoot(rootPc, low);
@@ -135,12 +213,19 @@ export function bassLine(
 
   if (style === 'root') {
     // Doubling the voicing's own bottom note an octave down, rather than
-    // picking an octave freely, is what makes it read as a doubling.
-    return [{ beat: startBeat, beats, midi: settle(low - 12, low, root), velocity: 0.74 }];
+    // picking an octave freely, is what makes it read as a doubling — but
+    // only when that note is the root. A voicing too wide to stack from its
+    // root gets the root placed underneath it instead, because a bass note
+    // that is not the root is not what this style promises.
+    const doubles = mod(low, 12) === mod(rootPc, 12);
+    const midi = doubles ? settle(low - 12, low, root) : root;
+    return [{ beat: startBeat, beats, midi, velocity: 0.74, role: 'root' }];
   }
 
-  if (style !== 'comp') {
-    const out: BassNote[] = [{ beat: startBeat, beats, midi: root, velocity: 0.74 }];
+  if (style !== 'walking') {
+    const out: BassNote[] = [
+      { beat: startBeat, beats, midi: root, velocity: 0.74, role: 'root' },
+    ];
     // A long chord gets its fifth halfway through, which keeps a whole bar of
     // one harmony from going static. A chord with no fifth holds the root.
     if (beats >= 4 && fifth !== null) {
@@ -151,26 +236,47 @@ export function bassLine(
       // a root-position chord comes to sound like an inversion.
       const above = pcAtOrAbove(mod(rootPc + fifth, 12), root + 1);
       const midi = above <= REGISTER.bass.hi ? above : above - 12;
-      out.push({ beat: startBeat + 2, beats: beats - 2, midi: settle(midi, low, root), velocity: 0.6 });
+      out.push({
+        beat: startBeat + 2,
+        beats: beats - 2,
+        midi: settle(midi, low, root),
+        velocity: 0.6,
+        role: 'fifth',
+      });
     }
     return out;
   }
 
   // Walking quarter notes from one root to the next: root, fifth, the seventh,
   // then a half step into the following root.
-  const nextRoot = placeRoot(next?.rootPc ?? rootPc, low);
-  const steps: Array<[number, number]> = [[0, root]];
-  if (beats >= 2) steps.push([1, pcAtOrAbove(mod(rootPc + (fifth ?? third ?? 0), 12), root - 5)]);
-  if (beats >= 3) steps.push([2, pcAtOrAbove(mod(rootPc + (seventh ?? 0), 12), root - 2)]);
-  if (beats >= 4) steps.push([3, nextRoot + (nextRoot >= root ? -1 : 1)]);
+  // The octave the next root will actually be played in, where the caller
+  // knows it. Guessing from this chord's voicing would aim the approach note
+  // at an octave the next chord never visits, which is a leap rather than a
+  // step and does not lead anywhere.
+  const nextRoot = opts.nextRootMidi ?? placeRoot(next?.rootPc ?? rootPc, low);
+  const steps: Array<[number, number, BassRole]> = [[0, root, 'root']];
+  if (beats >= 2) {
+    steps.push([1, pcAtOrAbove(mod(rootPc + (fifth ?? third ?? 0), 12), root - 5), 'fifth']);
+  }
+  if (beats >= 3) {
+    steps.push([2, pcAtOrAbove(mod(rootPc + (seventh ?? 0), 12), root - 2), 'passing']);
+  }
+  if (beats >= 4) {
+    // An approach note shifted an octave to fit the register is no longer an
+    // approach, so the alternatives are tried at their own octave first.
+    const candidates = approachNotes(nextRoot, root, opts.approachFromAbove ?? false);
+    const fits = candidates.find((m) => usableBass(m, low));
+    steps.push([3, fits ?? settle(candidates[0], low, root), 'approach']);
+  }
   return steps
     .filter(([b]) => b < beats)
     // Every step, the approach note included, is held to the same two rules.
-    .map(([b, midi]) => ({
+    .map(([b, midi, role]) => ({
       beat: startBeat + b,
       beats: 1,
       midi: settle(midi, low, root),
       velocity: 0.72,
+      role,
     }));
 }
 
@@ -349,18 +455,22 @@ export class Performer {
   progression(
     chords: readonly (BassChord & { voicing: Voicing })[],
     origin: number,
-    opts: { style?: BassStyle; startBeat?: number; velocity?: number } = {},
+    opts: {
+      style?: BassStyle;
+      startBeat?: number;
+      velocity?: number;
+      approachFromAbove?: boolean;
+    } = {},
   ): number {
-    const style = opts.style ?? 'sustained';
+    const style = opts.style ?? 'root-fifth';
     const velocity = opts.velocity ?? 0.66;
     let beat = opts.startBeat ?? 0;
 
     for (let i = 0; i < chords.length; i++) {
       const { voicing, beats } = chords[i];
-      const next = chords[i + 1];
       const stripped: Voicing = { ...voicing, bass: undefined, all: voicing.notes };
 
-      if (style === 'comp') {
+      if (style === 'walking') {
         // Chord hits: on the downbeat and pushed into the middle of the bar.
         const hits = beats >= 4 ? [0, 1.5, 3] : [0, 1.5];
         hits.forEach((h, idx) => {
@@ -374,12 +484,15 @@ export class Performer {
       } else {
         this.chord(stripped, origin, beat, { beats, velocity, roll: 0.012 });
       }
-      for (const b of bassLine(chords[i], next, style, beat)) {
-        this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity, {
-          instrument: BASS_INSTRUMENT,
-        });
-      }
       beat += beats;
+    }
+    for (const b of progressionBass(chords, style, {
+      startBeat: opts.startBeat ?? 0,
+      approachFromAbove: opts.approachFromAbove,
+    })) {
+      this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity, {
+        instrument: BASS_INSTRUMENT,
+      });
     }
     return this.beatOffset(beat);
   }

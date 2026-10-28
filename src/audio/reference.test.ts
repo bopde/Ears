@@ -68,7 +68,7 @@ describe('the bass stays where a bass belongs', () => {
             pcs: r.chord.quality.intervals.map((iv) => mod(r.chord.rootPc + iv, 12)),
             low,
           };
-          for (const b of bassLine(chord, realised[i + 1]?.chord, 'comp', beat)) {
+          for (const b of bassLine(chord, realised[i + 1]?.chord, 'walking', beat)) {
             if (b.midi < REGISTER.bass.lo || b.midi > REGISTER.bass.hi) {
               problems.push(`${def.id}/${tonic} walk out of register: ${b.midi}`);
             }
@@ -221,7 +221,9 @@ describe('what is shown is what is played', () => {
     const [first] = referenceVoicings(def, 0, 'root');
     const names = referenceNoteNames(first, 'flat');
     expect(names.notes).toEqual(first.notes.map((m) => midiName(m, 'flat')));
-    expect(names.bass).toEqual(first.bass.map((b) => midiName(b.midi, 'flat')));
+    expect(names.bass.map((b) => b.name)).toEqual(first.bass.map((b) => midiName(b.midi, 'flat')));
+    // Every bass note carries what it is doing, so the display can say so.
+    expect(names.bass.map((b) => b.role)).toEqual(first.bass.map((b) => b.role));
   });
 
   it('writes a slash chord whenever the lowest note is not the root', () => {

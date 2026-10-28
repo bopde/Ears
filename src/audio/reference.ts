@@ -1,5 +1,8 @@
 import { BASS_INSTRUMENT } from './instruments';
-import { Performer, bassLine, polyphonyGain, type BassNote, type BassStyle } from './performer';
+import {
+  BASS_STYLE_CAPTION, Performer, bassLine, polyphonyGain,
+  type BassNote, type BassRole, type BassStyle,
+} from './performer';
 import { realiseProgression, type ProgressionDef } from '../music/progressions';
 import {
   voiceChord, voiceProgression, type Voicing, type VoicingOptions, type VoicingStyle,
@@ -118,8 +121,17 @@ function voicingOptions(mode: ReferenceVoicing, chord: Chord): VoicingOptions {
   }
 }
 
-const bassStyleFor = (mode: ReferenceVoicing): BassStyle =>
-  mode === 'root' ? 'root' : 'sustained';
+/**
+ * The cheat sheet never walks: a moving line is one more thing to hear past
+ * when the point is to check what a chord or a change sounds like. Root
+ * position gets roots alone; every other voicing gets the root and its fifth.
+ */
+export const referenceBassStyle = (mode: ReferenceVoicing): BassStyle =>
+  mode === 'root' ? 'root' : 'root-fifth';
+
+/** One line saying what the bass is doing, shown rather than offered. */
+export const referenceBassCaption = (mode: ReferenceVoicing): string =>
+  BASS_STYLE_CAPTION[referenceBassStyle(mode)];
 
 /**
  * The one description of what a reference progression looks like and sounds
@@ -154,7 +166,7 @@ export function referenceVoicings(
         low: voicing.notes[0],
       },
       realised[i + 1]?.chord,
-      bassStyleFor(mode),
+      referenceBassStyle(mode),
       startBeat,
     );
     const bassPc = mod(bass[0]?.midi ?? voicing.notes[0], 12);
@@ -187,13 +199,38 @@ export function referenceVoicings(
 export const referenceDegrees = (chord: ReferenceChord): string[] =>
   chordDegrees(chord.chord, chord.notes);
 
-/** Note names for display, in the order the ear meets them. */
+/** What a bass note is called on screen. Roots need no label; the rest do. */
+export const BASS_ROLE_TAG: Record<BassRole, string> = {
+  root: '',
+  fifth: '5th',
+  passing: 'passing',
+  approach: 'approach',
+};
+
+export interface BassDisplay {
+  name: string;
+  role: BassRole;
+  tag: string;
+}
+
+/**
+ * Note names for display, in the order the ear meets them.
+ *
+ * Every bass note is listed, not only the roots, because every one of them
+ * sounds. Which is which is the thing worth knowing: root motion is what a
+ * learner is trying to hear, and a fifth or a passing note between two roots
+ * is exactly what makes that hard.
+ */
 export function referenceNoteNames(
   chord: ReferenceChord,
   accidental: Accidental = 'both',
-): { bass: string[]; notes: string[] } {
+): { bass: BassDisplay[]; notes: string[] } {
   return {
-    bass: chord.bass.map((b) => midiName(b.midi, accidental)),
+    bass: chord.bass.map((b) => ({
+      name: midiName(b.midi, accidental),
+      role: b.role,
+      tag: BASS_ROLE_TAG[b.role],
+    })),
     notes: chord.notes.map((m) => midiName(m, accidental)),
   };
 }
@@ -316,4 +353,55 @@ export function playComparison(
   const beats = plain.reduce((n, c) => n + c.beats, 0);
   const second = playReference(perf, dressed, { offsetBeats: beats + (gap * perf.tempo) / 60 });
   return first + gap + second;
+}
+
+/** Plain names for the distances a bass can move between two roots. */
+const MOTION_NAMES: Record<number, string> = {
+  0: 'stays', 1: 'a half step', 2: 'a tone', 3: 'a minor third', 4: 'a major third',
+  5: 'a fourth', 6: 'a tritone', 7: 'a fifth', 8: 'a minor sixth', 9: 'a major sixth',
+  10: 'a minor seventh', 11: 'a major seventh', 12: 'an octave',
+};
+
+/**
+ * What the bass does between one root and the next, as it actually plays.
+ *
+ * Read off the scheduled notes rather than off the roman numerals, so it
+ * cannot disagree with the audio: a progression written as a fall of a fifth
+ * is heard as a rise of a fourth when the bass turns the corner, and the
+ * learner is listening to the second of those.
+ */
+export function rootMotion(bass: readonly BassNote[]): string[] {
+  const roots = bass.filter((b) => b.role === 'root').map((b) => b.midi);
+  const out: string[] = [];
+  for (let i = 1; i < roots.length; i++) {
+    const delta = roots[i] - roots[i - 1];
+    const name = MOTION_NAMES[Math.min(Math.abs(delta), 12)] ?? 'a long way';
+    out.push(delta === 0 ? 'stays' : `${delta > 0 ? 'rises' : 'falls'} ${name}`);
+  }
+  return out;
+}
+
+/**
+ * The same thing as one line, for the reveal.
+ *
+ * A hint about what to listen for next time, not a lesson: repeated moves are
+ * collapsed so a cycle of fourths does not read as a list.
+ */
+export function rootMotionLine(bass: readonly BassNote[]): string {
+  const moves = rootMotion(bass);
+  if (!moves.length) return '';
+  // A line cliché holds one root the whole way; counting the times it does
+  // nothing would be a strange way to say so.
+  if (moves.every((m) => m === 'stays')) return 'Bass stays on one note throughout.';
+  const runs: Array<{ move: string; count: number }> = [];
+  for (const move of moves) {
+    const last = runs[runs.length - 1];
+    if (last && last.move === move) last.count += 1;
+    else runs.push({ move, count: 1 });
+  }
+  const parts = runs.map(({ move, count }, i) => {
+    const text = i === 0 ? `Bass ${move}` : move;
+    return count > 1 ? `${text} ${count === 2 ? 'twice' : `${count} times`}` : text;
+  });
+  return `${parts.join(', then ')}.`;
 }

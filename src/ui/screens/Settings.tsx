@@ -31,7 +31,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
     const realised = realiseProgression(def, 5);
     const voicings = voiceProgression(realised.map((r) => r.chord), { style: 'spread', maxNotes: 5 });
     performer.progression(Performer.changes(realised, voicings), performer.origin(), {
-      style: 'comp',
+      style: 'walking',
     });
   };
 

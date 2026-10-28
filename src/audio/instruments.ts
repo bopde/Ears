@@ -298,6 +298,80 @@ const vibes: Instrument = {
 };
 
 /** Upright bass, used under progressions so root motion is audible. */
+/**
+ * How the bass is built, and why it is built that way.
+ *
+ * The bass register runs from MIDI 33 to 50 — 55 Hz to 147 Hz. A phone's
+ * speaker cannot move air anywhere near that, and most laptops give up below
+ * about 200 Hz, so on the devices this app is actually used on, none of these
+ * notes' fundamentals reach the listener at all.
+ *
+ * What does reach them is the harmonics, and the ear reconstructs the root
+ * from those: the missing fundamental, which is why a bass guitar is audible
+ * through a laptop at all. So the series has to be dense enough to put real
+ * energy above the speaker's corner frequency.
+ *
+ * The series runs to a *frequency*, not to a harmonic number. 1.3 kHz is the
+ * 24th harmonic of the lowest note in the register and the 9th of the
+ * highest; counting harmonics instead would leave the bottom octave as
+ * inaudible as it was before, because six harmonics of 55 Hz still only reach
+ * 330 Hz. One periodic wave carries all of them, and the filter trims each
+ * note to the same ceiling.
+ */
+export const BASS_PARTIALS = 24;
+/** Amplitude of harmonic h is h^-BASS_TILT: slightly brighter than a sawtooth. */
+export const BASS_TILT = 0.8;
+/** Where the sustained tone is rolled off, in Hz. The top of the series. */
+export const BASS_CEILING_HZ = 1300;
+const BASS_Q = 1.1;
+
+/** A periodic wave belongs to its context, so each context gets its own. */
+const bassWaves = new WeakMap<BaseAudioContext, PeriodicWave>();
+
+function bassTimbre(ctx: BaseAudioContext): PeriodicWave {
+  const cached = bassWaves.get(ctx);
+  if (cached) return cached;
+  const real = new Float32Array(BASS_PARTIALS + 1);
+  const imag = new Float32Array(BASS_PARTIALS + 1);
+  for (let h = 1; h <= BASS_PARTIALS; h++) {
+    const amplitude = Math.pow(h, -BASS_TILT);
+    // Two dozen partials all starting together make an impulse, not a note:
+    // the peak towers over the average, so the limiter catches it long before
+    // it is loud. Spreading their phases quadratically leaves the spectrum,
+    // and so the timbre, untouched while flattening the waveform, which buys
+    // back the level this voice needs without taking it from the chord.
+    const phase = (-Math.PI * h * (h - 1)) / BASS_PARTIALS;
+    real[h] = amplitude * Math.cos(phase);
+    imag[h] = amplitude * Math.sin(phase);
+  }
+  const wave = ctx.createPeriodicWave(real, imag);
+  bassWaves.set(ctx, wave);
+  return wave;
+}
+
+/** Magnitude of a second-order lowpass at `hz`, as the filter below applies it. */
+export function bassFilterGain(hz: number, cutoff = BASS_CEILING_HZ, q = BASS_Q): number {
+  const r = hz / cutoff;
+  return 1 / Math.hypot(1 - r * r, r / q);
+}
+
+/**
+ * What the bass sustains on a note, partial by partial, after its own filter.
+ *
+ * Exported so the audibility of the design can be checked without rendering
+ * audio: what matters is how much of this sits above a small speaker's corner
+ * frequency, and that is a property of the series, not of the waveform.
+ */
+export function bassPartials(midi: number): Array<{ hz: number; amplitude: number }> {
+  const f = midiToFreq(midi);
+  const out: Array<{ hz: number; amplitude: number }> = [];
+  for (let h = 1; h <= BASS_PARTIALS; h++) {
+    const hz = f * h;
+    out.push({ hz, amplitude: Math.pow(h, -BASS_TILT) * bassFilterGain(hz) });
+  }
+  return out;
+}
+
 const bass: Instrument = {
   id: 'bass',
   name: 'Upright bass',
@@ -311,35 +385,35 @@ const bass: Instrument = {
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.Q.value = 1.1;
-    filter.frequency.setValueAtTime(clamp(f * 9 + vel * 900, 260, 3000), t);
-    filter.frequency.setTargetAtTime(clamp(f * 3.2, 150, 900), t + 0.01, 0.2);
+    filter.Q.value = BASS_Q;
+    // Brighter under the fingers, settling to the ceiling the series is
+    // written for. Fixed rather than a multiple of the fundamental: the
+    // ceiling is about the speaker, which does not know what note is playing.
+    filter.frequency.setValueAtTime(clamp(f * 9 + vel * 1200, 900, 3600), t);
+    filter.frequency.setTargetAtTime(BASS_CEILING_HZ, t + 0.01, 0.2);
     filter.connect(out);
 
     const amp = ctx.createGain();
     amp.gain.value = MIN;
     amp.connect(filter);
-    const peak = vel * 0.46 * (note.gain ?? 1);
+    // Set by ear-weighted measurement, not by matching the old waveform's
+    // amplitude. The sine this replaced measured 22 dB under the chord once
+    // A-weighted — all that energy sat at 55 to 147 Hz, where the ear is
+    // barely sensitive even on a system that can reproduce it. Matching its
+    // raw level would therefore have made this far louder than it ever was.
+    // This sits about 4 dB under the comping, which is where a bass belongs.
+    const peak = vel * 0.5 * (note.gain ?? 1);
     amp.gain.setValueAtTime(MIN, t);
     amp.gain.exponentialRampToValueAtTime(peak, t + 0.012);
     amp.gain.setTargetAtTime(peak * 0.2, t + 0.013, 0.42);
 
-    const sources: Array<OscillatorNode | AudioBufferSourceNode> = [];
-    for (const [type, mult, level] of [
-      ['sine', 1, 1],
-      ['triangle', 1, 0.5],
-      ['triangle', 2, 0.1],
-    ] as const) {
-      const osc = ctx.createOscillator();
-      osc.type = type;
-      osc.frequency.value = f * mult;
-      const lvl = ctx.createGain();
-      lvl.gain.value = level;
-      osc.connect(lvl);
-      lvl.connect(amp);
-      osc.start(t);
-      sources.push(osc);
-    }
+    const osc = ctx.createOscillator();
+    osc.setPeriodicWave(bassTimbre(ctx));
+    osc.frequency.value = f;
+    osc.connect(amp);
+    osc.start(t);
+
+    const sources: Array<OscillatorNode | AudioBufferSourceNode> = [osc];
     sources.push(noiseBurst(ctx, filter, t, 0.03, 900, vel * 0.09));
 
     return finish(ctx, { sources, envelopes: [amp.gain], out }, note, 0.14);

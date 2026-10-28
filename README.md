@@ -506,6 +506,45 @@ Everything the brief lists as future work attaches at an existing seam.
    voice in a drop-2 chord, reaches below `VOICING_FLOOR` into the bass's half
    of the keyboard.
 
+   g. Being in the right register is not the same as being audible from it.
+   The bass register is 55 Hz to 147 Hz; a phone radiates almost nothing below
+   about 500 Hz and a modest laptop gives up around 200, so on the devices
+   this app is used on, none of these fundamentals reach the listener at all.
+   Rendered through speaker models, the bass used to sit **34 dB** under the
+   chord on a phone — not quiet, absent. Turning it up would not have helped:
+   the speaker cannot move air down there at any level.
+
+   i. The fix is the missing fundamental. The ear reconstructs a root from its
+   harmonics, which is why a bass guitar is audible through a laptop at all,
+   so the voice is one periodic wave of 24 partials falling at h^-0.8, rolled
+   off at 1.3 kHz. The series runs to a *frequency*, not to a harmonic number:
+   1.3 kHz is the 24th harmonic of the lowest note in the register and the 9th
+   of the highest. Counting harmonics instead leaves the bottom octave as
+   inaudible as it was, because six harmonics of 55 Hz still only reach
+   330 Hz — which is how the first attempt at this failed.
+
+   ii. The partials' phases are spread quadratically. Two dozen of them
+   starting together make an impulse rather than a note: the peak towers over
+   the average, so the limiter catches it long before it is loud. Spreading
+   them leaves the spectrum, and so the timbre, untouched, and a walking bar
+   under a chord now peaks lower than the old design did.
+
+   iii. Its level was set by ear-weighted measurement rather than by matching
+   the old waveform's amplitude. A-weighted, the sine it replaced measured
+   22 dB under the chord even on a full-range system — all that energy sat
+   where the ear is barely sensitive — so matching its raw level would have
+   made this far louder than the bass has ever been. It now sits about 4 dB
+   under the comping, and within 1 dB of that on a phone, a laptop and a
+   full-range system alike. That last part is the point: what you hear no
+   longer depends on what you are listening on.
+
+   iv. `src/audio/audibility.test.ts` holds the line. It models a speaker as a
+   cascaded high-pass and asserts that enough of each note's energy survives
+   it, across the whole register and evenly — evenness matters because root
+   motion is an interval, and a bass that fades as it descends is harder to
+   follow than one that is quiet but consistent. It also measures the old
+   design, so it cannot pass by asserting something any design would meet.
+
 ## 10. Your data
 
    a. Practice history is written to `localStorage` on this device and nowhere

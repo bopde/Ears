@@ -3,7 +3,7 @@ import { BASS_INSTRUMENT, DEFAULT_INSTRUMENT, PAD_INSTRUMENT, getInstrument } fr
 import type { Voicing } from '../music/voicing';
 import type { RealisedChord } from '../music/progressions';
 import type { PhraseNote } from '../music/phrase';
-import { REGISTER, foldInto, pcAtOrAbove } from '../music/pitch';
+import { BASS_GAP, REGISTER, foldInto, pcAtOrAbove, type Midi } from '../music/pitch';
 import { clamp, mod } from '../lib/util';
 
 export interface PerformerOptions {
@@ -57,6 +57,43 @@ export interface BassChord {
   rootPc: number;
   /** Every pitch class the chord holds, so the bass can agree with it. */
   pcs: readonly number[];
+  /** Lowest note of the voicing above, so the bass can stay clear of it. */
+  low: Midi;
+}
+
+/** Octaves of `pc` that fit the bass register, lowest first. */
+function bassOctaves(pc: number): Midi[] {
+  const out: Midi[] = [];
+  for (let m = pcAtOrAbove(mod(pc, 12), REGISTER.bass.lo); m <= REGISTER.bass.hi; m += 12) {
+    out.push(m);
+  }
+  return out;
+}
+
+/** Which octave of the root to play, given what is sounding above it. */
+function placeRoot(rootPc: number, low: Midi): Midi {
+  const options = bassOctaves(rootPc);
+  if (!options.length) return foldInto(mod(rootPc, 12) + 36, REGISTER.bass.lo, REGISTER.bass.hi);
+  const cost = (m: Midi) => {
+    const gap = low - m;
+    return Math.abs(gap - BASS_GAP.want) +
+      (gap < BASS_GAP.min ? 100 : 0) +
+      (gap > BASS_GAP.max ? 24 : 0);
+  };
+  return options.reduce((best, m) => (cost(m) < cost(best) ? m : best), options[0]);
+}
+
+/**
+ * Moves a bass note by octaves until it is inside the register and clear of
+ * the voicing, keeping it as close as it can to where it wanted to be.
+ */
+function settle(midi: Midi, low: Midi, fallback: Midi): Midi {
+  const usable = (m: Midi) =>
+    m >= REGISTER.bass.lo && m <= REGISTER.bass.hi && low - m >= BASS_GAP.min;
+  for (const candidate of [midi, midi - 12, midi + 12, midi - 24, midi + 24]) {
+    if (usable(candidate)) return candidate;
+  }
+  return fallback;
 }
 
 /**
@@ -72,14 +109,22 @@ function ownTone(rootPc: number, pcs: readonly number[], prefer: readonly number
   return prefer.find((offset) => held.has(mod(rootPc + offset, 12))) ?? null;
 }
 
+/**
+ * How the bass behaves under a progression.
+ *
+ * `root` is the teaching setting: one note, the root, doubled an octave under
+ * the voicing and held. Nothing moves, so nothing competes with the chord.
+ */
+export type BassStyle = 'sustained' | 'comp' | 'root';
+
 export function bassLine(
   chord: BassChord,
   next: { rootPc: number } | undefined,
-  style: 'sustained' | 'comp',
+  style: BassStyle,
   startBeat: number,
 ): BassNote[] {
-  const { beats, rootPc, pcs } = chord;
-  const root = foldInto(rootPc + 36, REGISTER.bass.lo, REGISTER.bass.hi);
+  const { beats, rootPc, pcs, low } = chord;
+  const root = placeRoot(rootPc, low);
   // Diminished, perfect or augmented, whichever this chord actually holds.
   const fifth = ownTone(rootPc, pcs, [7, 6, 8]);
   // Seventh, sixth or diminished seventh, in that order of preference. A
@@ -88,31 +133,45 @@ export function bassLine(
   const third = ownTone(rootPc, pcs, [3, 4]);
   const seventh = ownTone(rootPc, pcs, [10, 11, 9]) ?? third;
 
+  if (style === 'root') {
+    // Doubling the voicing's own bottom note an octave down, rather than
+    // picking an octave freely, is what makes it read as a doubling.
+    return [{ beat: startBeat, beats, midi: settle(low - 12, low, root), velocity: 0.74 }];
+  }
+
   if (style !== 'comp') {
     const out: BassNote[] = [{ beat: startBeat, beats, midi: root, velocity: 0.74 }];
     // A long chord gets its fifth halfway through, which keeps a whole bar of
     // one harmony from going static. A chord with no fifth holds the root.
     if (beats >= 4 && fifth !== null) {
-      out.push({
-        beat: startBeat + 2,
-        beats: beats - 2,
-        midi: pcAtOrAbove(mod(rootPc + fifth, 12), root + 1),
-        velocity: 0.6,
-      });
+      // The fifth above the root where the register allows it, otherwise the
+      // same note a fourth down. Reaching above the bass register puts it in
+      // unison with the bottom of the right hand, and the ear then takes that
+      // freshly struck note as the bass while the root decays — which is how
+      // a root-position chord comes to sound like an inversion.
+      const above = pcAtOrAbove(mod(rootPc + fifth, 12), root + 1);
+      const midi = above <= REGISTER.bass.hi ? above : above - 12;
+      out.push({ beat: startBeat + 2, beats: beats - 2, midi: settle(midi, low, root), velocity: 0.6 });
     }
     return out;
   }
 
   // Walking quarter notes from one root to the next: root, fifth, the seventh,
   // then a half step into the following root.
-  const nextRoot = foldInto((next?.rootPc ?? rootPc) + 36, REGISTER.bass.lo, REGISTER.bass.hi);
+  const nextRoot = placeRoot(next?.rootPc ?? rootPc, low);
   const steps: Array<[number, number]> = [[0, root]];
   if (beats >= 2) steps.push([1, pcAtOrAbove(mod(rootPc + (fifth ?? third ?? 0), 12), root - 5)]);
   if (beats >= 3) steps.push([2, pcAtOrAbove(mod(rootPc + (seventh ?? 0), 12), root - 2)]);
   if (beats >= 4) steps.push([3, nextRoot + (nextRoot >= root ? -1 : 1)]);
   return steps
     .filter(([b]) => b < beats)
-    .map(([b, midi]) => ({ beat: startBeat + b, beats: 1, midi, velocity: 0.72 }));
+    // Every step, the approach note included, is held to the same two rules.
+    .map(([b, midi]) => ({
+      beat: startBeat + b,
+      beats: 1,
+      midi: settle(midi, low, root),
+      velocity: 0.72,
+    }));
 }
 
 
@@ -290,7 +349,7 @@ export class Performer {
   progression(
     chords: readonly (BassChord & { voicing: Voicing })[],
     origin: number,
-    opts: { style?: 'sustained' | 'comp'; startBeat?: number; velocity?: number } = {},
+    opts: { style?: BassStyle; startBeat?: number; velocity?: number } = {},
   ): number {
     const style = opts.style ?? 'sustained';
     const velocity = opts.velocity ?? 0.66;
@@ -335,6 +394,7 @@ export class Performer {
       beats: r.beats,
       rootPc: r.chord.rootPc,
       pcs: r.chord.quality.intervals.map((iv) => mod(r.chord.rootPc + iv, 12)),
+      low: voicings[i].notes[0],
     }));
   }
 }

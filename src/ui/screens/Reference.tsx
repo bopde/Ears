@@ -7,11 +7,15 @@ import {
   intervalNotes, playChordQuality, playInterval, playProgression, playScale,
 } from '../../audio/demo';
 import {
+  REFERENCE_VOICINGS, playReferenceChord, referenceNoteNames, referenceVoicings,
+  type ReferenceChord, type ReferenceVoicing,
+} from '../../audio/reference';
+import {
   CHORD_GROUP_ORDER, CHORD_QUALITIES, chordPitchClasses, chordSymbol, makeChord,
 } from '../../music/chords';
 import { INTERVALS } from '../../music/intervals';
 import { SCALES, scalePitchClasses } from '../../music/scales';
-import { PROGRESSIONS, realiseProgression, romanLine } from '../../music/progressions';
+import { PROGRESSIONS, romanLine } from '../../music/progressions';
 import { PITCH_CLASSES, midiName, pcName, pcNameDual } from '../../music/pitch';
 import { groupBy } from '../../lib/util';
 
@@ -74,6 +78,46 @@ function Row({
   );
 }
 
+/**
+ * One chord of a progression, with the notes that will sound.
+ *
+ * The notes come from the same call that schedules the audio, so what is read
+ * here is what is heard — the bass marked separately, because which note is
+ * underneath is the thing the display exists to settle.
+ */
+function ChordCard({
+  item,
+  accidental,
+  active,
+  onPlay,
+}: {
+  item: ReferenceChord;
+  accidental: 'sharp' | 'flat' | 'both';
+  active: boolean;
+  onPlay: () => void;
+}) {
+  const names = referenceNoteNames(item, accidental);
+  return (
+    <button
+      type="button"
+      className={clsx('refchord', active && 'refchord--on')}
+      onClick={onPlay}
+      aria-label={`Play ${item.symbol} alone`}
+    >
+      <span className="refchord__symbol">{item.symbol}</span>
+      <span className="refchord__roman">{item.roman}</span>
+      <span className="refchord__notes">
+        {[...names.notes].reverse().map((n, i) => (
+          <span key={`${n}-${i}`} className="refchord__note">{n}</span>
+        ))}
+      </span>
+      <span className="refchord__bass">
+        {names.bass.join(' → ') || '—'}
+      </span>
+    </button>
+  );
+}
+
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="card stack stack--tight">
@@ -92,8 +136,10 @@ export function Reference({ onBack }: { onBack: () => void }) {
   const { settings, updateSettings, performer, unlockAudio } = useApp();
   const [tab, setTab] = useState<Tab>('progressions');
   const [playing, setPlaying] = useState<string | null>(null);
+  const [roll, setRoll] = useState(false);
   const key = settings.referenceKey;
   const accidental = settings.accidental;
+  const voicing: ReferenceVoicing = settings.referenceVoicing;
 
   // One pending timer at a time, cancelled on the way out so a demo started
   // just before leaving the cheat sheet cannot set state on a gone screen.
@@ -149,25 +195,69 @@ export function Reference({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
+      {tab === 'progressions' && (
+        <section className="card stack stack--tight">
+          <div className="eyebrow">Voicing</div>
+          <div className="row row--wrap" style={{ gap: '0.3rem' }}>
+            {REFERENCE_VOICINGS.map((v) => (
+              <Chip
+                key={v.id}
+                on={v.id === voicing}
+                onClick={() => updateSettings({ referenceVoicing: v.id })}
+              >
+                {v.short}
+              </Chip>
+            ))}
+          </div>
+          <p className="small faint" style={{ marginTop: '0.1rem' }}>
+            {REFERENCE_VOICINGS.find((v) => v.id === voicing)?.blurb}
+          </p>
+          <label className="refroll">
+            <input
+              type="checkbox"
+              checked={roll}
+              onChange={(e) => setRoll(e.currentTarget.checked)}
+            />
+            <span>Roll a single chord from the bass</span>
+          </label>
+        </section>
+      )}
+
       {tab === 'progressions' &&
         (['major', 'minor', 'modal'] as const).map((tonality) => {
           const items = progressionGroups.get(tonality) ?? [];
           if (!items.length) return null;
           return (
             <Group key={tonality} title={TONALITY_LABEL[tonality]}>
-              {items.map((def) => (
-                <Row
-                  key={def.id}
-                  title={def.name}
-                  concrete={realiseProgression(def, key)
-                    .map((r) => chordSymbol(r.chord, accidental))
-                    .join('  |  ')}
-                  detail={romanLine(def)}
-                  blurb={def.blurb}
-                  active={playing === def.id}
-                  onPlay={() => void play(def.id, (perf) => playProgression(perf, def, key))}
-                />
-              ))}
+              {items.map((def) => {
+                const chords = referenceVoicings(def, key, voicing, accidental);
+                return (
+                  <div key={def.id} className="refprog">
+                    <Row
+                      title={def.name}
+                      concrete={chords.map((c) => c.symbol).join('  |  ')}
+                      detail={romanLine(def)}
+                      blurb={def.blurb}
+                      active={playing === def.id}
+                      onPlay={() =>
+                        void play(def.id, (perf) => playProgression(perf, def, key, voicing))}
+                    />
+                    <div className="refchords">
+                      {chords.map((item, i) => (
+                        <ChordCard
+                          key={`${def.id}-${i}`}
+                          item={item}
+                          accidental={accidental}
+                          active={playing === `${def.id}-${i}`}
+                          onPlay={() =>
+                            void play(`${def.id}-${i}`, (perf) =>
+                              playReferenceChord(perf, item, { roll }))}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </Group>
           );
         })}

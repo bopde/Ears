@@ -1,4 +1,6 @@
-import { bassLine, type BassChord, type NotePlayOptions, type Performer } from './audio/performer';
+import {
+  bassLine, type BassChord, type BassStyle, type NotePlayOptions, type Performer,
+} from './audio/performer';
 import type { Voicing } from './music/voicing';
 import type { PhraseNote } from './music/phrase';
 import { REGISTER, foldInto } from './music/pitch';
@@ -106,7 +108,7 @@ export class FakePerformer {
   progression(
     chords: readonly (BassChord & { voicing: Voicing })[],
     origin: number,
-    opts: { style?: 'sustained' | 'comp' } = {},
+    opts: { style?: BassStyle } = {},
   ): number {
     // One entry per chord, whatever the style: `chords` is what the question
     // claims to be playing, not how many times the comping hits it.

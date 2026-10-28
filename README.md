@@ -117,6 +117,24 @@ builds the app and deploys it on every push to `main`.
    or degrees, so it works both for checking what something sounds like and for
    playing along with it.
 
+   i. On the **Changes** tab each progression breaks out into one card per
+   chord, showing the notes that are about to sound, highest first, with the
+   bass underneath a rule. Tap a card to hear that chord on its own; tick
+   *Roll a single chord from the bass* and it arpeggiates upward from the bass
+   note before striking the chord, which is the only way to hear every voice
+   in a five-note stack and still hear it as a chord.
+
+   ii. The **Voicing** selector above the list decides how all of them are
+   played: *Root position* (the default), *Voice led*, *Shell*, *Rootless* or
+   *Drop 2*. Root position stacks every chord plainly from its root with the
+   root doubled an octave below and nothing moving underneath, so you can learn
+   the reference sound of a chord before meeting the ways a pianist disguises
+   it. The choice is remembered.
+
+   iii. The notes on screen and the notes that sound come from one function,
+   `referenceVoicings` in `src/audio/reference.ts`. The display cannot drift
+   from the audio, because there is nowhere for it to drift to.
+
    h. On a desktop keyboard, number keys answer, `R` replays, `H` plays the
    hint and `Enter` moves on. `S` shows held-back answers early.
 
@@ -279,6 +297,9 @@ chord questions without being told to.
    c. `src/audio/` — `engine.ts` owns the context, the reverb and the master
    chain; `instruments.ts` holds the synthesis; `performer.ts` turns musical
    intentions into scheduled notes, including swing, comping and walking bass.
+   `reference.ts` describes a progression as the cheat sheet both shows it and
+   plays it, so the two always agree; `demo.ts` is the single-item playback the
+   other cheat-sheet tabs use.
 
    d. `src/exercises/` — one module per exercise type, each implementing the
    `ExerciseType` interface. A question carries its own audio, its own hint and
@@ -361,6 +382,27 @@ Everything the brief lists as future work attaches at an existing seam.
    ii. The modal drone sounds the tonic alone when the mode has no perfect
    fifth. A drone is a held note, so a natural 5 under a Locrian line would
    contradict its ♭5 for the whole phrase — and that ♭5 is the answer.
+
+   f. The bass also has to be *heard* as the bass, which is a question of
+   register rather than of pitch class. Two rules in `bassLine`
+   (`src/audio/performer.ts`) settle it, and both are swept over every
+   progression, every key, both bass styles and every voicing mode in
+   `src/audio/reference.test.ts`.
+
+   i. Every bass note stays inside the bass register. The sustained fifth used
+   to be placed above the root without that check, and from B♭2 it landed on
+   F3 — above the register and in unison with the bottom of the right hand.
+   The ear takes the more recently struck of two identical notes as the bass,
+   so the root decayed and a root-position B♭7 came to sound like B♭7/F. It is
+   now played a fourth down instead whenever the fifth above will not fit.
+
+   ii. No bass note comes within a whole step of the lowest note of the
+   voicing, and the root's octave is chosen to sit about an octave below it
+   where the register allows. Across all progressions in all twelve keys that
+   collision happened in 33 of 1,872 chords; it now happens in none. Voicings
+   are held to the matching half of the bargain: nothing, not even a dropped
+   voice in a drop-2 chord, reaches below `VOICING_FLOOR` into the bass's half
+   of the keyboard.
 
 ## 10. Your data
 

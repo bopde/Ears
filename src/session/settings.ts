@@ -5,6 +5,7 @@ import { SIMPLE_INTERVALS } from '../music/intervals';
 import { CORE_MODES } from '../music/scales';
 import { CORE_PROGRESSIONS } from '../music/progressions';
 import { DEFAULT_INSTRUMENT, INSTRUMENTS } from '../audio/instruments';
+import { REFERENCE_VOICING_IDS, type ReferenceVoicing } from '../audio/reference';
 
 export const EXERCISE_TYPE_IDS = [
   'chord-quality',
@@ -75,6 +76,8 @@ export interface PracticeSettings {
   answerDelay: number | 'audio';
   /** Key the cheat sheet last demonstrated things in. */
   referenceKey: number;
+  /** How the cheat sheet voices progressions. */
+  referenceVoicing: ReferenceVoicing;
 }
 
 export const ANSWER_DELAY_OPTIONS: Array<{ value: number | 'audio'; label: string }> = [
@@ -114,6 +117,9 @@ export function defaultSettings(): PracticeSettings {
     theme: 'auto',
     answerDelay: 3,
     referenceKey: 0,
+    // Root position by default: a learner should meet the plain chord before
+    // any of the voicings that disguise it.
+    referenceVoicing: 'root',
   };
 }
 
@@ -235,5 +241,6 @@ export function normaliseSettings(partial: Partial<PracticeSettings> | null | un
       merged.referenceKey < 12
         ? merged.referenceKey
         : base.referenceKey,
+    referenceVoicing: oneOf(merged.referenceVoicing, REFERENCE_VOICING_IDS, base.referenceVoicing),
   };
 }

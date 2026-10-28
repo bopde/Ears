@@ -4,6 +4,7 @@ import {
 } from './settings';
 import { INSTRUMENTS } from '../audio/instruments';
 import { eligibleConcepts } from '../learning/selector';
+import { REFERENCE_VOICING_IDS } from '../audio/reference';
 
 /**
  * Settings arrive from localStorage, which is editable by hand, shared with
@@ -106,6 +107,15 @@ describe('stored settings are validated, not merely filled in', () => {
       .toEqual(base.intervalDirections);
     expect(bad({ intervalDirections: ['harmonic', 'sideways'] }).intervalDirections)
       .toEqual(['harmonic']);
+  });
+
+  it('refuses a cheat-sheet voicing it cannot play', () => {
+    expect(bad({ referenceVoicing: 'stride' }).referenceVoicing).toBe(base.referenceVoicing);
+    expect(bad({ referenceVoicing: 7 }).referenceVoicing).toBe(base.referenceVoicing);
+    expect(base.referenceVoicing, 'the plain chord comes first').toBe('root');
+    for (const id of REFERENCE_VOICING_IDS) {
+      expect(bad({ referenceVoicing: id }).referenceVoicing).toBe(id);
+    }
   });
 
   it('leaves a well-formed settings object exactly as it found it', () => {

@@ -131,7 +131,17 @@ builds the app and deploys it on every push to `main`.
    the reference sound of a chord before meeting the ways a pianist disguises
    it. The choice is remembered.
 
-   iii. The notes on screen and the notes that sound come from one function,
+   iii. Each set of changes carries the voicing a player would reach for, named
+   and then shown rather than explained: *Rootless · ♭3 5 ♭7 9 · ♭7 9 3 5 ·
+   3 5 7 9* says what a sentence about why would not. Tapping it plays the
+   changes that way.
+
+   iv. The **Voicings** tab takes them one at a time: what each is, where a
+   player reaches for it, the degrees it sounds over a set of changes that
+   shows it off, and a *Compare with root position* button that plays those
+   changes plainly and then in the voicing, back to back.
+
+   v. The notes on screen and the notes that sound come from one function,
    `referenceVoicings` in `src/audio/reference.ts`. The display cannot drift
    from the audio, because there is nowhere for it to drift to.
 
@@ -171,6 +181,17 @@ builds the app and deploys it on every push to `main`.
 
    h. **Chords in context** — a progression plays; name one chord from inside
    it.
+
+   i. **Name the voicing** — one chord sounds; say how it is arranged, not what
+   it is. The chord symbol is printed in the prompt, because the question is
+   about the shape. Only chords whose shapes come out audibly different are
+   used: on a plain seventh a spread voicing and a drop 2 can land on the same
+   four notes, and then there are two right answers.
+
+   j. **Guide tones** — a progression plays; follow the line the 3rds and 7ths
+   make through it. The wrong answers are the same line with one or two notes
+   moved to the other guide tone of that chord, so the only way to reject one
+   is to have followed the voice the whole way.
 
 ### 4.1 Questions it will not ask
 
@@ -231,7 +252,11 @@ to do:
 
    c. **Thinner voicings.** Level 1 is a rolled, root-position close voicing
    with a bass note underneath. Level 5 is a rootless inversion with no root
-   anywhere — you hear the chord rather than the stack.
+   anywhere — you hear the chord rather than the stack. Chord questions and
+   changes questions draw on the same curve, in `src/exercises/voicing-plan.ts`,
+   so the two move together. Settings → Display → *Voicings* overrides it:
+   *Plain* is root position whatever the level, *Realistic* is rootless and
+   drop 2 from the start, and *Mixed* is the curve.
 
    d. **Fewer reference cues.** Reference pitches and stated keys disappear at
    the higher levels.
@@ -281,6 +306,30 @@ The exercise type is then chosen by how much of that wish list it can actually
 serve — if the weak material is all altered dominants, the session leans toward
 chord questions without being told to.
 
+
+### 6.1 Voicing, as a modifier rather than a concept
+
+   a. A chord heard in close position and the same chord heard rootless are two
+   different listening problems, and a learner can have one and not the other.
+   That is worth knowing, and it is recorded.
+
+   b. It is not recorded as a concept of its own. Giving every chord quality an
+   entry per voicing would multiply the material by five and spread practice
+   across cells that mostly agree with each other. What is worth knowing is
+   narrower — that a learner who has a ii–V–I in close position loses it
+   rootless — and that is a correction to one number, not five more things to
+   schedule.
+
+   c. So each skill record carries a small per-voicing breakdown inside it. A
+   voicing only counts as weak once it has been seen a few times and trails the
+   concept's own strength, and then it tilts which of the voicings the level
+   already allows comes up next. It never widens what is on offer, and a
+   learner who is equally good at all of them is steered nowhere.
+
+   d. The one exercise that asks about voicings by name is the exception: there
+   the shape is the answer, so it has concepts of its own and the chord it was
+   played on is not marked either way.
+
 ## 7. Architecture
 
    a. `src/music/` — pure theory. Note spelling, intervals, chord qualities,
@@ -301,20 +350,35 @@ chord questions without being told to.
    plays it, so the two always agree; `demo.ts` is the single-item playback the
    other cheat-sheet tabs use.
 
-   d. `src/exercises/` — one module per exercise type, each implementing the
+   d. Seven voicing styles live in `src/music/voicing.ts`. Four are searched —
+   candidate stacks scored for spacing and voice leading. Three are fixed
+   shapes, because the order of the notes is what makes them that voicing:
+   rootless (3–5–♭7–9, or ♭7–9–3–5, alternating down a chain of fourths),
+   quartal (three perfect fourths and a major third, the "So What" shape), and
+   upper structure (guide tones underneath, a plain triad on the chord's
+   tensions above). A shape is only used when it still states every tone the
+   chord is named for; where it cannot, the engine falls back rather than play
+   something else under the name.
+
+   e. The 9th a pianist adds to every rootless voicing is off by default. It is
+   right at a piano and wrong in a question — a rootless Dm7 voiced F A C E
+   sounds a 9th, and "m7" stops being the only defensible answer — so the
+   cheat sheet asks for it and the exercises do not.
+
+   f. `src/exercises/` — one module per exercise type, each implementing the
    `ExerciseType` interface. A question carries its own audio, its own hint and
    its own reveal, so the session engine never special-cases a type.
 
-   e. `src/learning/` — the skill model, the adaptive selector, local
+   g. `src/learning/` — the skill model, the adaptive selector, local
    persistence and the statistics behind the progress screen.
 
-   f. `src/session/` — the session state machine. Questions are generated one at
+   h. `src/session/` — the session state machine. Questions are generated one at
    a time, not queued up front, so the model reacts to answers *within* a
    session. `daily.ts` is the exception: it builds all ten up front from a
    date-derived seed, and the engine plays that script instead of selecting
    anything, which is what makes the Daily shared.
 
-   g. `src/ui/` — React screens and components, plus one stylesheet holding the
+   i. `src/ui/` — React screens and components, plus one stylesheet holding the
    design tokens.
 
 ## 8. Extending it

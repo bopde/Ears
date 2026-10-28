@@ -2,6 +2,7 @@ import type { Concept } from './concept';
 import { conceptId } from './concept';
 import { makeChord, requireChordQuality, romanSuffix, type Chord } from './chords';
 import type { PitchClass } from './pitch';
+import type { VoicingStyle } from './voicing';
 import { mod } from '../lib/util';
 
 export interface ProgressionChord {
@@ -32,6 +33,13 @@ export interface ProgressionDef {
   tags: readonly string[];
   core: boolean;
   blurb?: string;
+  /**
+   * The voicing a player would reach for on these changes.
+   *
+   * Named rather than explained: the cheat sheet shows the degrees the voicing
+   * actually sounds beside it, which says more than a sentence about why.
+   */
+  voicing?: VoicingStyle;
 }
 
 const C = (degree: number, quality: string, numeral: string, beats?: number): ProgressionChord =>
@@ -42,7 +50,7 @@ const P = (p: ProgressionDef) => p;
 export const PROGRESSIONS: ProgressionDef[] = [
   // ── Foundational cadences ────────────────────────────────────────────────
   P({ id: 'ii-V-I', name: 'ii–V–I', short: 'ii V I', tonality: 'major', tier: 1,
-      beatsPerChord: 4, core: true, devices: ['ii-V-I'], tags: ['cadence', 'major-key'],
+      beatsPerChord: 4, core: true, voicing: 'rootless', devices: ['ii-V-I'], tags: ['cadence', 'major-key'],
       chords: [C(2, 'm7', 'ii'), C(7, '9', 'V'), C(0, 'maj7', 'I')],
       blurb: 'The backbone of jazz harmony: root motion down a fifth each time.' }),
   P({ id: 'I-IV-V-I', name: 'I–IV–V–I', short: 'I IV V I', tonality: 'major', tier: 1,
@@ -67,15 +75,15 @@ export const PROGRESSIONS: ProgressionDef[] = [
 
   // ── Minor-key harmony ────────────────────────────────────────────────────
   P({ id: 'ii-V-i-minor', name: 'Minor ii–V–i', short: 'iiø V i', tonality: 'minor', tier: 3,
-      beatsPerChord: 4, core: true, devices: ['minor-ii-V'], tags: ['cadence', 'minor-key'],
+      beatsPerChord: 4, core: true, voicing: 'rootless', devices: ['minor-ii-V'], tags: ['cadence', 'minor-key'],
       chords: [C(2, 'm7b5', 'ii'), C(7, '7b9', 'V'), C(0, 'm7', 'i')],
       blurb: 'Half-diminished ii and an altered V — the minor-key cadence.' }),
   P({ id: 'minor-ii-V-i-alt', name: 'Minor ii–V–i (altered)', short: 'iiø V7alt i',
-      tonality: 'minor', tier: 5, beatsPerChord: 4, core: true,
+      tonality: 'minor', tier: 5, beatsPerChord: 4, core: true, voicing: 'upperStructure',
       devices: ['minor-ii-V', 'altered-dominant'], tags: ['cadence', 'minor-key', 'altered'],
       chords: [C(2, 'm7b5', 'ii'), C(7, '7alt', 'V'), C(0, 'mMaj7', 'i')] }),
   P({ id: 'line-cliche', name: 'Minor line cliché', short: 'i i∆7 i7 i6', tonality: 'minor',
-      tier: 4, beatsPerChord: 4, core: true, devices: ['line-cliche'], tags: ['minor-key'],
+      tier: 4, beatsPerChord: 4, core: true, voicing: 'close', devices: ['line-cliche'], tags: ['minor-key'],
       chords: [C(0, 'min', 'i'), C(0, 'mMaj7', 'i'), C(0, 'm7', 'i'), C(0, 'm6', 'i')],
       blurb: 'A static root with an inner voice walking down from the octave.' }),
   P({ id: 'minor-plagal', name: 'Minor plagal cadence', short: 'IV iv I', tonality: 'major',
@@ -86,12 +94,12 @@ export const PROGRESSIONS: ProgressionDef[] = [
 
   // ── Substitution and reharmonisation ─────────────────────────────────────
   P({ id: 'tritone-sub', name: 'Tritone substitution', short: 'ii ♭II7 I', tonality: 'major',
-      tier: 4, beatsPerChord: 4, core: true, devices: ['tritone-sub'],
+      tier: 4, beatsPerChord: 4, core: true, voicing: 'rootless', devices: ['tritone-sub'],
       tags: ['substitution', 'major-key'],
       chords: [C(2, 'm7', 'ii'), C(1, '9#11', '♭II'), C(0, 'maj7', 'I')],
       blurb: 'The V is swapped for the dominant a tritone away, so the bass slides down a half step.' }),
   P({ id: 'backdoor', name: 'Backdoor dominant', short: 'iv ♭VII7 I', tonality: 'major',
-      tier: 4, beatsPerChord: 4, core: true, devices: ['backdoor', 'modal-interchange'],
+      tier: 4, beatsPerChord: 4, core: true, voicing: 'rootless', devices: ['backdoor', 'modal-interchange'],
       tags: ['substitution', 'borrowed'],
       chords: [C(5, 'm7', 'iv'), C(10, '7', '♭VII'), C(0, 'maj7', 'I')],
       blurb: 'Arriving at I from ♭VII7 instead of V7 — borrowed from the parallel minor.' }),
@@ -129,7 +137,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
                C(5, 'maj7', 'IV'), C(11, 'm7b5', 'vii')],
       blurb: 'Every chord diatonic, each root a fourth above the last.' }),
   P({ id: 'rhythm-changes-a', name: 'Rhythm changes (A section)', short: 'Rhythm A',
-      tonality: 'major', tier: 4, beatsPerChord: 2, core: true,
+      tonality: 'major', tier: 4, beatsPerChord: 2, core: true, voicing: 'rootless',
       devices: ['turnaround', 'secondary-dominant', 'diminished-passing'],
       tags: ['form', 'major-key'],
       chords: [C(0, 'maj7', 'I'), C(9, '7b9', 'VI'), C(2, 'm7', 'ii'), C(7, '7', 'V'),
@@ -138,27 +146,27 @@ export const PROGRESSIONS: ProgressionDef[] = [
 
   // ── Blues ────────────────────────────────────────────────────────────────
   P({ id: 'blues-opening', name: 'Jazz blues — opening', short: 'Blues 1–4', tonality: 'major',
-      tier: 3, beatsPerChord: 4, core: true, devices: ['blues'], tags: ['blues', 'form'],
+      tier: 3, beatsPerChord: 4, core: true, voicing: 'shell', devices: ['blues'], tags: ['blues', 'form'],
       chords: [C(0, '9', 'I'), C(5, '13', 'IV'), C(0, '9', 'I'), C(7, 'm7', 'v')],
       blurb: 'Bars 1–4 of a jazz blues, ending on the ii of IV.' }),
   P({ id: 'blues-turnaround', name: 'Jazz blues — turnaround', short: 'Blues 7–12',
-      tonality: 'major', tier: 4, beatsPerChord: 2, core: true,
+      tonality: 'major', tier: 4, beatsPerChord: 2, core: true, voicing: 'shell',
       devices: ['blues', 'turnaround', 'diminished-passing'], tags: ['blues', 'form'],
       chords: [C(5, '13', 'IV'), C(6, 'dim7', '♯iv'), C(0, '9', 'I'), C(9, '7b9', 'VI'),
                C(2, 'm9', 'ii'), C(7, '13', 'V')],
       blurb: 'The back half of a blues chorus, with the °7 passing chord.' }),
   P({ id: 'minor-blues', name: 'Minor blues — opening', short: 'Min blues', tonality: 'minor',
-      tier: 4, beatsPerChord: 4, core: true, devices: ['blues', 'minor-ii-V'],
+      tier: 4, beatsPerChord: 4, core: true, voicing: 'shell', devices: ['blues', 'minor-ii-V'],
       tags: ['blues', 'minor-key'],
       chords: [C(0, 'm7', 'i'), C(5, 'm7', 'iv'), C(0, 'm7', 'i'), C(7, '7alt', 'V')] }),
 
   // ── Modal ────────────────────────────────────────────────────────────────
   P({ id: 'so-what', name: 'Modal shift up a half step', short: 'Modal shift', tonality: 'modal',
-      tier: 3, beatsPerChord: 4, core: true, devices: ['modal'], tags: ['modal'],
+      tier: 3, beatsPerChord: 4, core: true, voicing: 'quartal', devices: ['modal'], tags: ['modal'],
       chords: [C(0, 'm11', 'i'), C(1, 'm11', '♭ii'), C(0, 'm11', 'i')],
       blurb: 'Static modal harmony that lifts a half step and drops back.' }),
   P({ id: 'constant-structure', name: 'Constant structure in minor 3rds', short: 'Const. struct.',
-      tonality: 'modal', tier: 5, beatsPerChord: 2, core: true,
+      tonality: 'modal', tier: 5, beatsPerChord: 2, core: true, voicing: 'quartal',
       devices: ['constant-structure'], tags: ['modal', 'symmetrical'],
       chords: [C(0, 'maj7', 'I'), C(3, 'maj7', '♭III'), C(6, 'maj7', '♯IV'),
                C(9, 'maj7', 'VI'), C(0, 'maj7', 'I')],
@@ -166,19 +174,19 @@ export const PROGRESSIONS: ProgressionDef[] = [
 
   // ── Advanced movement ────────────────────────────────────────────────────
   P({ id: 'coltrane-cell', name: 'Coltrane changes', short: 'Coltrane', tonality: 'major',
-      tier: 5, beatsPerChord: 2, core: true, devices: ['coltrane', 'modulation'],
+      tier: 5, beatsPerChord: 2, core: true, voicing: 'drop2', devices: ['coltrane', 'modulation'],
       tags: ['advanced', 'symmetrical'],
       chords: [C(0, 'maj7', 'I'), C(3, '7', '♭III'), C(8, 'maj7', '♭VI'),
                C(11, '7', 'VII'), C(4, 'maj7', 'III')],
       blurb: 'Tonic centres a major third apart, each reached by its own dominant.' }),
   P({ id: 'coltrane-substitution', name: 'Coltrane substitution over ii–V–I', short: 'Countdown',
-      tonality: 'major', tier: 5, beatsPerChord: 2, core: true,
+      tonality: 'major', tier: 5, beatsPerChord: 2, core: true, voicing: 'drop2',
       devices: ['coltrane', 'substitution'], tags: ['advanced', 'substitution'],
       chords: [C(2, 'm7', 'ii'), C(3, '7', '♭III'), C(8, 'maj7', '♭VI'), C(11, '7', 'VII'),
                C(4, 'maj7', 'III'), C(7, '7', 'V'), C(0, 'maj7', 'I')],
       blurb: 'A two-bar ii–V filled in with two extra key centres before it lands.' }),
   P({ id: 'giant-steps-head', name: 'Giant Steps opening', short: 'Giant Steps',
-      tonality: 'major', tier: 5, beatsPerChord: 2, core: true,
+      tonality: 'major', tier: 5, beatsPerChord: 2, core: true, voicing: 'drop2',
       devices: ['coltrane', 'modulation', 'ii-V-I'], tags: ['advanced', 'symmetrical', 'form'],
       chords: [C(0, 'maj7', 'I'), C(3, '7', '♭III'), C(8, 'maj7', '♭VI'),
                C(11, '7', 'VII'), C(4, 'maj7', 'III'), C(10, 'm7', '♭vii'),

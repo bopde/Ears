@@ -11,6 +11,7 @@ import { requireScale, scalePitchClasses } from '../music/scales';
 import { realiseProgression, requireProgression } from '../music/progressions';
 import { requireInversion } from '../music/inversions';
 import { BASS_GAP, PITCH_CLASSES, REGISTER } from '../music/pitch';
+import { BASS_INSTRUMENT } from '../audio/instruments';
 import { mod } from '../lib/util';
 
 /**
@@ -113,6 +114,31 @@ function checkHint(q: Question, where: string) {
     const earliest = [...first.perf.notes].sort((a, b) => a.time - b.time)[0];
     if (earliest && !sounded.has(mod(earliest.midi, 12))) {
       flag('hint: "First note" is not the first note', where);
+    }
+  } else if (label === 'Bottom of the chord') {
+    // The bass note is lower still, but it is always the root and so says
+    // nothing about the shape; the bottom of the stack is the whole clue.
+    const first = render((p) => q.play(p.asPerformer()));
+    const stack = first.perf.notes.filter((n) => n.instrument !== BASS_INSTRUMENT);
+    const lowest = Math.min(...stack.map((n) => n.midi));
+    if (!sounded.has(mod(lowest, 12))) {
+      flag('hint: "Bottom of the chord" is not the bottom of the chord', where);
+    }
+  } else if (label === 'First guide tone') {
+    // It has to be the 3rd or the 7th of the chord the progression opens on,
+    // or the hint is pointing at a note the answer never passes through.
+    const id = q.conceptIds.find((c) => c.startsWith('progression:'));
+    if (!id || q.keyPc === null) return;
+    const opening = realiseProgression(
+      requireProgression(id.slice('progression:'.length)),
+      q.keyPc,
+    )[0].chord;
+    const guides = opening.quality.intervals
+      .filter((i) => (i < 13 && (mod(i, 12) === 3 || mod(i, 12) === 4)) || (i >= 9 && i <= 11))
+      .map((i) => mod(opening.rootPc + i, 12));
+    if (![...sounded].every((pc) => guides.includes(pc))) {
+      flag('hint: "First guide tone" is not a guide tone of the first chord',
+        `${where} played ${[...sounded]}, guides ${guides}`);
     }
   } else {
     flag('hint: unrecognised label, cannot be checked', `${where} "${label}"`);

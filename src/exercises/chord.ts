@@ -3,7 +3,7 @@ import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, pitchClassField, questionId,
 } from './support';
 import {
-  CHORD_QUALITIES, chordConceptId, chordFullName, makeChord, nearestQualities,
+  CHORD_QUALITIES, chordConceptId, chordDegrees, chordFullName, makeChord, nearestQualities,
   qualityLabel, qualityPitchClasses, samePitchClasses, slashSymbol,
   type Chord, type ChordQuality,
 } from '../music/chords';
@@ -11,11 +11,11 @@ import { inversionByIndex } from '../music/inversions';
 import { inversionIndex } from '../music/voicing';
 import { mod } from '../lib/util';
 import { arpeggiate, voiceChord, type VoicingStyle } from '../music/voicing';
+import { chooseVoicing, voicingBass, voicingLabel } from './voicing-plan';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
 import { PITCH_CLASSES, midiName, pcName, pcNameDual, type PitchClass } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
-import type { Rng } from '../lib/rng';
 import { clamp } from '../lib/util';
 
 /** A reference pitch the user can measure everything else against. */
@@ -33,27 +33,19 @@ function enabledQualities(settings: PracticeSettings): ChordQuality[] {
  * This is the real difficulty lever for chord recognition: a root-position
  * close voicing with a bass note underneath hands you the root and the stack,
  * while a rootless inversion with no bass makes you hear the chord itself.
+ * The styles come from the shared curve, so what a chord question offers and
+ * what a progression question offers move together.
  */
-function voicingPlan(difficulty: number, rng: Rng): { style: VoicingStyle; bass: boolean; maxNotes: number } {
-  switch (clamp(Math.round(difficulty), 1, 5)) {
-    case 1:
-      return { style: 'close', bass: true, maxNotes: 4 };
-    case 2:
-      return { style: 'close', bass: true, maxNotes: 5 };
-    case 3:
-      return { style: rng.pick<VoicingStyle>(['close', 'spread']), bass: rng.chance(0.75), maxNotes: 5 };
-    case 4:
-      return {
-        style: rng.pick<VoicingStyle>(['spread', 'drop2', 'rootless']),
-        bass: rng.chance(0.35),
-        maxNotes: 5,
-      };
-    default:
-      return { style: rng.pick<VoicingStyle>(['rootless', 'drop2']), bass: false, maxNotes: 5 };
-  }
+function voicingPlan(ctx: GenContext): { style: VoicingStyle; bass: boolean; maxNotes: number } {
+  const difficulty = clamp(Math.round(ctx.difficulty), 1, 5);
+  const style = chooseVoicing(ctx.rng, ctx.settings.voicingMode, difficulty, ctx.voicingFocus);
+  return {
+    style,
+    bass: voicingBass(style, difficulty) && ctx.rng.chance(difficulty <= 2 ? 1 : 0.7),
+    maxNotes: difficulty <= 1 ? 4 : 5,
+  };
 }
 
-/** The pitch classes the voicing actually sounds, root included or not. */
 function soundingPitchClasses(voicing: ReturnType<typeof voiceChord>): Set<PitchClass> {
   return new Set(voicing.all.map((m) => mod(m, 12)));
 }
@@ -88,14 +80,19 @@ interface ChordMaterial {
   quality: ChordQuality;
   rootPc: number;
   voicing: ReturnType<typeof voiceChord>;
+  style: VoicingStyle;
   play: (perf: import('../audio/performer').Performer) => number;
   playReveal: (perf: import('../audio/performer').Performer) => number;
+  playPlain: (perf: import('../audio/performer').Performer) => number;
 }
 
 function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): ChordMaterial {
   const chord = makeChord(rootPc, quality.id);
-  const plan = voicingPlan(ctx.difficulty, ctx.rng);
+  const plan = voicingPlan(ctx);
   const voicing = voiceChord(chord, { style: plan.style, bass: plan.bass, maxNotes: plan.maxNotes });
+  // The same chord stacked from its root with the root underneath: what the
+  // voicing was dressing up, offered after the answer.
+  const plain = voiceChord(chord, { style: 'close', bottomPc: rootPc, bass: true, maxNotes: 5 });
   // A rolled chord at the easy end lets the ear walk up the stack; higher up
   // it is struck as a block, which is how you meet it on a bandstand.
   const roll = ctx.difficulty <= 1 ? 0.14 : ctx.difficulty <= 2 ? 0.045 : 0.012;
@@ -104,6 +101,16 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
     quality,
     rootPc,
     voicing,
+    style: plan.style,
+    playPlain: (perf) => {
+      const origin = perf.origin();
+      const gain = polyphonyGain(plain.all.length);
+      plain.notes.forEach((midi, i) => perf.note(midi, origin + i * 0.012, 3, 0.66, { gain }));
+      if (plain.bass !== undefined) {
+        perf.note(plain.bass, origin, 3, 0.72, { instrument: 'bass', gain });
+      }
+      return 3.2;
+    },
     play: (perf) => {
       const origin = perf.origin();
       perf.chord(voicing, origin, 0, { beats: 4, roll, velocity: 0.7 });
@@ -136,17 +143,20 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
 function revealFor(
   chord: Chord,
   voicing: ReturnType<typeof voiceChord>,
+  style: VoicingStyle,
   accidental: PracticeSettings['accidental'],
 ) {
   const bassPc = mod(voicing.all[0], 12);
   const inverted = inversionByIndex(inversionIndex(chord, voicing));
   const named = inverted && inverted.index > 0 ? inverted : undefined;
+  const parts = [chordFullName(chord, accidental), voicingLabel(style)];
+  if (named) parts.splice(1, 0, named.name);
   return {
     heading: slashSymbol(chord, bassPc, accidental),
-    detail: named
-      ? `${chordFullName(chord, accidental)}  \u00b7  ${named.name}`
-      : chordFullName(chord, accidental),
-    notes: voicing.all.map((m) => midiName(m, accidental)).join('  '),
+    detail: parts.join('  \u00b7  '),
+    // The degrees say what the voicing is; the note names say what it was.
+    notes: `${voicing.all.map((m) => midiName(m, accidental)).join('  ')}` +
+      `   \u2014   ${chordDegrees(chord, voicing.notes).join(' ')}`,
   };
 }
 
@@ -187,6 +197,8 @@ export const chordQualityExercise: ExerciseType = {
       correct: { quality: quality.id },
       play: material.play,
       playReveal: material.playReveal,
+      playPlain: material.playPlain,
+      voicing: material.style,
       hint: {
         label: 'Root',
         description: `Sounds the root of the chord (${pcNameDual(rootPc)}) on its own.`,
@@ -195,7 +207,7 @@ export const chordQualityExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
+      reveal: revealFor(chord, material.voicing, material.style, ctx.settings.accidental),
       estimatedSeconds: 11 + ctx.difficulty,
     };
   },
@@ -239,6 +251,8 @@ export const chordFullExercise: ExerciseType = {
       correct: { root: String(rootPc), quality: quality.id },
       play: material.play,
       playReveal: material.playReveal,
+      playPlain: material.playPlain,
+      voicing: material.style,
       hint: {
         label: `Reference ${pcName(REFERENCE_PC, ctx.settings.accidental)}`,
         description:
@@ -248,7 +262,7 @@ export const chordFullExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
+      reveal: revealFor(chord, material.voicing, material.style, ctx.settings.accidental),
       estimatedSeconds: 15 + ctx.difficulty,
     };
   },

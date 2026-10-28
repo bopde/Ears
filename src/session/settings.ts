@@ -6,6 +6,7 @@ import { CORE_MODES } from '../music/scales';
 import { CORE_PROGRESSIONS } from '../music/progressions';
 import { DEFAULT_INSTRUMENT, INSTRUMENTS } from '../audio/instruments';
 import { REFERENCE_VOICING_IDS, type ReferenceVoicing } from '../audio/reference';
+import { VOICING_MODE_IDS, type VoicingMode } from '../exercises/voicing-plan';
 
 export const EXERCISE_TYPE_IDS = [
   'chord-quality',
@@ -16,6 +17,8 @@ export const EXERCISE_TYPE_IDS = [
   'mode',
   'progression',
   'progression-chord',
+  'voicing',
+  'guide-tones',
 ] as const;
 
 export type ExerciseTypeId = (typeof EXERCISE_TYPE_IDS)[number];
@@ -78,6 +81,8 @@ export interface PracticeSettings {
   referenceKey: number;
   /** How the cheat sheet voices progressions. */
   referenceVoicing: ReferenceVoicing;
+  /** How plainly the exercises voice their chords. */
+  voicingMode: VoicingMode;
 }
 
 export const ANSWER_DELAY_OPTIONS: Array<{ value: number | 'audio'; label: string }> = [
@@ -93,6 +98,7 @@ export function defaultSettings(): PracticeSettings {
   return {
     exerciseTypes: [
       'chord-quality', 'chord-full', 'chord-inversion', 'interval', 'key', 'mode', 'progression',
+      'voicing', 'guide-tones',
     ],
     durationMinutes: 10,
     difficulty: 'adaptive',
@@ -120,6 +126,8 @@ export function defaultSettings(): PracticeSettings {
     // Root position by default: a learner should meet the plain chord before
     // any of the voicings that disguise it.
     referenceVoicing: 'root',
+    // The curve: plain at the bottom, the way a pianist plays at the top.
+    voicingMode: 'curve',
   };
 }
 
@@ -242,5 +250,6 @@ export function normaliseSettings(partial: Partial<PracticeSettings> | null | un
         ? merged.referenceKey
         : base.referenceKey,
     referenceVoicing: oneOf(merged.referenceVoicing, REFERENCE_VOICING_IDS, base.referenceVoicing),
+    voicingMode: oneOf(merged.voicingMode, VOICING_MODE_IDS, base.voicingMode),
   };
 }

@@ -16,7 +16,8 @@ export type ConceptKind =
   | 'mode'
   | 'progression'
   | 'key'
-  | 'inversion';
+  | 'inversion'
+  | 'voicing';
 
 export interface Concept {
   /** Namespaced and stable — it is the key for stored practice history. */

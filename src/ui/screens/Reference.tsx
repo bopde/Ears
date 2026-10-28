@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../state';
-import { Chip, Segmented, TopBar, clsx } from '../components/ui';
+import { Button, Chip, Segmented, TopBar, clsx } from '../components/ui';
 import { PlayIcon } from '../components/Icons';
 import type { Performer } from '../../audio/performer';
 import {
   intervalNotes, playChordQuality, playInterval, playProgression, playScale,
 } from '../../audio/demo';
 import {
-  REFERENCE_VOICINGS, playReferenceChord, referenceNoteNames, referenceVoicings,
-  type ReferenceChord, type ReferenceVoicing,
+  REFERENCE_VOICINGS, VOICING_LESSONS, modeForStyle, playComparison, playReference,
+  playReferenceChord, referenceDegrees, referenceNoteNames, referenceVoicings,
+  type ReferenceChord, type ReferenceVoicing, type VoicingLesson,
 } from '../../audio/reference';
 import {
   CHORD_GROUP_ORDER, CHORD_QUALITIES, chordPitchClasses, chordSymbol, makeChord,
@@ -19,14 +20,18 @@ import { PROGRESSIONS, romanLine } from '../../music/progressions';
 import { PITCH_CLASSES, midiName, pcName, pcNameDual } from '../../music/pitch';
 import { groupBy } from '../../lib/util';
 
-type Tab = 'progressions' | 'chords' | 'intervals' | 'modes';
+type Tab = 'progressions' | 'voicings' | 'chords' | 'intervals' | 'modes';
 
 const TABS: Array<{ value: Tab; label: string }> = [
   { value: 'progressions', label: 'Changes' },
+  { value: 'voicings', label: 'Voicings' },
   { value: 'chords', label: 'Chords' },
   { value: 'intervals', label: 'Intervals' },
   { value: 'modes', label: 'Modes' },
 ];
+
+/** The progression a voicing is heard over, when the plain ii–V–I will not do. */
+const DEMO_FALLBACK = 'ii-V-I';
 
 const TONALITY_LABEL: Record<string, string> = {
   major: 'Major key',
@@ -115,6 +120,57 @@ function ChordCard({
         {names.bass.join(' → ') || '—'}
       </span>
     </button>
+  );
+}
+
+/**
+ * One voicing, taught.
+ *
+ * What it is, where a player reaches for it, and the degrees it actually
+ * sounds over a set of changes — then the same changes in root position and
+ * in the voicing, back to back, which is the part that does the teaching.
+ */
+function VoicingCard({
+  lesson,
+  chords,
+  demo,
+  playing,
+  onPlay,
+  onCompare,
+}: {
+  lesson: VoicingLesson;
+  chords: ReferenceChord[];
+  demo: string;
+  playing: string | null;
+  onPlay: () => void;
+  onCompare: () => void;
+}) {
+  return (
+    <section className="card stack stack--tight">
+      <div className="row row--between">
+        <span className="refvoice__title">{lesson.label}</span>
+        <span className="small faint">{demo}</span>
+      </div>
+      <p className="refrow__blurb">{lesson.blurb}</p>
+      {lesson.use && <p className="refrow__blurb">{lesson.use}</p>}
+      <div className="refdegrees">
+        {chords.map((c, i) => (
+          <span key={i} className="refdegrees__item">
+            <span className="refdegrees__chord">{c.symbol}</span>
+            <span className="refdegrees__line">{referenceDegrees(c).join('  ')}</span>
+          </span>
+        ))}
+      </div>
+      <div className="row" style={{ gap: '0.4rem' }}>
+        <Button size="sm" onClick={onPlay}>
+          <PlayIcon size={14} />
+          {playing === `voicing-${lesson.id}` ? 'Playing' : 'Play'}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCompare}>
+          {playing === `compare-${lesson.id}` ? 'Comparing' : 'Compare with root position'}
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -242,6 +298,28 @@ export function Reference({ onBack }: { onBack: () => void }) {
                       onPlay={() =>
                         void play(def.id, (perf) => playProgression(perf, def, key, voicing))}
                     />
+                    {def.voicing && modeForStyle(def.voicing) !== voicing && (
+                      <button
+                        type="button"
+                        className="refsuggest"
+                        onClick={() =>
+                          void play(`${def.id}-rec`, (perf) =>
+                            playReference(
+                              perf,
+                              referenceVoicings(def, key, modeForStyle(def.voicing!), accidental),
+                            ))}
+                      >
+                        <PlayIcon size={12} />
+                        <span className="refsuggest__name">
+                          {REFERENCE_VOICINGS.find((v) => v.id === modeForStyle(def.voicing!))?.label}
+                        </span>
+                        <span className="refsuggest__degrees">
+                          {referenceVoicings(def, key, modeForStyle(def.voicing!), accidental)
+                            .map((c) => referenceDegrees(c).join(' '))
+                            .join('  ·  ')}
+                        </span>
+                      </button>
+                    )}
                     <div className="refchords">
                       {chords.map((item, i) => (
                         <ChordCard
@@ -259,6 +337,27 @@ export function Reference({ onBack }: { onBack: () => void }) {
                 );
               })}
             </Group>
+          );
+        })}
+
+      {tab === 'voicings' &&
+        VOICING_LESSONS.map((lesson) => {
+          const def = PROGRESSIONS.find((p) => p.id === (lesson.demo ?? DEMO_FALLBACK))
+            ?? PROGRESSIONS[0];
+          const chords = referenceVoicings(def, key, lesson.id, accidental);
+          return (
+            <VoicingCard
+              key={lesson.id}
+              lesson={lesson}
+              chords={chords}
+              demo={`${def.short} in ${pcNameDual(key)}`}
+              playing={playing}
+              onPlay={() =>
+                void play(`voicing-${lesson.id}`, (perf) => playReference(perf, chords))}
+              onCompare={() =>
+                void play(`compare-${lesson.id}`, (perf) =>
+                  playComparison(perf, def, key, lesson.id))}
+            />
           );
         })}
 

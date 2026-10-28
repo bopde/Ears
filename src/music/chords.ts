@@ -257,6 +257,38 @@ export function chordFullName(chord: Chord, pref: Accidental = 'both'): string {
 }
 
 /** Absolute semitone offsets above a concrete root pitch, extensions kept high. */
+/**
+ * What each interval is called, read off the chord's own spelling.
+ *
+ * The same pitch gets a different name depending on the chord it is in — six
+ * semitones above the root is a ♭5 in a half-diminished chord and a ♯11 in a
+ * Lydian dominant — so the name comes from the interval the quality lists, not
+ * from the pitch class.
+ */
+const DEGREE_NAMES: Record<number, string> = {
+  0: '1', 1: '♭9', 2: '9', 3: '♭3', 4: '3', 5: '4', 6: '♭5', 7: '5',
+  8: '♯5', 9: '6', 10: '♭7', 11: '7',
+  13: '♭9', 14: '9', 15: '♯9', 17: '11', 18: '♯11', 20: '♭13', 21: '13',
+};
+
+export const degreeName = (interval: number): string =>
+  DEGREE_NAMES[interval] ?? DEGREE_NAMES[mod(interval, 12)] ?? '?';
+
+/**
+ * The degrees a voicing sounds, in the order it sounds them.
+ *
+ * This is what a voicing *is*: a rootless chord is "3 5 ♭7 9" and the same
+ * notes rearranged are "♭7 9 3 5". Naming them beats describing them, because
+ * the degrees are read straight off the notes that were scheduled.
+ */
+export function chordDegrees(chord: Chord, notes: readonly Midi[]): string[] {
+  return notes.map((midi) => {
+    const pc = mod(midi - chord.rootPc, 12);
+    const spelled = chord.quality.intervals.find((i) => mod(i, 12) === pc);
+    return degreeName(spelled ?? pc);
+  });
+}
+
 export function chordTones(chord: Chord, rootMidi: Midi): Midi[] {
   return chord.quality.intervals.map((i) => rootMidi + i);
 }

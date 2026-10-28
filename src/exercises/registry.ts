@@ -5,6 +5,7 @@ import { intervalExercise } from './interval';
 import { keyExercise } from './key';
 import { modeExercise } from './mode';
 import { progressionChordExercise, progressionExercise } from './progression';
+import { guideToneExercise, voicingExercise } from './voicing';
 
 /**
  * Every exercise type the app can run.
@@ -23,6 +24,8 @@ export const EXERCISE_TYPES: ExerciseType[] = [
   modeExercise,
   progressionExercise,
   progressionChordExercise,
+  voicingExercise,
+  guideToneExercise,
 ];
 
 const registry = new Map(EXERCISE_TYPES.map((t) => [t.id, t]));

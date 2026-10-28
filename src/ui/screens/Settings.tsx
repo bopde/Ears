@@ -5,6 +5,7 @@ import { PlayIcon } from '../components/Icons';
 import { SELECTABLE_INSTRUMENTS } from '../../audio/instruments';
 import { exportProfile, importProfile, saveProfile } from '../../learning/store';
 import { ANSWER_DELAY_OPTIONS } from '../../session/settings';
+import { VOICING_MODES } from '../../exercises/voicing-plan';
 import { realiseProgression, requireProgression } from '../../music/progressions';
 import { voiceProgression } from '../../music/voicing';
 import { Performer } from '../../audio/performer';
@@ -181,6 +182,26 @@ export function Settings({ onBack }: { onBack: () => void }) {
             {settings.answerDelay === 0
               ? 'The options are on screen from the start, so you can narrow a question down by reading them rather than by listening.'
               : 'The options are held back so you have to form an impression first. Tap the panel to bring them up early.'}
+          </p>
+        </div>
+
+        <div className="field">
+          <div className="field__label">
+            <span>Voicings</span>
+          </div>
+          <div className="row row--wrap" style={{ gap: '0.35rem' }}>
+            {VOICING_MODES.map((option) => (
+              <Chip
+                key={option.value}
+                on={settings.voicingMode === option.value}
+                onClick={() => updateSettings({ voicingMode: option.value })}
+              >
+                {option.label}
+              </Chip>
+            ))}
+          </div>
+          <p className="small faint" style={{ marginTop: '0.35rem' }}>
+            {VOICING_MODES.find((m) => m.value === settings.voicingMode)?.blurb}
           </p>
         </div>
 

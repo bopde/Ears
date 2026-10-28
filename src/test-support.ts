@@ -1,6 +1,7 @@
 import {
   bassLine, type BassChord, type BassStyle, type NotePlayOptions, type Performer,
 } from './audio/performer';
+import { BASS_INSTRUMENT } from './audio/instruments';
 import type { Voicing } from './music/voicing';
 import type { PhraseNote } from './music/phrase';
 import { REGISTER, foldInto } from './music/pitch';
@@ -10,6 +11,8 @@ export interface RecordedNote {
   time: number;
   seconds: number;
   velocity: number;
+  /** Which voice played it, so a test can tell the bass from the chord above. */
+  instrument?: string;
 }
 
 /**
@@ -52,7 +55,7 @@ export class FakePerformer {
     }
     if (!Number.isFinite(time) || time < 0) throw new Error(`Bad note time: ${time}`);
     if (!Number.isFinite(seconds) || seconds <= 0) throw new Error(`Bad duration: ${seconds}`);
-    this.notes.push({ midi, time, seconds, velocity });
+    this.notes.push({ midi, time, seconds, velocity, instrument: opts.instrument });
   }
 
   noteAtBeat(
@@ -61,18 +64,25 @@ export class FakePerformer {
     beat: number,
     beats: number,
     velocity = 0.7,
-    _opts: NotePlayOptions = {},
+    opts: NotePlayOptions = {},
   ): number {
     const at = origin + beat * this.beatSeconds;
-    this.note(midi, at, beats * this.beatSeconds, velocity);
+    this.note(midi, at, beats * this.beatSeconds, velocity, opts);
     return at;
   }
 
   chord(voicing: Voicing, origin: number, beat: number, opts: { beats?: number } = {}): number {
     this.chords.push(voicing);
     const beats = opts.beats ?? 4;
-    for (const midi of voicing.all) {
+    for (const midi of voicing.notes) {
       this.note(midi, origin + beat * this.beatSeconds, beats * this.beatSeconds);
+    }
+    // The real performer sends the bass note to the bass voice, so the double
+    // does too: a test that cannot tell them apart cannot check either.
+    if (voicing.bass !== undefined) {
+      this.note(voicing.bass, origin + beat * this.beatSeconds, beats * this.beatSeconds, 0.72, {
+        instrument: BASS_INSTRUMENT,
+      });
     }
     return beats * this.beatSeconds;
   }
@@ -121,7 +131,9 @@ export class FakePerformer {
       }
       // The same bass line the real performer plays, from the same function.
       for (const b of bassLine(c, chords[i + 1], opts.style ?? 'sustained', beat)) {
-        const time = this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity);
+        const time = this.noteAtBeat(b.midi, origin, b.beat, b.beats, b.velocity, {
+          instrument: BASS_INSTRUMENT,
+        });
         this.bass.push({ midi: b.midi, beat: b.beat, time });
       }
       beat += c.beats;

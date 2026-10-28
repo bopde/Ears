@@ -1050,3 +1050,66 @@ details.disclosure > div { padding-bottom: 1rem; }
   .optgrid--pitch { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .app { padding-left: 1.5rem; padding-right: 1.5rem; }
 }
+
+
+/* The Voicings tab, and the recommendation on a set of changes. */
+.refvoice__title {
+  font-weight: 560;
+  font-size: 1rem;
+}
+
+.refdegrees {
+  display: flex;
+  flex-wrap: wrap;
+  /* The gap does the grouping: one chord's degrees have to read as one run. */
+  gap: 0.4rem 0.95rem;
+  padding: 0.5rem 0;
+}
+
+.refdegrees__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 4.4rem;
+}
+
+.refdegrees__chord {
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+
+.refdegrees__line {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.refsuggest {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.4rem;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.5rem;
+  background: var(--bg-elev);
+  text-align: left;
+  color: var(--fg-dim);
+}
+
+.refsuggest__name {
+  font-size: 0.76rem;
+  font-weight: 560;
+  color: var(--fg);
+}
+
+/* The degrees run to several chords, so they wrap rather than scroll. */
+.refsuggest__degrees {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}

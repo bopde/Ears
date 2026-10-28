@@ -1,6 +1,7 @@
 import type { Rng } from '../lib/rng';
 import type { Performer } from '../audio/performer';
 import type { PracticeSettings } from '../session/settings';
+import type { VoicingStyle } from '../music/voicing';
 
 export interface AnswerOption {
   id: string;
@@ -52,6 +53,22 @@ export interface Question {
   reveal: Reveal;
   /** A slower, plainer rendering offered after the answer. */
   playReveal?(perf: Performer): number;
+  /**
+   * The same material in root position over a root bass.
+   *
+   * The thing a learner wants after getting a rootless drop-2 voicing wrong is
+   * not the same voicing again but the chord underneath it, and that is a
+   * different rendering rather than a slower one.
+   */
+  playPlain?(perf: Performer): number;
+  /**
+   * How the chords were voiced, when that was a choice the question made.
+   *
+   * Recorded against the attempt: hearing a ii–V–I in close position and
+   * missing it rootless is a gap the model can only see if it is told which
+   * one was played.
+   */
+  voicing?: VoicingStyle;
   /** Planning estimate: audio plus thinking time. */
   estimatedSeconds: number;
 }
@@ -63,6 +80,13 @@ export interface GenContext {
   settings: PracticeSettings;
   /** Concept ids the adaptive selector wants covered, most wanted first. */
   targetConcepts: readonly string[];
+  /**
+   * Voicing styles the model would like more of, weakest first.
+   *
+   * A hint rather than an instruction: the level still decides what is on
+   * offer, and this only tilts the choice among them.
+   */
+  voicingFocus?: readonly VoicingStyle[];
 }
 
 export interface ExerciseType {

@@ -3,7 +3,9 @@ import type { Question, FieldAnswers } from '../exercises/types';
 import { fieldResults, isCorrect } from '../exercises/types';
 import { getExerciseType } from '../exercises/registry';
 import type { Attempt, Profile, SessionRecord } from '../learning/model';
-import { applyAttempt, bumpStreak } from '../learning/model';
+import { applyAttempt, bumpStreak, weakVoicings } from '../learning/model';
+import { isVoicingStyle } from '../exercises/voicing-plan';
+import type { VoicingStyle } from '../music/voicing';
 import { difficultyFor, eligibleConcepts, prioritiseConcepts } from '../learning/selector';
 import type { PracticeSettings } from './settings';
 import { makeRng, timeSeed, type Rng } from '../lib/rng';
@@ -292,6 +294,7 @@ export class SessionEngine {
         difficulty: clamp(difficulty, 1, 5),
         settings: this.settings,
         targetConcepts,
+        voicingFocus: this.voicingFocus(targetConcepts),
       });
       if (question) {
         this.typeCounts[type.id] = (this.typeCounts[type.id] ?? 0) + 1;
@@ -299,6 +302,26 @@ export class SessionEngine {
       }
     }
     return null;
+  }
+
+  /**
+   * Voicings the concepts in play go worse in than they do overall.
+   *
+   * Pooled across the concepts a question might be about, weakest first. It
+   * only tilts the choice the level has already narrowed down, which is why
+   * it can be a soft hint rather than another thing to schedule.
+   */
+  private voicingFocus(conceptIds: readonly string[]): VoicingStyle[] {
+    const score = new Map<string, number>();
+    for (const id of conceptIds.slice(0, 4)) {
+      weakVoicings(this.profile.skills[id]).forEach((style, rank) => {
+        score.set(style, (score.get(style) ?? 0) + 1 / (1 + rank));
+      });
+    }
+    return [...score.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([style]) => style)
+      .filter(isVoicingStyle);
   }
 
   // ── Playback ─────────────────────────────────────────────────────────────
@@ -335,6 +358,14 @@ export class SessionEngine {
     this.performer.stop();
     const seconds = question.playReveal ? question.playReveal(this.performer) : question.play(this.performer);
     this.markPlaying(seconds);
+  }
+
+  /** The same chords in root position — what was underneath the voicing. */
+  playPlain(): void {
+    const question = this.state.question;
+    if (!question?.playPlain) return;
+    this.performer.stop();
+    this.markPlaying(question.playPlain(this.performer));
   }
 
   useHint(): void {
@@ -404,7 +435,12 @@ export class SessionEngine {
         correct: prior.correct + (outcome.correct ? 1 : 0),
         hints: prior.hints + (outcome.hintUsed ? 1 : 0),
       };
-      const update = applyAttempt(conceptId, skills[conceptId], outcome, now);
+      const update = applyAttempt(
+        conceptId,
+        skills[conceptId],
+        { ...outcome, voicing: question.voicing },
+        now,
+      );
       skills[conceptId] = update.skill;
       this.deltas[conceptId] = (this.deltas[conceptId] ?? 0) + update.delta;
       if (update.levelChange === 1) this.promotions.push(conceptId);

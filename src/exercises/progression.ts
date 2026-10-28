@@ -9,7 +9,8 @@ import {
 import {
   CHORD_QUALITIES, chordConceptId, chordSymbol, makeChord, nearestQualities, type Chord,
 } from '../music/chords';
-import { voiceProgression } from '../music/voicing';
+import { voiceChord, voiceProgression, type VoicingStyle } from '../music/voicing';
+import { chooseVoicing, voicingLabel } from './voicing-plan';
 import { Performer } from '../audio/performer';
 import { pcNameDual } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
@@ -85,27 +86,36 @@ function enabledProgressions(settings: PracticeSettings): ProgressionDef[] {
 
 interface Changes {
   realised: RealisedChord[];
+  voicingStyle: VoicingStyle;
   play: (perf: Performer) => number;
   playReveal: (perf: Performer) => number;
+  playPlain: (perf: Performer) => number;
   seconds: (tempo: number) => number;
 }
 
 function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Changes {
   const realised = realiseProgression(def, tonic);
+  const chords = realised.map((r) => r.chord);
   const level = clamp(Math.round(ctx.difficulty), 1, 5);
   // Rootless comping with a walking bass is how these changes are actually
   // played; block voicings with the root on the bottom are the training wheels.
   const style = level >= 3 ? ('comp' as const) : ('sustained' as const);
-  const voicingStyle = level >= 4 ? ('rootless' as const) : level >= 2 ? ('spread' as const) : ('close' as const);
-  const voicings = voiceProgression(realised.map((r) => r.chord), {
-    style: voicingStyle,
-    maxNotes: 5,
-  });
+  // The same curve the chord questions use. Hearing a ii–V–I in close position
+  // and missing it rootless is a gap in one direction, not two, so both kinds
+  // of question have to be able to produce both.
+  const voicingStyle = chooseVoicing(ctx.rng, ctx.settings.voicingMode, level, ctx.voicingFocus);
+  const voicings = voiceProgression(chords, { style: voicingStyle, maxNotes: 5 });
   const changes = Performer.changes(realised, voicings);
+  // Root position over a root bass: the changes with nothing on top of them.
+  const plain = Performer.changes(
+    realised,
+    chords.map((chord) => voiceChord(chord, { style: 'close', bottomPc: chord.rootPc, maxNotes: 5 })),
+  );
   const totalBeats = realised.reduce((n, r) => n + r.beats, 0);
 
   return {
     realised,
+    voicingStyle,
     play: (perf) => {
       perf.configure({ tempo: tempoFor(ctx, 118) });
       return perf.progression(changes, perf.origin(), { style }) + 0.5;
@@ -113,6 +123,10 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
     playReveal: (perf) => {
       perf.configure({ tempo: Math.round(tempoFor(ctx, 118) * 0.82) });
       return perf.progression(changes, perf.origin(), { style: 'sustained' }) + 0.5;
+    },
+    playPlain: (perf) => {
+      perf.configure({ tempo: Math.round(tempoFor(ctx, 118) * 0.82) });
+      return perf.progression(plain, perf.origin(), { style: 'sustained' }) + 0.5;
     },
     seconds: (tempo) => (totalBeats * 60) / tempo,
   };
@@ -165,6 +179,8 @@ export const progressionExercise: ExerciseType = {
       correct: { progression: def.id },
       play: changes.play,
       playReveal: changes.playReveal,
+      playPlain: changes.playPlain,
+      voicing: changes.voicingStyle,
       hint: {
         label: 'Tonic',
         description: `Sounds the tonic (${pcNameDual(tonic)}) so you can hear the chords as degrees.`,
@@ -176,7 +192,7 @@ export const progressionExercise: ExerciseType = {
       reveal: {
         heading: def.name,
         detail: `${romanLine(def)}  ·  in ${pcNameDual(tonic)}`,
-        notes: symbols,
+        notes: `${symbols}   —   ${voicingLabel(changes.voicingStyle)}`,
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 12,
     };
@@ -267,6 +283,8 @@ export const progressionChordExercise: ExerciseType = {
       correct: { chord: `${target.rootPc}:${target.quality.id}` },
       play: changes.play,
       playReveal: changes.playReveal,
+      playPlain: changes.playPlain,
+      voicing: changes.voicingStyle,
       hint: {
         label: 'Tonic',
         description: `Sounds the tonic (${pcNameDual(tonic)}) so you can place the chord as a degree.`,
@@ -278,7 +296,8 @@ export const progressionChordExercise: ExerciseType = {
       reveal: {
         heading: chordLabel(target, ctx.settings),
         detail: `${realised[index].roman} of ${pcNameDual(tonic)}  ·  ${def.name}`,
-        notes: realised.map((r) => chordLabel(r.chord, ctx.settings)).join('  |  '),
+        notes: `${realised.map((r) => chordLabel(r.chord, ctx.settings)).join('  |  ')}` +
+          `   —   ${voicingLabel(changes.voicingStyle)}`,
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 14,
     };

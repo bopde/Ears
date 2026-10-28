@@ -32,6 +32,25 @@ export interface SkillRecord {
   recent: number[];
   /** Rolling mean response time in milliseconds. */
   avgMs: number;
+  /**
+   * How this concept goes in each voicing, as a modifier on the concept rather
+   * than as a concept of its own.
+   *
+   * Giving every chord quality its own entry per voicing would multiply the
+   * material by five and spread practice thin across cells that mostly agree
+   * with each other. What is worth knowing is narrower: that a learner who has
+   * a ii–V–I in close position loses it rootless. That is a correction to
+   * one number, not five more concepts to schedule.
+   */
+  voicings?: Record<string, VoicingRecord>;
+}
+
+/** One voicing's record within a concept. */
+export interface VoicingRecord {
+  attempts: number;
+  correct: number;
+  /** Exponential moving average of credit, on the same scale as `strength`. */
+  strength: number;
 }
 
 export interface SessionRecord {
@@ -158,7 +177,7 @@ export interface SkillUpdate {
 export function applyAttempt(
   conceptId: string,
   existing: SkillRecord | undefined,
-  attempt: { correct: boolean; hintUsed: boolean; ms: number },
+  attempt: { correct: boolean; hintUsed: boolean; ms: number; voicing?: string },
   now = Date.now(),
 ): SkillUpdate {
   const skill: SkillRecord = { ...(existing ?? newSkill(conceptId, now)) };
@@ -199,7 +218,36 @@ export function applyAttempt(
     }
   }
 
+  if (attempt.voicing) {
+    const prior = skill.voicings?.[attempt.voicing];
+    const alphaV = clamp(0.5 - (prior?.attempts ?? 0) * 0.05, 0.2, 0.5);
+    skill.voicings = {
+      ...skill.voicings,
+      [attempt.voicing]: {
+        attempts: (prior?.attempts ?? 0) + 1,
+        correct: (prior?.correct ?? 0) + (attempt.correct ? 1 : 0),
+        strength: prior ? prior.strength + alphaV * (value - prior.strength) : value,
+      },
+    };
+  }
+
   return { skill, delta: skill.strength - before, levelChange };
+}
+
+/**
+ * Voicings this concept goes worse in than the concept as a whole, weakest
+ * first.
+ *
+ * Only voicings with enough attempts to mean anything are considered, and only
+ * those that trail the concept's own strength: a learner who is equally good
+ * at all of them should not be steered anywhere.
+ */
+export function weakVoicings(skill: SkillRecord | undefined, minAttempts = 3): string[] {
+  if (!skill?.voicings) return [];
+  return Object.entries(skill.voicings)
+    .filter(([, v]) => v.attempts >= minAttempts && v.strength < skill.strength - 0.08)
+    .sort((a, b) => a[1].strength - b[1].strength)
+    .map(([style]) => style);
 }
 
 export type Mastery = 'new' | 'shaky' | 'developing' | 'solid' | 'mastered';

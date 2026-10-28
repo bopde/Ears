@@ -1,5 +1,5 @@
 import type { Chord } from './chords';
-import { REGISTER, foldInto, pcAtOrAbove, type Midi } from './pitch';
+import { REGISTER, VOICING_FLOOR, foldInto, pcAtOrAbove, type Midi } from './pitch';
 import { mod } from '../lib/util';
 
 /**
@@ -13,7 +13,13 @@ import { mod } from '../lib/util';
 export type VoicingStyle =
   /** Root position, tones close together. The clearest way to hear a chord. */
   | 'close'
-  /** Root in the left hand, colour tones spread above. */
+  /**
+   * Any inversion in the right hand, spaced wide.
+   *
+   * Written to sit over a separate bass note, which is what states the root:
+   * on its own the stack is as likely to be in third inversion as in root
+   * position, so the bass below it is doing the work.
+   */
   | 'spread'
   /** Close voicing with the second voice from the top dropped an octave. */
   | 'drop2'
@@ -150,21 +156,36 @@ export function voiceChord(chord: Chord, opts: VoicingOptions = {}): Voicing {
 
   // Candidate bottom notes: each core tone as the lowest voice (i.e. each
   // inversion), in each octave that fits the register.
-  const candidates: Midi[][] = [];
   const rotations = style === 'close' || opts.bottomPc !== undefined ? 1 : core.length;
-  for (let r = 0; r < Math.max(1, rotations); r++) {
-    const rotated = [...core.slice(r), ...core.slice(0, r)];
-    const bottomPc = opts.bottomPc !== undefined ? mod(opts.bottomPc, 12) : rotated[0]?.pc;
-    if (bottomPc === undefined) continue;
-    const ordered = [
-      ...rotated.filter((t) => t.pc === bottomPc).slice(0, 1),
-      ...rotated.filter((t) => t.pc !== bottomPc),
-      ...tones.filter((t) => t.upper),
-    ];
-    for (let bottom = pcAtOrAbove(bottomPc, lo); bottom <= lo + 12; bottom += 12) {
-      const notes = stack(ordered, bottom, hi);
-      if (notes) candidates.push(notes);
+  const build = (ceiling: Midi): Midi[][] => {
+    const out: Midi[][] = [];
+    for (let r = 0; r < Math.max(1, rotations); r++) {
+      const rotated = [...core.slice(r), ...core.slice(0, r)];
+      const bottomPc = opts.bottomPc !== undefined ? mod(opts.bottomPc, 12) : rotated[0]?.pc;
+      if (bottomPc === undefined) continue;
+      const ordered = [
+        ...rotated.filter((t) => t.pc === bottomPc).slice(0, 1),
+        ...rotated.filter((t) => t.pc !== bottomPc),
+        ...tones.filter((t) => t.upper),
+      ];
+      for (let bottom = pcAtOrAbove(bottomPc, lo); bottom <= lo + 12; bottom += 12) {
+        const notes = stack(ordered, bottom, ceiling);
+        if (notes) out.push(notes);
+      }
     }
+    return out;
+  };
+
+  let candidates = build(hi);
+  if (!candidates.length && opts.bottomPc !== undefined) {
+    // The caller named the lowest voice, so it cannot be the thing that gives
+    // way. A thirteenth chord stacked from its root spans more than two
+    // octaves, and when the root sits high in the register it simply needs
+    // more room than the voicing register allows. Lend it the top of the
+    // singing range rather than fold the tones to wherever they land, which
+    // silently drops the bottom note and with it the inversion that was asked
+    // for.
+    candidates = build(Math.min(hi + 12, REGISTER.melody.hi));
   }
   if (!candidates.length) {
     const fallback = tones.map((t) => foldInto(t.pc + 60, lo, hi)).sort((a, b) => a - b);
@@ -182,10 +203,27 @@ export function voiceChord(chord: Chord, opts: VoicingOptions = {}): Voicing {
   }
 
   if (style === 'drop2' && best.length >= 3) {
-    const dropped = [...best];
-    dropped[dropped.length - 2] -= 12;
-    dropped.sort((a, b) => a - b);
-    if (dropped[0] >= lo - 12) best = dropped;
+    // Dropping the second voice from the top is the whole point of drop 2, but
+    // it must not drop into the bass register: a note down there is heard as
+    // the bass, not as part of the voicing. Prefer a candidate high enough that
+    // the drop still clears the floor; if none does, leave the chord undropped
+    // rather than put the voicing where the bass player is.
+    const floor = opts.lo !== undefined ? Math.min(opts.lo, VOICING_FLOOR) : VOICING_FLOOR;
+    const drop = (notes: readonly Midi[]) => {
+      const out = [...notes];
+      out[out.length - 2] -= 12;
+      return out.sort((a, b) => a - b);
+    };
+    const usable = candidates.map(drop).filter((n) => n[0] >= floor);
+    if (usable.length) {
+      best = usable.reduce(
+        (a, b) => (spacingPenalty(b) + voiceLeadingCost(b, opts.prev ?? []) * 2.5
+          < spacingPenalty(a) + voiceLeadingCost(a, opts.prev ?? []) * 2.5 ? b : a),
+        usable[0],
+      );
+    } else if (drop(best)[0] >= floor) {
+      best = drop(best);
+    }
   }
 
   // An inversion is only an inversion if the bass agrees with the stack, so

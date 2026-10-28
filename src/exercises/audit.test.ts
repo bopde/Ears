@@ -10,7 +10,7 @@ import { requireInterval } from '../music/intervals';
 import { requireScale, scalePitchClasses } from '../music/scales';
 import { realiseProgression, requireProgression } from '../music/progressions';
 import { requireInversion } from '../music/inversions';
-import { PITCH_CLASSES } from '../music/pitch';
+import { BASS_GAP, PITCH_CLASSES, REGISTER } from '../music/pitch';
 import { mod } from '../lib/util';
 
 /**
@@ -212,6 +212,19 @@ function checkProgression(q: Question, perf: FakePerformer, where: string) {
       }
     }
     const under = perf.bass.filter((b) => b.beat >= beat && b.beat < beat + r.beats);
+    for (const b of under) {
+      if (b.midi < REGISTER.bass.lo || b.midi > REGISTER.bass.hi) {
+        flag('progression: a bass note fell outside the bass register',
+          `${where} ${def.id} chord ${i + 1}: ${b.midi}`);
+      }
+      // In unison with the bottom of the right hand, the more recently struck
+      // of the two becomes the apparent bass, and a root-position chord starts
+      // to sound like an inversion.
+      if (perf.chords[i].notes[0] - b.midi < BASS_GAP.min) {
+        flag('progression: the bass crowded the bottom of the voicing',
+          `${where} ${def.id} chord ${i + 1}: ${b.midi} under ${perf.chords[i].notes[0]}`);
+      }
+    }
     const downbeat = under.find((b) => b.beat === beat);
     if (!downbeat) {
       flag('progression: no bass note on a chord downbeat', `${where} ${def.id} chord ${i + 1}`);

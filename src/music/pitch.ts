@@ -83,3 +83,25 @@ export const REGISTER = {
   melody: { lo: 60, hi: 84 },
   drone: { lo: 36, hi: 48 },
 } as const;
+
+/**
+ * How far the bass should sit below the lowest note of the voicing above it.
+ *
+ * `min` is the hard rule, and it is a rule about hearing rather than taste: a
+ * bass note in unison with, or a step from, the bottom of the right hand is
+ * heard as part of the chord instead of under it, and whichever of the two was
+ * struck most recently becomes the apparent bass — which is how a chord in
+ * root position comes to sound like an inversion. `want` and `max` are
+ * preferences: an octave reads as a foundation, and much past an octave and a
+ * fifth the two stop sounding like one chord.
+ */
+export const BASS_GAP = { min: 3, want: 12, max: 19 } as const;
+
+/**
+ * The lowest note a voicing may use, leaving the register below it to the bass.
+ *
+ * It is the bottom of the voicing register, so a dropped voice cannot end up
+ * lower than any other voicing would start. The bass register reaches up to
+ * MIDI 50, and `BASS_GAP.min` keeps the bass clear of whatever sits here.
+ */
+export const VOICING_FLOOR = REGISTER.voicing.lo;

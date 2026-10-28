@@ -5,7 +5,7 @@ import { SCALES, scalePitchClasses } from './scales';
 import { PROGRESSIONS, progressionBeats, realiseProgression } from './progressions';
 import { arpeggiate, voiceChord, voiceProgression } from './voicing';
 import { generatePhrase, phraseDurationBeats, scaleRun } from './phrase';
-import { REGISTER, foldInto, pcAtOrAbove } from './pitch';
+import { REGISTER, VOICING_FLOOR, foldInto, pcAtOrAbove } from './pitch';
 import { makeRng } from '../lib/rng';
 import { CONCEPTS } from './catalog';
 import { mod } from '../lib/util';
@@ -135,7 +135,9 @@ describe('voicing', () => {
           for (let i = 1; i < v.notes.length; i++) {
             expect(v.notes[i], `${q.id}/${style} ascending`).toBeGreaterThan(v.notes[i - 1]);
           }
-          expect(v.notes[0], `${q.id}/${style} low bound`).toBeGreaterThanOrEqual(REGISTER.voicing.lo - 12);
+          // Nothing reaches into the bass register, a dropped voice included:
+          // a note down there is heard as the bass, not as part of the chord.
+          expect(v.notes[0], `${q.id}/${style} low bound`).toBeGreaterThanOrEqual(VOICING_FLOOR);
           expect(v.notes[v.notes.length - 1], `${q.id}/${style} high bound`).toBeLessThanOrEqual(
             REGISTER.voicing.hi,
           );

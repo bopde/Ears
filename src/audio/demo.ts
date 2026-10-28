@@ -1,6 +1,7 @@
 import { Performer, polyphonyGain } from './performer';
-import { realiseProgression, type ProgressionDef } from '../music/progressions';
-import { arpeggiate, voiceChord, voiceProgression } from '../music/voicing';
+import type { ProgressionDef } from '../music/progressions';
+import { playReference, referenceVoicings, type ReferenceVoicing } from './reference';
+import { arpeggiate, voiceChord } from '../music/voicing';
 import { makeChord, type ChordQuality } from '../music/chords';
 import { phraseDurationBeats, scaleRun } from '../music/phrase';
 import type { ScaleDef } from '../music/scales';
@@ -17,19 +18,20 @@ import { mod } from '../lib/util';
  * deterministic, so the same item in the same key sounds the same each time.
  */
 
-/** Sustained block chords with the root underneath: the clearest reading. */
+/**
+ * Sustained block chords with the bass underneath, in the chosen voicing.
+ *
+ * It goes through `referenceVoicings` rather than voicing the chords itself,
+ * because the page shows the notes beside the play button: the two have to
+ * come from the same place or they will drift apart.
+ */
 export function playProgression(
   perf: Performer,
   def: ProgressionDef,
   tonic: PitchClass,
+  mode: ReferenceVoicing = 'root',
 ): number {
-  const realised = realiseProgression(def, tonic);
-  const voicings = voiceProgression(
-    realised.map((r) => r.chord),
-    { style: 'spread', maxNotes: 5 },
-  );
-  const changes = Performer.changes(realised, voicings);
-  return perf.progression(changes, perf.origin(), { style: 'sustained' }) + 0.4;
+  return playReference(perf, referenceVoicings(def, tonic, mode));
 }
 
 /** Arpeggiated so each tone is audible, then struck as a block. */

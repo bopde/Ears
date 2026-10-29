@@ -27,10 +27,12 @@ export interface VoicingLesson {
   id: ReferenceVoicing;
   label: string;
   short: string;
-  /** What the voicing is, in one sentence. */
+  /** What the voicing is, as a shape. */
   blurb: string;
-  /** Where a player reaches for it. Absent on the two that are not voicings. */
+  /** When a player reaches for it. Absent on the one that is not a voicing. */
   use?: string;
+  /** The thing worth knowing that the shape alone does not tell you. */
+  detail?: string;
   /** The progression that shows it off, if the plain ii–V–I does not. */
   demo?: string;
 }
@@ -38,41 +40,48 @@ export interface VoicingLesson {
 export const REFERENCE_VOICINGS: VoicingLesson[] = [
   {
     id: 'root', label: 'Root position', short: 'Root',
-    blurb: 'Every chord stacked from its root, the root doubled an octave below, nothing moving underneath. This is the sound the chord symbol names.',
-    use: 'Learning a chord, and checking one. Nobody comps like this, which is the point — there is nothing in the way of the chord itself.',
+    blurb: 'Every chord stacked from its root — 1, 3, 5, 7 and upward — with that root doubled underneath and nothing moving down there.',
+    use: 'Learning a chord, and checking one. Nobody comps like this, and that is the point: there is nothing in the way of the chord itself.',
+    detail: 'Because every chord here is built the same way, the shapes can be compared directly against each other. It is also the only mode on this page where what you read is exactly what you hear — everywhere else the notes have been rearranged.',
   },
   {
     id: 'voice-led', label: 'Voice led', short: 'Voice led',
-    blurb: 'Each chord takes whichever inversion moves least from the last, over a root bass. How a pianist actually plays changes.',
+    blurb: 'Each chord takes whichever inversion moves least from the last, over a root bass.',
     use: 'Everywhere. It is less a voicing than the rule that decides which one to use next.',
+    detail: 'Watch the note names rather than the chord symbols: between one chord and the next, most of them stay put. That is what voice leading is, and it is why changes played this way sound like one line moving rather than a series of separate grabs.',
   },
   {
     id: 'shell', label: 'Shell', short: 'Shell',
-    blurb: 'Root, 3rd and 7th only. The notes that decide whether a chord is major, minor or dominant, with nothing colouring them.',
-    use: 'Behind a soloist, and in stride and blues playing, where the left hand has to state the chord and keep out of the way at the same time.',
+    blurb: 'Root, 3rd and 7th only — three notes, nothing else.',
+    use: 'Behind a soloist, and in stride and blues playing, where the left hand has to state the chord and stay out of the way at the same time.',
+    detail: 'Three notes is the least that still names a chord. Lose the 3rd and major and minor sound alike; lose the 7th and a dominant and a major 7th do. The 5th says almost nothing on its own, which is why it is the first note to go here and the first to be replaced by a tension everywhere else.',
     demo: 'blues-opening',
   },
   {
     id: 'rootless', label: 'Rootless', short: 'Rootless',
     blurb: 'The root left to the bass, so the hand plays 3rd, 5th, 7th and 9th — or 7th, 9th, 3rd, 5th, which is the same four notes rotated.',
-    use: 'Comping in a band with a bass player. The two shapes alternate down a chain of fourths, so a ii–V–I can be played with the hand barely moving.',
+    use: 'Comping with a bass player, which is most of the time. Playing the root as well only doubles what is already there and muddies the bottom.',
+    detail: 'The two shapes exist so they can alternate. Take form A on the ii and form B on the V and the hand barely moves — a note or two shifts and the rest stays. Down a chain of fourths that economy is the whole reason to learn both rather than one.',
   },
   {
     id: 'drop2', label: 'Drop 2', short: 'Drop 2',
-    blurb: 'A close voicing with the second voice from the top dropped an octave. The same notes, opened out so the inner lines are audible.',
-    use: 'Chord melody and horn-section writing, where the top note is the tune and the rest has to move underneath it without turning to mud.',
+    blurb: 'A close voicing with the second voice from the top dropped an octave. The same notes, opened out.',
+    use: 'Chord melody and horn-section writing, where the top note is the tune and everything underneath has to move without turning to mud.',
+    detail: 'Close voicings go muddy below middle C because neighbouring notes are too near each other down there. Spreading one voice an octave down opens a gap in the middle and the chord stays clear. A chord too low to drop without landing in the bass register is left alone here rather than played into it.',
     demo: 'coltrane-cell',
   },
   {
     id: 'quartal', label: 'Quartal', short: 'Quartal',
     blurb: 'Fourths stacked instead of thirds — three perfect fourths and a major third on top is the shape everybody learns from "So What".',
-    use: 'Modal playing, where a chord is a colour to sit in rather than a step on the way somewhere. It states a key without committing to a quality.',
+    use: 'Modal playing, where a chord is a colour to sit in rather than a step on the way somewhere.',
+    detail: 'Built from fourths, it often has no 3rd in it at all, so it never commits to major or minor. That vagueness is the point: it states a key centre without stating a chord. It also moves in parallel without anything clashing, which is why modal writing slides the same shape up and down a scale.',
     demo: 'so-what',
   },
   {
     id: 'upperStructure', label: 'Upper structure', short: 'Upper str.',
-    blurb: 'Guide tones underneath, an ordinary major or minor triad built on the chord’s tensions above.',
-    use: 'Altered dominants. It is why a chord that is daunting to read is easy to play: the right hand is a triad a child could name.',
+    blurb: 'Guide tones underneath — just the 3rd and the 7th — with an ordinary major or minor triad built on the chord’s tensions above them.',
+    use: 'Altered dominants, where reading the symbol is harder than playing it.',
+    detail: 'The triad is always rooted on a tension — a 9th, a ♯11th, a ♭13th — never on a chord tone, or it would just be the chord again. That is why something as forbidding as G7alt turns out to be a plain E♭ triad in the right hand over two notes in the left. A chord with no tensions of its own has no triad to build, and falls back to rootless.',
     demo: 'minor-ii-V-i-alt',
   },
 ];
@@ -211,6 +220,13 @@ export interface BassDisplay {
   name: string;
   role: BassRole;
   tag: string;
+  /** Which degree of the chord this note is, where it is one at all. */
+  degree: string;
+}
+
+export interface NoteDisplay {
+  name: string;
+  degree: string;
 }
 
 /**
@@ -224,14 +240,16 @@ export interface BassDisplay {
 export function referenceNoteNames(
   chord: ReferenceChord,
   accidental: Accidental = 'both',
-): { bass: BassDisplay[]; notes: string[] } {
+): { bass: BassDisplay[]; notes: NoteDisplay[] } {
+  const degrees = chordDegrees(chord.chord, chord.notes);
   return {
     bass: chord.bass.map((b) => ({
       name: midiName(b.midi, accidental),
       role: b.role,
       tag: BASS_ROLE_TAG[b.role],
+      degree: chordDegrees(chord.chord, [b.midi])[0],
     })),
-    notes: chord.notes.map((m) => midiName(m, accidental)),
+    notes: chord.notes.map((m, i) => ({ name: midiName(m, accidental), degree: degrees[i] })),
   };
 }
 

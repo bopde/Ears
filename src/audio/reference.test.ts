@@ -7,7 +7,7 @@ import { bassLine } from './performer';
 import { FakePerformer } from '../test-support';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { BASS_GAP, PITCH_CLASSES, REGISTER, VOICING_FLOOR, midiName } from '../music/pitch';
-import { CHORD_QUALITIES, makeChord } from '../music/chords';
+import { CHORD_QUALITIES, chordDegrees, makeChord } from '../music/chords';
 import { voiceChord } from '../music/voicing';
 import { mod } from '../lib/util';
 
@@ -220,10 +220,55 @@ describe('what is shown is what is played', () => {
     const def = PROGRESSIONS.find((p) => p.id === 'ii-V-I')!;
     const [first] = referenceVoicings(def, 0, 'root');
     const names = referenceNoteNames(first, 'flat');
-    expect(names.notes).toEqual(first.notes.map((m) => midiName(m, 'flat')));
+    expect(names.notes.map((n) => n.name)).toEqual(first.notes.map((m) => midiName(m, 'flat')));
     expect(names.bass.map((b) => b.name)).toEqual(first.bass.map((b) => midiName(b.midi, 'flat')));
     // Every bass note carries what it is doing, so the display can say so.
     expect(names.bass.map((b) => b.role)).toEqual(first.bass.map((b) => b.role));
+    // And every note carries the degree it is playing, read off the same
+    // voicing that is about to be scheduled.
+    expect(names.notes.map((n) => n.degree)).toEqual(chordDegrees(first.chord, first.notes));
+    expect(names.bass[0].degree, 'the bass states the root').toBe('1');
+  });
+
+  /**
+   * What each degree label means, written out independently of the code that
+   * produces them, so the two have to agree rather than agreeing by
+   * construction. A label is a claim about the note beside it; this is the
+   * only place that claim is checked against the note.
+   */
+  const DEGREE_SEMITONES: Record<string, number> = {
+    '1': 0, '\u266d9': 1, '9': 2, '\u266f9': 3, '\u266d3': 3, '3': 4,
+    '4': 5, '11': 5, '\u266d5': 6, '\u266f11': 6, '5': 7, '\u266f5': 8,
+    '\u266d13': 8, '6': 9, '13': 9, '\u266d7': 10, '7': 11,
+  };
+
+  it('puts a degree beside every note, and the degree names the note', () => {
+    const wrong: string[] = [];
+    const seen = new Set<string>();
+    let notes = 0;
+    sweep((chord, where) => {
+      const names = referenceNoteNames(chord);
+      expect(names.notes.length, `${where} ${chord.symbol}`).toBe(chord.notes.length);
+      expect(names.bass.length, `${where} ${chord.symbol}`).toBe(chord.bass.length);
+      const check = (midi: number, degree: string, what: string) => {
+        notes += 1;
+        seen.add(degree);
+        const semitones = DEGREE_SEMITONES[degree];
+        if (semitones === undefined || semitones !== mod(midi - chord.chord.rootPc, 12)) {
+          wrong.push(`${where} ${chord.symbol}: ${what} ${midiName(midi, 'both')} labelled ${degree}`);
+        }
+      };
+      chord.notes.forEach((midi, i) => check(midi, names.notes[i].degree, 'note'));
+      chord.bass.forEach((b, i) => check(b.midi, names.bass[i].degree, 'bass'));
+    });
+    expect(wrong.slice(0, 8), `${wrong.length} of ${notes} notes mislabelled`).toEqual([]);
+    // Non-vacuous twice over: the sweep has to reach a real catalogue, and it
+    // has to meet degrees a plain triad would never produce — a display that
+    // printed "1 3 5 7" for everything would pass the check above.
+    expect(notes).toBeGreaterThan(5000);
+    for (const tension of ['9', '\u266f11', '\u266d13', '\u266d9']) {
+      expect(seen, `no ${tension} anywhere in the sweep`).toContain(tension);
+    }
   });
 
   it('writes a slash chord whenever the lowest note is not the root', () => {

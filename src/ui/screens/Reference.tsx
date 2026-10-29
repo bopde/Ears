@@ -112,17 +112,26 @@ function ChordCard({
     >
       <span className="refchord__symbol">{item.symbol}</span>
       <span className="refchord__roman">{item.roman}</span>
+      {/* Highest first, the way the stack is read off a keyboard, with the
+          degree each note is playing beside it. */}
       <span className="refchord__notes">
         {[...names.notes].reverse().map((n, i) => (
-          <span key={`${n}-${i}`} className="refchord__note">{n}</span>
+          <span key={`${n.name}-${i}`} className="refchord__note">
+            <span className="refchord__noteName">{n.name}</span>
+            <span className="refchord__degree">{n.degree}</span>
+          </span>
         ))}
       </span>
       <span className="refchord__bass">
         {names.bass.length === 0 && '—'}
         {names.bass.map((b, i) => (
           <span key={i} className={clsx('refbass', b.role !== 'root' && 'refbass--passing')}>
-            {b.name}
-            {b.tag && <span className="refbass__tag">{b.tag}</span>}
+            <span className="refchord__noteName">{b.name}</span>
+            {/* A chord tone says which degree it is; a note that is only
+                passing through says what it is doing instead. */}
+            <span className="refchord__degree">
+              {b.role === 'root' || b.role === 'fifth' ? b.degree : b.tag}
+            </span>
           </span>
         ))}
       </span>
@@ -158,8 +167,22 @@ function VoicingCard({
         <span className="refvoice__title">{lesson.label}</span>
         <span className="small faint">{demo}</span>
       </div>
-      <p className="refrow__blurb">{lesson.blurb}</p>
-      {lesson.use && <p className="refrow__blurb">{lesson.use}</p>}
+      <dl className="refvoice__facts">
+        <dt>What it is</dt>
+        <dd>{lesson.blurb}</dd>
+        {lesson.use && (
+          <>
+            <dt>When to use it</dt>
+            <dd>{lesson.use}</dd>
+          </>
+        )}
+        {lesson.detail && (
+          <>
+            <dt>Worth knowing</dt>
+            <dd>{lesson.detail}</dd>
+          </>
+        )}
+      </dl>
       <div className="refdegrees">
         {chords.map((c, i) => (
           <span key={i} className="refdegrees__item">

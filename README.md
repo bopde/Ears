@@ -356,8 +356,11 @@ chord questions without being told to.
    a. `src/music/` — pure theory. Note spelling, intervals, chord qualities,
    inversions, scales, progressions, voicing and phrase generation. No audio,
    no UI, no React. Roman numerals are derived from the chord quality rather
-   than written out by hand, so a progression that plays a ninth is written as
-   V9 and cannot drift back to V7.
+   than written out by hand, so a blues IV13 is written as IV13 and cannot
+   drift back to IV7. What a chord *is* and what a voicing *sounds* are kept
+   apart: the ii–V–I is written Dm7 · G7 · C∆7 even though every voicing on
+   the cheat sheet sounds a 9th over all three, because the 9th belongs to the
+   voicing and the symbol names the chord.
 
    b. `src/music/concept.ts` — the seam the brief asks for. A **Concept** is one
    trainable idea with a stable id. Exercises declare which concepts a question

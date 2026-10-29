@@ -120,8 +120,8 @@ describe('progressions', () => {
   it('realises a ii-V-I in the right key', () => {
     const iiVI = PROGRESSIONS.find((p) => p.id === 'ii-V-I')!;
     const inF = realiseProgression(iiVI, 5);
-    expect(inF.map((r) => r.chord.rootPc)).toEqual([7, 0, 5]); // Gm7, C9, Fmaj7
-    expect(inF.map((r) => r.chord.quality.id)).toEqual(['m7', '9', 'maj7']);
+    expect(inF.map((r) => r.chord.rootPc)).toEqual([7, 0, 5]); // Gm7, C7, Fmaj7
+    expect(inF.map((r) => r.chord.quality.id)).toEqual(['m7', '7', 'maj7']);
   });
 });
 

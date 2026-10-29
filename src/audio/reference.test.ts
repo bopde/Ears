@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   REFERENCE_VOICINGS, REFERENCE_VOICING_IDS, playReference, playReferenceChord,
-  referenceNoteNames, referenceVoicings, type ReferenceVoicing,
+  referenceDegrees, referenceNoteNames, referenceVoicings, type ReferenceVoicing,
 } from './reference';
 import { bassLine } from './performer';
 import { FakePerformer } from '../test-support';
@@ -268,6 +268,23 @@ describe('what is shown is what is played', () => {
     expect(notes).toBeGreaterThan(5000);
     for (const tension of ['9', '\u266f11', '\u266d13', '\u266d9']) {
       expect(seen, `no ${tension} anywhere in the sweep`).toContain(tension);
+    }
+  });
+
+  it('names the chord, and lets the voicing say the rest', () => {
+    // The ii-V-I is three plain seventh chords. It used to spell its V as a
+    // 9th, which said the V was doing something the ii and the I were not —
+    // when in fact every voicing on this page sounds a 9th over all three.
+    const def = PROGRESSIONS.find((p) => p.id === 'ii-V-I')!;
+    expect(referenceVoicings(def, 0, 'root').map((c) => c.symbol))
+      .toEqual(['Dm7', 'G7', 'C\u22067']);
+    // And the 9th is still there to hear, on each of them.
+    for (const chord of referenceVoicings(def, 0, 'rootless')) {
+      expect(referenceDegrees(chord), `${chord.symbol} sounds its 9th`).toContain('9');
+    }
+    // Plain stacks state the chord and nothing else, so the three agree.
+    for (const chord of referenceVoicings(def, 0, 'root')) {
+      expect(referenceDegrees(chord), `${chord.symbol} plain`).not.toContain('9');
     }
   });
 

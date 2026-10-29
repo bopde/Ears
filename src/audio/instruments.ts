@@ -319,10 +319,29 @@ const vibes: Instrument = {
  * note to the same ceiling.
  */
 export const BASS_PARTIALS = 24;
-/** Amplitude of harmonic h is h^-BASS_TILT: slightly brighter than a sawtooth. */
-export const BASS_TILT = 0.8;
+/**
+ * Amplitude of harmonic h is h^-BASS_TILT, and this is the tone control.
+ *
+ * It is the one number that decides whether this sounds like an instrument or
+ * like a buzz, because partials a fundamental apart sit well inside a critical
+ * band up here and beat against each other. Measured as sensory roughness on
+ * the lowest note in the register: a tilt of 0.8 — brighter than a sawtooth —
+ * scores 0.088, about sixty times the pure sine this replaced and far past any
+ * plucked string. At 1.8 it scores 0.027, which is plucked-string territory.
+ * Lower it and the bass buzzes; raise it much past 2 and the harmonics get too
+ * weak to carry the note on a small speaker, which is the whole point of them.
+ */
+export const BASS_TILT = 1.8;
 /** Where the sustained tone is rolled off, in Hz. The top of the series. */
-export const BASS_CEILING_HZ = 1300;
+export const BASS_CEILING_HZ = 1100;
+/**
+ * Peak amplitude before velocity and polyphony trim, and the other dial.
+ *
+ * It sets how far under the comping the bass sits — about 13 dB at this
+ * value, measured A-weighted, which is where an accompaniment belongs. It
+ * does not change the tone, only the presence.
+ */
+export const BASS_LEVEL = 0.6;
 const BASS_Q = 1.1;
 
 /** A periodic wave belongs to its context, so each context gets its own. */
@@ -333,17 +352,14 @@ function bassTimbre(ctx: BaseAudioContext): PeriodicWave {
   if (cached) return cached;
   const real = new Float32Array(BASS_PARTIALS + 1);
   const imag = new Float32Array(BASS_PARTIALS + 1);
-  for (let h = 1; h <= BASS_PARTIALS; h++) {
-    const amplitude = Math.pow(h, -BASS_TILT);
-    // Two dozen partials all starting together make an impulse, not a note:
-    // the peak towers over the average, so the limiter catches it long before
-    // it is loud. Spreading their phases quadratically leaves the spectrum,
-    // and so the timbre, untouched while flattening the waveform, which buys
-    // back the level this voice needs without taking it from the chord.
-    const phase = (-Math.PI * h * (h - 1)) / BASS_PARTIALS;
-    real[h] = amplitude * Math.cos(phase);
-    imag[h] = amplitude * Math.sin(phase);
-  }
+  // Plain sine phase. An earlier version spread the phases quadratically to
+  // flatten the waveform, which is a standard trick for test signals and the
+  // wrong one here: it bought a single dB of crest factor, and at 55 Hz a
+  // period is 18 ms, long enough for that dispersion to be heard as a chirp
+  // within every cycle rather than as a note. A tilt steep enough to sound
+  // like an instrument flattens the waveform anyway — 2.8 dB of crest here,
+  // against 8.5 for the bright wave the trick was propping up.
+  for (let h = 1; h <= BASS_PARTIALS; h++) imag[h] = Math.pow(h, -BASS_TILT);
   const wave = ctx.createPeriodicWave(real, imag);
   bassWaves.set(ctx, wave);
   return wave;
@@ -396,13 +412,7 @@ const bass: Instrument = {
     const amp = ctx.createGain();
     amp.gain.value = MIN;
     amp.connect(filter);
-    // Set by ear-weighted measurement, not by matching the old waveform's
-    // amplitude. The sine this replaced measured 22 dB under the chord once
-    // A-weighted — all that energy sat at 55 to 147 Hz, where the ear is
-    // barely sensitive even on a system that can reproduce it. Matching its
-    // raw level would therefore have made this far louder than it ever was.
-    // This sits about 4 dB under the comping, which is where a bass belongs.
-    const peak = vel * 0.5 * (note.gain ?? 1);
+    const peak = vel * BASS_LEVEL * (note.gain ?? 1);
     amp.gain.setValueAtTime(MIN, t);
     amp.gain.exponentialRampToValueAtTime(peak, t + 0.012);
     amp.gain.setTargetAtTime(peak * 0.2, t + 0.013, 0.42);

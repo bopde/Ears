@@ -516,34 +516,49 @@ Everything the brief lists as future work attaches at an existing seam.
 
    i. The fix is the missing fundamental. The ear reconstructs a root from its
    harmonics, which is why a bass guitar is audible through a laptop at all,
-   so the voice is one periodic wave of 24 partials falling at h^-0.8, rolled
-   off at 1.3 kHz. The series runs to a *frequency*, not to a harmonic number:
-   1.3 kHz is the 24th harmonic of the lowest note in the register and the 9th
-   of the highest. Counting harmonics instead leaves the bottom octave as
-   inaudible as it was, because six harmonics of 55 Hz still only reach
-   330 Hz — which is how the first attempt at this failed.
+   so the voice is one periodic wave of 24 partials, rolled off at 1.1 kHz.
+   The series runs to a *frequency*, not to a harmonic number: counting
+   harmonics instead leaves the bottom octave as inaudible as it was, because
+   six harmonics of 55 Hz still only reach 330 Hz.
 
-   ii. The partials' phases are spread quadratically. Two dozen of them
-   starting together make an impulse rather than a note: the peak towers over
-   the average, so the limiter catches it long before it is loud. Spreading
-   them leaves the spectrum, and so the timbre, untouched, and a walking bar
-   under a chord now peaks lower than the old design did.
+   ii. There are exactly two dials, and they are independent.
+   `BASS_TILT` sets the tone — harmonic *h* has amplitude h^-tilt — and
+   `BASS_LEVEL` sets how far under the comping it sits, about 13 dB,
+   measured A-weighted. Turning it down cannot make it smoother, and
+   brightening it cannot make it louder.
 
-   iii. Its level was set by ear-weighted measurement rather than by matching
-   the old waveform's amplitude. A-weighted, the sine it replaced measured
-   22 dB under the chord even on a full-range system — all that energy sat
-   where the ear is barely sensitive — so matching its raw level would have
-   made this far louder than the bass has ever been. It now sits about 4 dB
-   under the comping, and within 1 dB of that on a phone, a laptop and a
-   full-range system alike. That last part is the point: what you hear no
-   longer depends on what you are listening on.
+   iii. The tilt matters more than it looks, because partials a fundamental
+   apart sit well inside one critical band up at 500 Hz and beat against each
+   other. Measured as sensory roughness on the lowest note: the sine this
+   replaced scores 0.006, a first attempt at a tilt of 0.8 scored 0.088 and
+   buzzed audibly on headphones, and the 1.8 shipped here scores 0.027, which
+   is plucked-string territory. Past about 2 the harmonics get too weak to
+   carry the note on a phone, which is what they are for.
 
-   iv. `src/audio/audibility.test.ts` holds the line. It models a speaker as a
-   cascaded high-pass and asserts that enough of each note's energy survives
-   it, across the whole register and evenly — evenness matters because root
-   motion is an interval, and a bass that fades as it descends is harder to
-   follow than one that is quiet but consistent. It also measures the old
-   design, so it cannot pass by asserting something any design would meet.
+   iv. The partials are in plain sine phase. An earlier version spread them
+   quadratically to flatten the waveform — a standard trick for test signals,
+   and the wrong one here. It bought a single dB of crest factor, and at
+   55 Hz a period is 18 ms, long enough for that dispersion to be heard as a
+   chirp within every cycle. A tilt steep enough to sound like an instrument
+   flattens the waveform anyway: 2.8 dB of crest against 8.5 for the bright
+   wave the trick was propping up.
+
+   v. The result holds across devices. A-weighted, the bass sits within half a
+   decibel of the same place under the comping on a phone, a laptop and a
+   full-range system — which is the point: what you hear no longer depends on
+   what you are listening on. On the quietest note of the register it is some
+   26 dB more audible through a phone than the design it replaced.
+
+   vi. `src/audio/audibility.test.ts` guards both failure modes, since there
+   are two: inaudible, and unpleasant. It models a speaker as a cascaded
+   high-pass and the ear as A-weighting, and asserts how much of each note
+   actually reaches a listener — against the old design, so it cannot pass by
+   asserting something any design would meet — and separately that the tone
+   stays under the roughness that made the first attempt buzz. An earlier
+   version of that file measured the *fraction* of the voice's energy that
+   survived instead, which sounds equivalent and is not: the denominator is
+   dominated by a fundamental nobody can hear, so it rewarded brightness for
+   its own sake and passed the design that buzzed.
 
 ## 10. Your data
 

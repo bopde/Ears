@@ -469,9 +469,44 @@ Everything the brief lists as future work attaches at an existing seam.
    well past full scale and digital clipping is the quickest way to make a
    synthesised piano sound cheap. Chords are trimmed by the square root of the
    voice count, loudness is kept separate from velocity so a chord is balanced
-   without being made duller, and a soft limiter sits last in the chain: a
-   straight wire below about 0.78 of full scale, a gentle knee above it, and a
-   ceiling just under 1.
+   without being made duller, and a soft limiter sits near the end of the
+   chain: a straight wire below about 0.78 of full scale, a gentle knee above
+   it, and a ceiling just under 1.
+
+   i. **The volume control is after the limiter**, and it used to be before.
+   That one position was the whole fault: the volume *was* the pre-limiter
+   gain, so turning the app up did not make it louder so much as drive it
+   further into the clipper — and a bass and a chord soft-clipped together
+   intermodulate, which puts a buzz at the bass's frequency on everything
+   above it. The chain's headroom is now a fixed `MASTER_TRIM` instead, and
+   volume only scales what has already been limited. It can make the output
+   quieter; it can no longer make it dirtier. The default moved to the top of
+   the slider for the same reason.
+
+   ii. That trim is 0.6, which is a measurement rather than a taste. Rendered
+   through the real chain, the loudest thing in the catalogue is a rolled
+   quartal voicing of A♭m7 off the cheat sheet; at 0.6 it peaks 2.0 dB under
+   the limiter's knee, where at 0.7 the margin is 0.7 dB and at 1.0 it clips.
+   The whole app is about 3 dB quieter at the same volume setting than it was,
+   and clean where it was not.
+
+   iii. The compressor attacks in 26 ms rather than 6. One cycle of the lowest
+   note the app plays is 18 ms, and a compressor faster than that moves its
+   gain *within* a bass cycle — which is distortion rather than levelling.
+
+   iv. The limiter's WaveShaper is no longer oversampled, which is the
+   opposite of the usual advice and is right here. Oversampling means
+   upsample, shape, filter back down, and that last filter rings: measured
+   through this curve, a sawtooth driven into the knee came out at **1.16** of
+   full scale, in Chromium and in the offline renderer alike. A limiter that
+   can exceed its own ceiling is not a limiter, and the pad voice is three
+   sawtooths. Below the knee all three settings are bit-identical, and above
+   it the curve is a gentle tanh whose harmonics are low-order, so the
+   aliasing this gives up costs less than the ceiling it was breaking.
+
+   v. All four are held by renders in `src/audio/mix.test.ts`, not by
+   reasoning about the curve. The old test asserted that no point of the
+   *curve* exceeded full scale, which was true and was not the question.
 
    d. Safari needs a user gesture before audio will start, so the unlock happens
    on the tap that begins a session. iOS also needs a silent media element

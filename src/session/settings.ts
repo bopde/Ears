@@ -53,6 +53,14 @@ export interface PracticeSettings {
   instrument: string;
   tempo: number;
   swing: number;
+  /**
+   * 0–1, applied after the limiter.
+   *
+   * It defaults to the top because it can only make the output quieter now,
+   * never dirtier: the chain's own headroom is `MASTER_TRIM`, ahead of the
+   * limiter, and this scales what has already left it. Turn the device down
+   * from here.
+   */
   volume: number;
   reverb: number;
   accidental: Accidental;
@@ -116,7 +124,7 @@ export function defaultSettings(): PracticeSettings {
     instrument: DEFAULT_INSTRUMENT,
     tempo: 120,
     swing: 0.55,
-    volume: 0.85,
+    volume: 1,
     reverb: 0.26,
     accidental: 'both',
     autoAdvance: false,

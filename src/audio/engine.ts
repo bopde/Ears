@@ -34,9 +34,36 @@ export interface Voice {
 export const LIMITER_PRE = 1 / 3;
 export const LIMITER_POST = 1 / LIMITER_PRE;
 /** Input level, in shaper units, below which the curve is exactly linear. */
-const LIMITER_KNEE = 0.26;
+export const LIMITER_KNEE = 0.26;
+/**
+ * Fixed trim ahead of the limiter, so the chain has somewhere to put a loud
+ * texture. See `buildMasterChain` for why this is not the volume control.
+ *
+ * Set by measurement rather than by taste: rendered through this chain, the
+ * loudest thing the app plays is a rolled quartal voicing of A♭m7 off the
+ * cheat sheet, and at this trim it peaks 2.0 dB under the limiter's knee. At
+ * 0.7 that margin is 0.7 dB, which is no margin at all.
+ */
+export const MASTER_TRIM = 0.6;
 /** Asymptotic output in shaper units; times LIMITER_POST this is the ceiling. */
 const LIMITER_CEILING = 0.33;
+
+/**
+ * The compressor that evens out a single note against a full voicing.
+ *
+ * The attack is the number with a reason behind it. It has to be longer than
+ * one cycle of the lowest note the app plays — 18 ms at 55 Hz — or the
+ * compressor changes its gain *within* a bass cycle, which is distortion
+ * rather than levelling, and is heard as a growl on the bottom notes. It used
+ * to be 6 ms.
+ */
+export const COMPRESSOR = {
+  threshold: -16,
+  knee: 24,
+  ratio: 3,
+  attack: 0.026,
+  release: 0.24,
+} as const;
 
 export function makeSoftClipCurve(points = 4097) {
   const curve = new Float32Array(points);
@@ -66,8 +93,17 @@ export interface MasterChain {
 
 /**
  * Builds the output chain: a parallel reverb send, a compressor to even out
- * the difference between a single note and a full voicing, the master level,
- * and a soft limiter so nothing can leave the page above full scale.
+ * the difference between a single note and a full voicing, a fixed trim, a
+ * soft limiter so nothing can leave the page above full scale, and the user's
+ * volume after all of it.
+ *
+ * The order of those last two is the whole point. The volume used to sit
+ * *before* the limiter, which meant turning the app up did not make it louder
+ * so much as drive it further into the clipper — and a bass and a chord
+ * soft-clipped together intermodulate, so the chord picks up a buzz at the
+ * bass's frequency. Volume now scales what has already been limited: it can
+ * only make the output quieter, never dirtier, and the limiter is back to
+ * being a safety net rather than part of the sound.
  *
  * Separated from AudioEngine so the exact chain can be rendered offline and
  * measured, rather than only being heard.
@@ -78,13 +114,16 @@ export function buildMasterChain(ctx: BaseAudioContext, destination: AudioNode):
   const send = ctx.createGain();
   const wet = ctx.createGain();
   const master = ctx.createGain();
+  const output = ctx.createGain();
+
+  master.gain.value = MASTER_TRIM;
 
   const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.value = -16;
-  compressor.knee.value = 24;
-  compressor.ratio.value = 3;
-  compressor.attack.value = 0.006;
-  compressor.release.value = 0.22;
+  compressor.threshold.value = COMPRESSOR.threshold;
+  compressor.knee.value = COMPRESSOR.knee;
+  compressor.ratio.value = COMPRESSOR.ratio;
+  compressor.attack.value = COMPRESSOR.attack;
+  compressor.release.value = COMPRESSOR.release;
 
   const convolver = ctx.createConvolver();
   convolver.buffer = makeImpulseResponse(ctx, 1.9, 2.4);
@@ -99,7 +138,16 @@ export function buildMasterChain(ctx: BaseAudioContext, destination: AudioNode):
   limiterIn.gain.value = LIMITER_PRE;
   const shaper = ctx.createWaveShaper();
   shaper.curve = makeSoftClipCurve();
-  shaper.oversample = '4x';
+  // Not oversampled, which is the opposite of the usual advice and is right
+  // here. Oversampling a shaper means upsample, shape, filter back down, and
+  // that last filter rings: measured through this very curve, a sawtooth
+  // driven into the knee leaves at 1.16 — past full scale, which is the one
+  // thing a limiter exists to prevent, and the pad voice is three sawtooths.
+  // Chromium and the offline renderer agree on the figure to three decimals.
+  // Below the knee all three settings are identical, and above it this curve
+  // is a gentle tanh whose harmonics are low-order, so the aliasing avoided
+  // by oversampling costs less than the ceiling it breaks.
+  shaper.oversample = 'none';
   const limiterOut = ctx.createGain();
   limiterOut.gain.value = LIMITER_POST;
 
@@ -114,14 +162,15 @@ export function buildMasterChain(ctx: BaseAudioContext, destination: AudioNode):
   master.connect(limiterIn);
   limiterIn.connect(shaper);
   shaper.connect(limiterOut);
-  limiterOut.connect(destination);
+  limiterOut.connect(output);
+  output.connect(destination);
 
   wet.gain.value = 0.9;
 
   return {
     input,
     setVolume(value) {
-      master.gain.value = Math.min(1, Math.max(0, value));
+      output.gain.value = Math.min(1, Math.max(0, value));
     },
     setReverb(value) {
       const amount = Math.min(1, Math.max(0, value));

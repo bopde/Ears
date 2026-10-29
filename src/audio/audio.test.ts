@@ -24,6 +24,11 @@ describe('output limiter', () => {
     // possible output is the last point of the curve scaled by the make-up gain.
     const loudest = Math.max(...Array.from(curve, Math.abs)) * LIMITER_POST;
     expect(loudest).toBeLessThan(1);
+    // This is a property of the curve, and for a while it was mistaken for a
+    // property of the limiter. It is not: with the oversampling the node used
+    // to carry, the filter that resamples back down rings, and a sawtooth
+    // driven into this very curve came out at 1.16. The node is held to the
+    // same bound by a render in mix.test.ts, which is where that was caught.
   });
 
   it('is a straight wire below the knee and only bends above it', () => {

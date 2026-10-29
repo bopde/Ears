@@ -523,18 +523,41 @@ Everything the brief lists as future work attaches at an existing seam.
 
    i. The fix is the missing fundamental. The ear reconstructs a root from its
    harmonics, which is why a bass guitar is audible through a laptop at all,
-   so the voice is one periodic wave of 24 partials, rolled off at 1.1 kHz.
-   The series runs to a *frequency*, not to a harmonic number: counting
-   harmonics instead leaves the bottom octave as inaudible as it was, because
-   six harmonics of 55 Hz still only reach 330 Hz.
+   so the voice is one periodic wave of 24 partials. The series runs to a
+   *frequency*, not to a harmonic number: counting harmonics instead leaves
+   the bottom octave as inaudible as it was, because six harmonics of 55 Hz
+   still only reach 330 Hz.
 
-   ii. There are exactly two dials, and they are independent.
-   `BASS_TILT` sets the tone — harmonic *h* has amplitude h^-tilt — and
-   `BASS_LEVEL` sets how far under the comping it sits, about 13 dB,
-   measured A-weighted. Turning it down cannot make it smoother, and
-   brightening it cannot make it louder.
+   ii. The lowpass over that series moves, and that is what makes it a string
+   rather than a saw. Hold a cutoff still and every harmonic sustains in fixed
+   proportion, which is the definition of a sawtooth and is what this sounded
+   like. It now opens bright under the fingers — 1.2 to 2.2 kHz across the
+   register, which is what puts the note on a phone — and closes to four times
+   the fundamental, between 220 and 500 Hz, with a time constant of 120 ms.
+   Key-tracked rather than fixed, so the same handful of harmonics survives on
+   every note instead of the top of the register going dull and the bottom
+   still buzzing. The trade is deliberate: the sustain is well under what a
+   phone can radiate, so a phone listener places the note on its attack, which
+   stays above that speaker's corner for at least a tenth of a second.
 
-   iii. The tilt matters more than it looks, because partials a fundamental
+   iii. There are three dials, and they are independent. `BASS_TILT` sets the
+   tone — harmonic *h* has amplitude h^-tilt — the pair of sustain bounds set
+   how far the filter closes, and `BASS_LEVEL` sets how far under the comping
+   it sits: 2 to 4 dB in the comping textures, about 10 in the cheat sheet's
+   held chords. Turning it down cannot make it smoother, and brightening it
+   cannot make it louder.
+
+   iv. That level is measured **K-weighted** (ITU-R BS.1770), and the switch
+   from A-weighting is why it moved so far. A-weighting is a 40-phon curve —
+   the ear at a whisper — and discounts 55 Hz by nearly 29 dB. A bass set
+   through it to measure 13 dB under the comping was in fact sitting 5 to 7 dB
+   *over* it, which is what people heard on headphones. K-weighting discounts
+   the same note by 3.4 dB and is what broadcast loudness is measured with.
+   `src/audio/mix.test.ts` holds the balance by rendering the real chain
+   offline, because what the voices do to each other is the one thing no
+   single-voice measurement can see.
+
+   v. The tilt matters more than it looks, because partials a fundamental
    apart sit well inside one critical band up at 500 Hz and beat against each
    other. Measured as sensory roughness on the lowest note: the sine this
    replaced scores 0.006, a first attempt at a tilt of 0.8 scored 0.088 and
@@ -542,7 +565,7 @@ Everything the brief lists as future work attaches at an existing seam.
    is plucked-string territory. Past about 2 the harmonics get too weak to
    carry the note on a phone, which is what they are for.
 
-   iv. The partials are in plain sine phase. An earlier version spread them
+   vi. The partials are in plain sine phase. An earlier version spread them
    quadratically to flatten the waveform — a standard trick for test signals,
    and the wrong one here. It bought a single dB of crest factor, and at
    55 Hz a period is 18 ms, long enough for that dispersion to be heard as a
@@ -550,22 +573,38 @@ Everything the brief lists as future work attaches at an existing seam.
    flattens the waveform anyway: 2.8 dB of crest against 8.5 for the bright
    wave the trick was propping up.
 
-   v. The result holds across devices. A-weighted, the bass sits within half a
-   decibel of the same place under the comping on a phone, a laptop and a
-   full-range system — which is the point: what you hear no longer depends on
-   what you are listening on. On the quietest note of the register it is some
-   26 dB more audible through a phone than the design it replaced.
+   vii. What that costs, stated plainly, because it is a trade and not a free
+   win. At equal level the new tone delivers over 20 dB more to a phone than
+   the old one did, on the quietest note of the register. But the level came
+   down 9.5 dB, and the sustain a phone would have radiated is now below what
+   it can radiate, so in the mix the bass sits further under the comping on a
+   small speaker than on headphones — about 12 dB further, where the old
+   design was about 9 dB further. A phone listener places each note on its
+   attack and then loses it, which is what the closing filter is for.
 
-   vi. `src/audio/audibility.test.ts` guards both failure modes, since there
-   are two: inaudible, and unpleasant. It models a speaker as a cascaded
-   high-pass and the ear as A-weighting, and asserts how much of each note
+   viii. Raising the settle to buy that back does not work, and the figure is
+   worth recording so nobody tries it twice. Taking the sustain from four
+   times the fundamental to eight moves the phone balance by 1.9 dB and drops
+   the upper-partial loss that makes it sound plucked from 12 dB to 2.7 — it
+   buys almost nothing and spends the whole tone. The dial that controls
+   presence on a phone is `BASS_LEVEL`, and that one is set by the headphone
+   balance.
+
+   ix. `src/audio/audibility.test.ts` guards all three failure modes:
+   inaudible, unpleasant, and static. It models a speaker as a cascaded
+   high-pass and the ear as K-weighting, and asserts how much of each note
    actually reaches a listener — against the old design, so it cannot pass by
-   asserting something any design would meet — and separately that the tone
-   stays under the roughness that made the first attempt buzz. An earlier
-   version of that file measured the *fraction* of the voice's energy that
-   survived instead, which sounds equivalent and is not: the denominator is
-   dominated by a fundamental nobody can hear, so it rewarded brightness for
-   its own sake and passed the design that buzzed.
+   asserting something any design would meet — that the tone stays under the
+   roughness that made the first attempt buzz, and that the filter really does
+   close, by a measured 12 dB of upper partials, while the fundamental rings
+   on. An earlier version of that file measured the *fraction* of the voice's
+   energy that survived instead, which sounds equivalent and is not: the
+   denominator is dominated by a fundamental nobody can hear, so it rewarded
+   brightness for its own sake and passed the design that buzzed.
+
+   x. Four ways of breaking it were checked against that file and each one
+   fails it: cutting the series to six partials, steepening the tilt to 3,
+   dulling the attack, and closing the filter four times faster.
 
 ## 10. Your data
 

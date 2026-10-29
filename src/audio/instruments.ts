@@ -72,7 +72,10 @@ function finish(ctx: AudioContext, rig: Rig, note: NoteSpec, releaseTau: number)
         /* already stopped */
       }
     }
-    window.setTimeout(() => rig.out.disconnect(), Math.max(0, (end - ctx.currentTime) * 1000) + 120);
+    // Plain setTimeout rather than window's: the only browser-ism in the
+    // voice, and removing it is what lets the whole chain be rendered offline
+    // and measured instead of only listened to.
+    setTimeout(() => rig.out.disconnect(), Math.max(0, (end - ctx.currentTime) * 1000) + 120);
   };
   release(note.time + note.duration);
   return {
@@ -330,18 +333,50 @@ export const BASS_PARTIALS = 24;
  * plucked string. At 1.8 it scores 0.027, which is plucked-string territory.
  * Lower it and the bass buzzes; raise it much past 2 and the harmonics get too
  * weak to carry the note on a small speaker, which is the whole point of them.
+ *
+ * The tilt is the shape of the series. What the ear actually receives is that
+ * series behind the lowpass below, which moves.
  */
 export const BASS_TILT = 1.8;
-/** Where the sustained tone is rolled off, in Hz. The top of the series. */
-export const BASS_CEILING_HZ = 1100;
+/**
+ * The filter envelope, which is the difference between a string and a saw.
+ *
+ * A fixed cutoff holds every harmonic in fixed proportion for the whole note,
+ * and a steady harmonic-rich tone is what a sawtooth is. A plucked string
+ * loses its upper partials within a few hundred milliseconds while the
+ * fundamental rings on, so the cutoff has to fall.
+ *
+ * It opens bright under the fingers — that attack is what puts the note on a
+ * phone speaker, which radiates nothing near these fundamentals — and then
+ * closes to a key-tracked target within a couple of hundred milliseconds.
+ * Key-tracked rather than fixed because a fixed settle would leave the top of
+ * the register dull and the bottom still buzzing: the ratio keeps the same
+ * handful of harmonics on every note.
+ */
+export const BASS_SUSTAIN_RATIO = 4;
+/** The lowest the sustain settles to, in Hz, at the bottom of the register. */
+export const BASS_FLOOR_HZ = 220;
+/** The highest it settles to, at the top. The ceiling of the sustained tone. */
+export const BASS_CEILING_HZ = 500;
+/** Time constant of the close, in seconds: audibly a pluck, not a filter sweep. */
+export const BASS_CLOSE_TAU = 0.12;
 /**
  * Peak amplitude before velocity and polyphony trim, and the other dial.
  *
- * It sets how far under the comping the bass sits — about 13 dB at this
- * value, measured A-weighted, which is where an accompaniment belongs. It
- * does not change the tone, only the presence.
+ * It sets how far under the comping the bass sits: 2 to 4 dB in the comping
+ * textures and about 10 in the held chords of the cheat sheet, measured
+ * K-weighted (ITU-R BS.1770) through the real chain in mix.test.ts.
+ *
+ * The weighting is the point, and is why this number moved so far. The level
+ * it replaces was set A-weighted, which is a 40-phon curve — the ear at a
+ * whisper — and discounts 55 Hz by nearly 29 dB and 147 Hz by 14. A bass that
+ * measured 13 dB under the comping through it in fact sat 5 to 7 dB over it,
+ * which is what people were hearing on headphones. K-weighting discounts the
+ * same two by 3.4 dB and 0.5, and is what broadcast loudness is measured with.
+ *
+ * It does not change the tone, only the presence.
  */
-export const BASS_LEVEL = 0.6;
+export const BASS_LEVEL = 0.2;
 const BASS_Q = 1.1;
 
 /** A periodic wave belongs to its context, so each context gets its own. */
@@ -366,24 +401,44 @@ function bassTimbre(ctx: BaseAudioContext): PeriodicWave {
 }
 
 /** Magnitude of a second-order lowpass at `hz`, as the filter below applies it. */
-export function bassFilterGain(hz: number, cutoff = BASS_CEILING_HZ, q = BASS_Q): number {
+export function bassFilterGain(hz: number, cutoff: number, q = BASS_Q): number {
   const r = hz / cutoff;
   return 1 / Math.hypot(1 - r * r, r / q);
 }
 
+/** Where the lowpass opens at the instant of the attack, in Hz. */
+export function bassAttackHz(midi: number, velocity: number): number {
+  return clamp(midiToFreq(midi) * 9 + velocity * 1200, 900, 3600);
+}
+
+/** Where it has settled a few hundred milliseconds later, in Hz. */
+export function bassSustainHz(midi: number): number {
+  return clamp(midiToFreq(midi) * BASS_SUSTAIN_RATIO, BASS_FLOOR_HZ, BASS_CEILING_HZ);
+}
+
 /**
- * What the bass sustains on a note, partial by partial, after its own filter.
+ * What the bass puts out on a note, partial by partial, after its own filter.
  *
- * Exported so the audibility of the design can be checked without rendering
- * audio: what matters is how much of this sits above a small speaker's corner
- * frequency, and that is a property of the series, not of the waveform.
+ * The filter moves, so this takes the point in the note being asked about.
+ * `attack` is what decides whether the note can be placed at all on a small
+ * speaker; `sustain` is what it settles into, and the difference between the
+ * two is what makes it read as a plucked string.
+ *
+ * Exported so both can be checked without rendering audio: what matters is
+ * how much sits above a small speaker's corner frequency, and that is a
+ * property of the series and the filter, not of the waveform.
  */
-export function bassPartials(midi: number): Array<{ hz: number; amplitude: number }> {
+export function bassPartials(
+  midi: number,
+  phase: 'attack' | 'sustain' = 'attack',
+  velocity = 0.7,
+): Array<{ hz: number; amplitude: number }> {
   const f = midiToFreq(midi);
+  const cutoff = phase === 'attack' ? bassAttackHz(midi, velocity) : bassSustainHz(midi);
   const out: Array<{ hz: number; amplitude: number }> = [];
   for (let h = 1; h <= BASS_PARTIALS; h++) {
     const hz = f * h;
-    out.push({ hz, amplitude: Math.pow(h, -BASS_TILT) * bassFilterGain(hz) });
+    out.push({ hz, amplitude: Math.pow(h, -BASS_TILT) * bassFilterGain(hz, cutoff) });
   }
   return out;
 }
@@ -402,11 +457,11 @@ const bass: Instrument = {
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.Q.value = BASS_Q;
-    // Brighter under the fingers, settling to the ceiling the series is
-    // written for. Fixed rather than a multiple of the fundamental: the
-    // ceiling is about the speaker, which does not know what note is playing.
-    filter.frequency.setValueAtTime(clamp(f * 9 + vel * 1200, 900, 3600), t);
-    filter.frequency.setTargetAtTime(BASS_CEILING_HZ, t + 0.01, 0.2);
+    // Bright under the fingers, then closing over the note. The attack is what
+    // places the pitch on a speaker that cannot reproduce the fundamental; the
+    // sustain is what the note turns into once it has been placed.
+    filter.frequency.setValueAtTime(bassAttackHz(note.midi, vel), t);
+    filter.frequency.setTargetAtTime(bassSustainHz(note.midi), t + 0.01, BASS_CLOSE_TAU);
     filter.connect(out);
 
     const amp = ctx.createGain();

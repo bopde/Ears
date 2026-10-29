@@ -119,15 +119,18 @@ builds the app and deploys it on every push to `main`.
 
    i. On the **Changes** tab each progression breaks out into one card per
    chord, showing the notes that are about to sound, highest first, with the
-   bass underneath a rule. Tap a card to hear that chord on its own; tick
-   *Roll a single chord from the bass* and it arpeggiates upward from the bass
-   note before striking the chord, which is the only way to hear every voice
-   in a five-note stack and still hear it as a chord.
+   degree each one is playing beside it — *E4 9*, *C4 ♭7*, *A3 5*, *F3 ♭3* —
+   and the bass underneath a rule. The degrees line up into a column of their
+   own, so a card can be read either as notes to play or as the shape of the
+   voicing. Tap a card to hear that chord on its own; tick *Roll a single chord
+   from the bass* and it arpeggiates upward from the bass note before striking
+   the chord, which is the only way to hear every voice in a five-note stack
+   and still hear it as a chord.
 
    ii. The **Voicing** selector above the list decides how all of them are
-   played: *Root position* (the default), *Voice led*, *Shell*, *Rootless* or
-   *Drop 2*. Root position stacks every chord plainly from its root with the
-   root doubled an octave below and nothing moving underneath, so you can learn
+   played: *Root position* (the default), *Voice led*, *Shell*, *Rootless*,
+   *Drop 2*, *Quartal* or *Upper structure*. Root position stacks every chord plainly from its root with the
+   root doubled underneath and nothing moving down there, so you can learn
    the reference sound of a chord before meeting the ways a pianist disguises
    it. The choice is remembered.
 
@@ -141,10 +144,14 @@ builds the app and deploys it on every push to `main`.
    rather than off the numerals, so it describes the register they are played
    in rather than the one they are written in.
 
-   v. The **Voicings** tab takes them one at a time: what each is, where a
-   player reaches for it, the degrees it sounds over a set of changes that
-   shows it off, and a *Compare with root position* button that plays those
-   changes plainly and then in the voicing, back to back.
+   v. The **Voicings** tab takes them one at a time, under three headings:
+   *What it is* (the shape, in degrees), *When to use it* (the setting a player
+   actually reaches for it in) and *Worth knowing* (the thing the shape alone
+   does not tell you — why there are two rootless forms, why a quartal voicing
+   refuses to commit to major or minor, why an upper-structure triad is always
+   rooted on a tension). Under them are the degrees it sounds over a set of
+   changes that shows it off, and a *Compare with root position* button that
+   plays those changes plainly and then in the voicing, back to back.
 
    vi. The notes on screen and the notes that sound come from one function,
    `referenceVoicings` in `src/audio/reference.ts`. The display cannot drift

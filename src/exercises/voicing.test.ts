@@ -163,7 +163,15 @@ describe('the difficulty curve', () => {
         for (let seed = 0; seed < 12; seed++) {
           const q = type.generate({ ...context(5, seed * 31 + 3), settings: tuned });
           if (!q) continue;
-          expect(expected, `${id}/${mode} used ${q.voicing}`).toContain(q.voicing);
+          // A progression may also use the voicing it names for itself, which
+          // the curve's list does not have to contain: a modal vamp asks for
+          // quartal and an altered minor ii–V for an upper structure, and
+          // outside root-position-only mode they get it.
+          const own = PROGRESSIONS.find(
+            (p) => p.id === q.correct.progression || `progression:${p.id}` === q.conceptIds[0],
+          )?.voicing;
+          const allowed = mode !== 'plain' && own ? [...expected, own] : expected;
+          expect(allowed, `${id}/${mode} used ${q.voicing}`).toContain(q.voicing);
         }
       }
     }

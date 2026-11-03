@@ -111,7 +111,9 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
   // The same curve the chord questions use. Hearing a ii–V–I in close position
   // and missing it rootless is a gap in one direction, not two, so both kinds
   // of question have to be able to produce both.
-  const voicingStyle = chooseVoicing(ctx.rng, ctx.settings.voicingMode, level, ctx.voicingFocus);
+  const voicingStyle = chooseVoicing(
+    ctx.rng, ctx.settings.voicingMode, level, ctx.voicingFocus, def.voicing,
+  );
   const voicings = voiceProgression(chords, {
     style: voicingStyle,
     maxNotes: 5,

@@ -49,23 +49,54 @@ export function voicingChoices(mode: VoicingMode, difficulty: number): VoicingSt
 }
 
 /**
+ * Whether a progression's own recommendation is allowed to steer the choice.
+ *
+ * Only where the curve has stopped holding the learner's hand. Up to level 3
+ * the point is to hear the changes at all, and a ii–V–I comped rootless is
+ * one more thing in the way of that; from level 4 the point is to meet them
+ * as they are played, and then "what would a pianist reach for here" is
+ * exactly the right question. Root position only means root position only.
+ */
+function recommendationApplies(mode: VoicingMode, difficulty: number): boolean {
+  if (mode === 'plain') return false;
+  if (mode === 'realistic') return true;
+  return clamp(Math.round(difficulty), 1, 5) >= 4;
+}
+
+/** How much more often the recommended style comes up where it applies. */
+const RECOMMENDED_WEIGHT = 3;
+
+/**
  * Picks one of them, leaning towards whichever the learner hears least well.
  *
  * `focus` comes from the learning model: the same chord heard in close
  * position and rootless is two different listening problems, and a learner who
  * has one and not the other should meet the other more often.
+ *
+ * `recommended` is the voicing the progression itself names — rootless for a
+ * ii–V–I, shell for a blues, quartal for modal changes. The cheat sheet has
+ * shown it all along and the exercises ignored it, so a learner could read
+ * that these changes are comped rootless and never once hear them that way.
+ * The two weights multiply: a recommended style the learner is also weak at
+ * is the most worth playing, and the model should not have to choose.
  */
 export function chooseVoicing(
   rng: Rng,
   mode: VoicingMode,
   difficulty: number,
   focus: readonly string[] = [],
+  recommended?: VoicingStyle,
 ): VoicingStyle {
-  const choices = voicingChoices(mode, difficulty);
+  const base = voicingChoices(mode, difficulty);
+  const steer = recommended !== undefined && recommendationApplies(mode, difficulty);
+  const choices = steer && !base.includes(recommended)
+    ? [...base, recommended]
+    : base;
   if (choices.length === 1) return choices[0];
   return rng.weighted(choices, (style) => {
     const rank = focus.indexOf(style);
-    return rank === -1 ? 1 : 2.5 / (1 + rank * 0.5);
+    const weak = rank === -1 ? 1 : 2.5 / (1 + rank * 0.5);
+    return weak * (steer && style === recommended ? RECOMMENDED_WEIGHT : 1);
   });
 }
 

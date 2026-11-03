@@ -1,6 +1,9 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
-import { pcName, pcSetSimilarity, type Accidental, type Midi, type PitchClass } from './pitch';
+import {
+  LETTERS, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
+  type Accidental, type Midi, type PitchClass,
+} from './pitch';
 import { mod } from '../lib/util';
 
 /**
@@ -256,7 +259,6 @@ export function chordFullName(chord: Chord, pref: Accidental = 'both'): string {
   return `${pcName(chord.rootPc, pref)} ${chord.quality.name}`;
 }
 
-/** Absolute semitone offsets above a concrete root pitch, extensions kept high. */
 /**
  * What each interval is called, read off the chord's own spelling.
  *
@@ -271,8 +273,34 @@ const DEGREE_NAMES: Record<number, string> = {
   13: '♭9', 14: '9', 15: '♯9', 17: '11', 18: '♯11', 20: '♭13', 21: '13',
 };
 
+/**
+ * What a note *outside* the chord is called, over a chord that has a seventh.
+ *
+ * Above a seventh the stack keeps going, so a note the chord does not name is
+ * heard as an extension of it rather than as a displaced chord tone: over a
+ * dominant 7th the 9 semitones are a 13th, not a 6th, and the 3 are a ♯9
+ * rather than a ♭3 that would contradict the major 3rd below it. Under a
+ * triad there is no seventh to extend past, and 9, 4 and 6 are what they are.
+ */
+const TENSION_NAMES: Record<number, string> = {
+  1: '♭9', 2: '9', 3: '♯9', 5: '11', 6: '♯11', 8: '♭13', 9: '13',
+};
+
 export const degreeName = (interval: number): string =>
   DEGREE_NAMES[interval] ?? DEGREE_NAMES[mod(interval, 12)] ?? '?';
+
+/**
+ * Whether the quality stacks as far as a seventh.
+ *
+ * A sixth chord does not, however close 9 semitones looks to one: its 6th is
+ * a 6th. A fully diminished seventh does, and spells those same 9 semitones
+ * as a seventh, so it is the one chord where the interval alone cannot say.
+ */
+function hasSeventh(quality: ChordQuality): boolean {
+  const pcs = new Set(quality.intervals.map((i) => mod(i, 12)));
+  if (pcs.has(10) || pcs.has(11)) return true;
+  return pcs.has(3) && pcs.has(6) && pcs.has(9);
+}
 
 /**
  * The degrees a voicing sounds, in the order it sounds them.
@@ -282,11 +310,33 @@ export const degreeName = (interval: number): string =>
  * the degrees are read straight off the notes that were scheduled.
  */
 export function chordDegrees(chord: Chord, notes: readonly Midi[]): string[] {
+  const extended = hasSeventh(chord.quality);
   return notes.map((midi) => {
     const pc = mod(midi - chord.rootPc, 12);
     const spelled = chord.quality.intervals.find((i) => mod(i, 12) === pc);
-    return degreeName(spelled ?? pc);
+    if (spelled !== undefined) return degreeName(spelled);
+    return (extended ? TENSION_NAMES[pc] : undefined) ?? degreeName(pc);
   });
+}
+
+/**
+ * A note's name, spelled as the chord it belongs to would write it.
+ *
+ * The letter comes from the degree: a ♭9 of G is the letter a 9th above G,
+ * flattened, which is A♭ — not the G♯ a pitch-class table would reach for.
+ * Where the degree asks for something unreadable — a double accidental, or
+ * one of the four names pitch.ts refuses — the plain enharmonic is used
+ * instead, so an E♭7♭9 shows an E rather than an F♭, and a C diminished 7th
+ * an A rather than a B𝄫.
+ */
+export function spellInChord(chord: Chord, midi: Midi, pref: Accidental = 'both'): string {
+  const degree = chordDegrees(chord, [midi])[0];
+  const number = Number(degree.replace(/[^0-9]/g, ''));
+  const letter = LETTERS.indexOf(pcName(chord.rootPc, pref)[0] as typeof LETTERS[number]);
+  const spelled = Number.isFinite(number) && number > 0 && letter >= 0
+    ? spellOnLetter(pcOf(midi), letter + number - 1)
+    : null;
+  return `${spelled ?? pcName(pcOf(midi), pref)}${octaveOf(midi)}`;
 }
 
 export function chordTones(chord: Chord, rootMidi: Midi): Midi[] {

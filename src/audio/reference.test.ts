@@ -7,7 +7,7 @@ import { bassLine } from './performer';
 import { FakePerformer } from '../test-support';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { BASS_GAP, PITCH_CLASSES, REGISTER, VOICING_FLOOR, midiName } from '../music/pitch';
-import { CHORD_QUALITIES, chordDegrees, makeChord } from '../music/chords';
+import { CHORD_QUALITIES, chordDegrees, makeChord, spellInChord } from '../music/chords';
 import { voiceChord } from '../music/voicing';
 import { mod } from '../lib/util';
 
@@ -220,8 +220,12 @@ describe('what is shown is what is played', () => {
     const def = PROGRESSIONS.find((p) => p.id === 'ii-V-I')!;
     const [first] = referenceVoicings(def, 0, 'root');
     const names = referenceNoteNames(first, 'flat');
-    expect(names.notes.map((n) => n.name)).toEqual(first.notes.map((m) => midiName(m, 'flat')));
-    expect(names.bass.map((b) => b.name)).toEqual(first.bass.map((b) => midiName(b.midi, 'flat')));
+    // Spelled against the chord rather than by pitch class, so the letter
+    // agrees with the degree printed beside it.
+    expect(names.notes.map((n) => n.name))
+      .toEqual(first.notes.map((m) => spellInChord(first.chord, m, 'flat')));
+    expect(names.bass.map((b) => b.name))
+      .toEqual(first.bass.map((b) => spellInChord(first.chord, b.midi, 'flat')));
     // Every bass note carries what it is doing, so the display can say so.
     expect(names.bass.map((b) => b.role)).toEqual(first.bass.map((b) => b.role));
     // And every note carries the degree it is playing, read off the same

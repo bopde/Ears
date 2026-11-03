@@ -1,7 +1,7 @@
 import type { ExerciseType, GenContext, Question } from './types';
 import { buildOptions, chooseKey, chooseTarget, optionCount, questionId, tempoFor } from './support';
 import {
-  CHORD_QUALITIES, chordDegrees, chordSymbol, makeChord,
+  CHORD_QUALITIES, chordDegrees, chordSymbol, makeChord, spellInChord,
   type Chord, type ChordQuality,
 } from '../music/chords';
 import {
@@ -11,7 +11,7 @@ import {
   NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingBass, voicingLabel, voicingLabelFor,
 } from './voicing-plan';
 import { Performer, polyphonyGain } from '../audio/performer';
-import { midiName, pcNameDual, type PitchClass } from '../music/pitch';
+import { pcNameDual, type PitchClass } from '../music/pitch';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { voicingConceptId } from '../music/catalog';
 import type { PracticeSettings } from '../session/settings';
@@ -212,7 +212,7 @@ export const voicingExercise: ExerciseType = {
         // rootless shapes played is worth knowing, and is not the question.
         heading: voicingLabelFor(target, voicing.form),
         detail: `${chordSymbol(chord, ctx.settings.accidental)}  ·  ${chordDegrees(chord, voicing.notes).join(' ')}`,
-        notes: voicing.all.map((m) => midiName(m, ctx.settings.accidental)).join('  '),
+        notes: voicing.all.map((m) => spellInChord(chord!, m, ctx.settings.accidental)).join('  '),
       },
       estimatedSeconds: 13 + ctx.difficulty,
     };

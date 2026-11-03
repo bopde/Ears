@@ -4,7 +4,7 @@ import {
 } from './support';
 import {
   CHORD_QUALITIES, chordConceptId, chordDegrees, chordFullName, makeChord, nearestQualities,
-  qualityLabel, slashSymbol,
+  qualityLabel, slashSymbol, spellInChord,
   type Chord, type ChordQuality,
 } from '../music/chords';
 import { namedInversion } from '../music/inversions';
@@ -15,7 +15,7 @@ import {
 import { chooseVoicing, voicingBass, voicingLabelFor } from './voicing-plan';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
-import { PITCH_CLASSES, midiName, pcName, pcNameDual, type PitchClass } from '../music/pitch';
+import { PITCH_CLASSES, pcName, pcNameDual, type PitchClass } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import { clamp } from '../lib/util';
 
@@ -260,7 +260,7 @@ function revealFor(
     heading: slashSymbol(chord, slashPc, accidental),
     detail: parts.join('  \u00b7  '),
     // The degrees say what the voicing is; the note names say what it was.
-    notes: `${voicing.all.map((m) => midiName(m, accidental)).join('  ')}` +
+    notes: `${voicing.all.map((m) => spellInChord(chord, m, accidental)).join('  ')}` +
       `   \u2014   ${chordDegrees(chord, voicing.notes).join(' ')}`,
   };
 }

@@ -2,11 +2,11 @@ import type { ExerciseType, Question } from './types';
 import { buildOptions, chooseKey, chooseTarget, questionId } from './support';
 import {
   CHORD_QUALITIES, chordConceptId, chordFullName, isSymmetrical, makeChord, slashSymbol,
-  type ChordQuality,
+  spellInChord, type ChordQuality,
 } from '../music/chords';
 import { inversionConceptId, inversionsFor, type InversionDef } from '../music/inversions';
 import { voiceChord, type VoicingStyle } from '../music/voicing';
-import { midiName, pcName } from '../music/pitch';
+import { pcName } from '../music/pitch';
 import { polyphonyGain } from '../audio/performer';
 import type { PracticeSettings } from '../session/settings';
 import { clamp, mod } from '../lib/util';
@@ -141,7 +141,7 @@ export const inversionExercise: ExerciseType = {
       reveal: {
         heading: slashSymbol(chord, bassPc, ctx.settings.accidental),
         detail: `${inversion.name} — ${inversion.bassTone} of ${chordFullName(chord, ctx.settings.accidental)} is in the bass`,
-        notes: voicing.all.map((m) => midiName(m, ctx.settings.accidental)).join('  '),
+        notes: voicing.all.map((m) => spellInChord(chord, m, ctx.settings.accidental)).join('  '),
       },
       estimatedSeconds: 10 + clamp(ctx.difficulty, 1, 5),
     };

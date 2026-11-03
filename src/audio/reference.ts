@@ -7,9 +7,11 @@ import { realiseProgression, type ProgressionDef } from '../music/progressions';
 import {
   voiceChord, voiceProgression, type Voicing, type VoicingOptions, type VoicingStyle,
 } from '../music/voicing';
-import { chordDegrees, chordSymbol, slashSymbol, type Chord } from '../music/chords';
+import {
+  chordDegrees, chordSymbol, slashSymbol, spellInChord, type Chord,
+} from '../music/chords';
 import { VOICING_NAMES, VOICING_SHORT } from '../music/catalog';
-import { midiName, type Accidental, type Midi, type PitchClass } from '../music/pitch';
+import type { Accidental, Midi, PitchClass } from '../music/pitch';
 import { mod } from '../lib/util';
 
 /**
@@ -279,14 +281,18 @@ export function referenceNoteNames(
   accidental: Accidental = 'both',
 ): { bass: BassDisplay[]; notes: NoteDisplay[] } {
   const degrees = chordDegrees(chord.chord, chord.notes);
+  // Spelled against the chord, so the letter agrees with the degree beside
+  // it: a ♭9 is the letter a 9th up, not whichever enharmonic a pitch-class
+  // table happens to prefer.
+  const name = (midi: Midi) => spellInChord(chord.chord, midi, accidental);
   return {
     bass: chord.bass.map((b) => ({
-      name: midiName(b.midi, accidental),
+      name: name(b.midi),
       role: b.role,
       tag: BASS_ROLE_TAG[b.role],
       degree: chordDegrees(chord.chord, [b.midi])[0],
     })),
-    notes: chord.notes.map((m, i) => ({ name: midiName(m, accidental), degree: degrees[i] })),
+    notes: chord.notes.map((m, i) => ({ name: name(m), degree: degrees[i] })),
   };
 }
 

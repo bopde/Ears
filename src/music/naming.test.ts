@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { VOICING_NAMES, VOICING_SHORT, voicingConcept } from './catalog';
 import { VOICING_STYLES, voiceChord, type VoicingStyle } from './voicing';
 import { makeChord } from './chords';
+import { namedInversion } from './inversions';
 import { REFERENCE_VOICINGS, styleForMode } from '../audio/reference';
 import { VOICING_MODES } from '../exercises/voicing-plan';
 import { voicingLabel, voicingLabelFor } from '../exercises/voicing-plan';
@@ -76,6 +77,25 @@ describe('a voicing is called one thing', () => {
     expect(VOICING_MODES.find((m) => m.value === 'curve')?.label).toBe('By level');
     expect(VOICING_MODES.find((m) => m.value === 'plain')?.label).toBe('Root position only');
     expect(ACCIDENTALS).toContain('both');
+  });
+
+  it('calls nothing an inversion that has no root to turn over', () => {
+    const dm7 = makeChord(2, 'm7');
+    // A rootless stack with nothing underneath: the 3rd is at the bottom, and
+    // that used to read as "first inversion". There is no root in it to invert.
+    const bare = voiceChord(dm7, { style: 'rootless' });
+    expect(bare.notes.some((m) => m % 12 === 2), 'really has no root').toBe(false);
+    expect(namedInversion(dm7, bare)).toBeUndefined();
+    // The same stack over a root bass is in root position, however the notes
+    // above it are arranged.
+    const over = voiceChord(dm7, { style: 'rootless', bass: true });
+    expect(namedInversion(dm7, over)).toBeUndefined();
+    // A chord that does hold its root, turned over, still gets named.
+    const inverted = voiceChord(dm7, { style: 'spread', bottomPc: 5 });
+    expect(inverted.notes.some((m) => m % 12 === 2), 'holds its root').toBe(true);
+    expect(namedInversion(dm7, inverted)?.index).toBe(1);
+    expect(namedInversion(dm7, voiceChord(dm7, { style: 'close', rootPosition: true })))
+      .toBeUndefined();
   });
 
   it('adds the rootless form only where a rootless shape actually played', () => {

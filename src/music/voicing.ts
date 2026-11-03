@@ -568,6 +568,18 @@ export function voiceProgression(
 }
 
 /**
+ * Whether the voicing leaves the root for something else to state.
+ *
+ * The test is the bottom of the right hand, not whether the root appears
+ * anywhere: a stack whose lowest note is the 3rd sounds like a chord rooted
+ * on that 3rd until something underneath says otherwise. A rootless Dm7 is
+ * F A C E — an F major triad with a 9th on it — and nothing in those four
+ * notes argues for D.
+ */
+export const isRootFree = (chord: Chord, voicing: Voicing): boolean =>
+  mod(voicing.notes[0], 12) !== mod(chord.rootPc, 12);
+
+/**
  * Which chord tone is sounding lowest: 0 the root, 1 the third, 2 the fifth,
  * 3 the seventh. -1 when the lowest note is not a chord tone at all.
  */

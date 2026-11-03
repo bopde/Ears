@@ -1,4 +1,7 @@
-import { VOICING_STYLES, type RootlessForm, type VoicingStyle } from '../music/voicing';
+import {
+  VOICING_STYLES, isRootFree, type RootlessForm, type Voicing, type VoicingStyle,
+} from '../music/voicing';
+import type { Chord } from '../music/chords';
 import { CONCEPTS, voicingConceptId } from '../music/catalog';
 import { PROGRESSIONS } from '../music/progressions';
 import type { PracticeSettings } from '../session/settings';
@@ -66,10 +69,21 @@ export function chooseVoicing(
   });
 }
 
-/** Whether a question at this level puts a bass note under the voicing. */
-export function voicingBass(style: VoicingStyle, difficulty: number): boolean {
-  if (style === 'rootless') return false;
-  return difficulty <= 3;
+/**
+ * Whether a question puts a bass note under the voicing.
+ *
+ * The root has to be audible somewhere, and a voicing whose lowest note is
+ * not the root does not state it. Those get a bass at every level — a
+ * rootless Dm7 without one is an F major triad with a 9th on top, and "minor
+ * 7th" stops being a defensible answer to what sounded. An inversion is the
+ * same problem in a milder form: C E G over no bass is as much an E minor
+ * ♭6 as a C major.
+ *
+ * Where the root is already at the bottom of the stack, the bass only doubles
+ * it, so it is a help rather than a necessity and the curve may take it away.
+ */
+export function voicingBass(chord: Chord, voicing: Voicing, difficulty: number): boolean {
+  return isRootFree(chord, voicing) || difficulty <= 3;
 }
 
 export const voicingLabel = (style: VoicingStyle): string =>

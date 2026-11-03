@@ -6,7 +6,7 @@ import {
 } from '../music/chords';
 import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
 import {
-  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingLabel, voicingLabelFor,
+  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingBass, voicingLabel, voicingLabelFor,
 } from './voicing-plan';
 import { Performer, polyphonyGain } from '../audio/performer';
 import { midiName, pcNameDual, type PitchClass } from '../music/pitch';
@@ -45,13 +45,23 @@ function voicableQualities(settings: PracticeSettings): ChordQuality[] {
  */
 const fingerprint = (v: Voicing) => v.all.join(',');
 
-function voiceIn(chord: Chord, style: VoicingStyle, bass: boolean): Voicing {
-  return voiceChord(chord, {
+/**
+ * One shape of one chord, with a bass under it wherever the root needs one.
+ *
+ * The bass is not a difficulty setting here. A rootless or inverted stack
+ * does not state its own root, and this question prints the chord symbol in
+ * the prompt — so without one the listener is being shown a D minor 7 and
+ * played an F major triad, and asked only about the shape. The level decides
+ * whether a stack that *does* state its root gets the doubling as well.
+ */
+function voiceIn(chord: Chord, style: VoicingStyle, difficulty: number): Voicing {
+  const opts = {
     style,
-    bass,
     maxNotes: 5,
     ...(style === 'close' ? { bottomPc: chord.rootPc } : {}),
-  });
+  };
+  const dry = voiceChord(chord, opts);
+  return voicingBass(chord, dry, difficulty) ? voiceChord(chord, { ...opts, bass: true }) : dry;
 }
 
 export const voicingExercise: ExerciseType = {
@@ -75,14 +85,14 @@ export const voicingExercise: ExerciseType = {
     const rootPc = chooseKey(ctx);
     // A quality whose shapes come out audibly different, so the question has
     // exactly one answer. Everything else in the pool is tried before giving up.
-    const bass = ctx.difficulty <= 3;
+    const level = clamp(Math.round(ctx.difficulty), 1, 5);
     let chord: Chord | null = null;
     let voicing: Voicing | null = null;
     let offered: VoicingStyle[] = [];
     for (const quality of ctx.rng.shuffle([...qualities])) {
       const candidate = makeChord(rootPc, quality.id);
       const byShape = new Map<VoicingStyle, Voicing>();
-      for (const style of shapes) byShape.set(style, voiceIn(candidate, style, bass));
+      for (const style of shapes) byShape.set(style, voiceIn(candidate, style, level));
       // Pairwise distinct, not merely distinct from the answer: two options
       // that sound the same as each other are two options that cannot both be
       // wrong, and the question would be unanswerable either way.
@@ -144,7 +154,7 @@ export const voicingExercise: ExerciseType = {
       play: (perf) => sound(perf, 0.008),
       playReveal: (perf) => sound(perf, 0.16),
       playPlain: (perf) => {
-        const plain = voiceIn(chord!, 'close', true);
+        const plain = voiceIn(chord!, 'close', 1);
         const origin = perf.origin();
         const g = polyphonyGain(plain.all.length);
         plain.notes.forEach((midi) => perf.note(midi, origin, 3, 0.66, { gain: g }));

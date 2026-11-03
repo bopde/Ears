@@ -82,17 +82,26 @@ function bassOctaves(pc: number): Midi[] {
   return out;
 }
 
+/**
+ * How badly a bass note sits under a voicing whose lowest note is `low`.
+ *
+ * An octave under is where a bass belongs; too close and it is heard as part
+ * of the chord rather than under it, which is heavily penalised, and too far
+ * and the two stop sounding like one texture. Every bass note is placed by
+ * this, so the root and the notes that follow it are judged alike.
+ */
+function gapCost(midi: Midi, low: Midi): number {
+  const gap = low - midi;
+  return Math.abs(gap - BASS_GAP.want) +
+    (gap < BASS_GAP.min ? 100 : 0) +
+    (gap > BASS_GAP.max ? 24 : 0);
+}
+
 /** Which octave of the root to play, given what is sounding above it. */
 function placeRoot(rootPc: number, low: Midi): Midi {
   const options = bassOctaves(rootPc);
   if (!options.length) return foldInto(mod(rootPc, 12) + 36, REGISTER.bass.lo, REGISTER.bass.hi);
-  const cost = (m: Midi) => {
-    const gap = low - m;
-    return Math.abs(gap - BASS_GAP.want) +
-      (gap < BASS_GAP.min ? 100 : 0) +
-      (gap > BASS_GAP.max ? 24 : 0);
-  };
-  return options.reduce((best, m) => (cost(m) < cost(best) ? m : best), options[0]);
+  return options.reduce((best, m) => (gapCost(m, low) < gapCost(best, low) ? m : best), options[0]);
 }
 
 /**
@@ -229,13 +238,19 @@ export function bassLine(
     // A long chord gets its fifth halfway through, which keeps a whole bar of
     // one harmony from going static. A chord with no fifth holds the root.
     if (beats >= 4 && fifth !== null) {
-      // The fifth above the root where the register allows it, otherwise the
-      // same note a fourth down. Reaching above the bass register puts it in
-      // unison with the bottom of the right hand, and the ear then takes that
-      // freshly struck note as the bass while the root decays — which is how
-      // a root-position chord comes to sound like an inversion.
+      // The fifth above the root, or the same note a fourth below it, by the
+      // same cost that placed the root. Taking the one above whenever it fits
+      // the register was the old rule and it reached too high: under a
+      // rootless ii–V–I it put the fifth a third beneath the bottom of the
+      // right hand, close enough that the ear takes the freshly struck note
+      // as the bass while the root decays — which is how a root-position
+      // chord comes to sound like an inversion.
       const above = pcAtOrAbove(mod(rootPc + fifth, 12), root + 1);
-      const midi = above <= REGISTER.bass.hi ? above : above - 12;
+      const octaves = [above, above - 12].filter(
+        (m) => m >= REGISTER.bass.lo && m <= REGISTER.bass.hi,
+      );
+      const midi = (octaves.length ? octaves : [above - 12])
+        .reduce((best, m) => (gapCost(m, low) < gapCost(best, low) ? m : best));
       out.push({
         beat: startBeat + 2,
         beats: beats - 2,

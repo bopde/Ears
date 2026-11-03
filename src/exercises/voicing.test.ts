@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EXERCISE_TYPES, getExerciseType } from './registry';
 import type { GenContext, Question } from './types';
-import { chooseVoicing, voicingChoices, voicingLabel, NAMEABLE_VOICINGS, VOICING_MODE_IDS } from './voicing-plan';
+import {
+  chooseVoicing, voicingBass, voicingChoices, voicingLabel, NAMEABLE_VOICINGS, VOICING_MODE_IDS,
+} from './voicing-plan';
 import { defaultSettings, normaliseSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
@@ -237,16 +239,18 @@ describe('naming the voicing', () => {
           (c) => chordSymbol(makeChord(q.keyPc!, c.id), settings.accidental) === symbol,
         )!;
         const chord = makeChord(q.keyPc!, quality.id);
-        const bass = d <= 3;
         const heard = new Map<string, string[]>();
         for (const option of q.fields[0].options) {
           const style = option.id as VoicingStyle;
-          const v = voiceChord(chord, {
+          const opts = {
             style,
-            bass,
             maxNotes: 5,
             ...(style === 'close' ? { bottomPc: chord.rootPc } : {}),
-          });
+          };
+          // The bass follows the voicing rather than the level, so working out
+          // what sounded means voicing it first and asking afterwards.
+          const dry = voiceChord(chord, opts);
+          const v = voicingBass(chord, dry, d) ? voiceChord(chord, { ...opts, bass: true }) : dry;
           const key = v.all.join(',');
           heard.set(key, [...(heard.get(key) ?? []), style]);
         }
@@ -255,6 +259,28 @@ describe('naming the voicing', () => {
         }
       }
     }
+  });
+
+  it('states the root under every shape that does not state its own', () => {
+    // The chord symbol is printed in the prompt, so a rootless voicing with
+    // no bass shows a listener D minor 7 and plays them an F major triad.
+    let rootFree = 0;
+    for (let d = 1; d <= 5; d++) {
+      for (let seed = 0; seed < 30; seed++) {
+        const q = type.generate(context(d, seed * 211 + d));
+        if (!q) continue;
+        const perf = new FakePerformer();
+        q.play(perf.asPerformer());
+        const stack = perf.notes.filter((n) => n.instrument !== BASS_INSTRUMENT);
+        const bass = perf.notes.filter((n) => n.instrument === BASS_INSTRUMENT);
+        const lowest = Math.min(...stack.map((n) => n.midi));
+        if (mod(lowest, 12) === q.keyPc!) continue;
+        rootFree += 1;
+        expect(bass.length, `${d}#${seed}: root-free voicing with no bass`).toBeGreaterThan(0);
+        expect(mod(bass[0].midi, 12), `${d}#${seed}: the bass states the root`).toBe(q.keyPc!);
+      }
+    }
+    expect(rootFree, 'root-free shapes really do come up').toBeGreaterThan(30);
   });
 
   it('asks only about shapes the exercises can produce', () => {

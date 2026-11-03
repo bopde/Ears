@@ -7,10 +7,9 @@ import {
   qualityLabel, qualityPitchClasses, samePitchClasses, slashSymbol,
   type Chord, type ChordQuality,
 } from '../music/chords';
-import { inversionByIndex } from '../music/inversions';
-import { inversionIndex } from '../music/voicing';
+import { namedInversion } from '../music/inversions';
 import { mod } from '../lib/util';
-import { arpeggiate, voiceChord, type VoicingStyle } from '../music/voicing';
+import { arpeggiate, isRootFree, voiceChord, type VoicingStyle } from '../music/voicing';
 import { chooseVoicing, voicingBass, voicingLabelFor } from './voicing-plan';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
@@ -32,18 +31,41 @@ function enabledQualities(settings: PracticeSettings): ChordQuality[] {
  *
  * This is the real difficulty lever for chord recognition: a root-position
  * close voicing with a bass note underneath hands you the root and the stack,
- * while a rootless inversion with no bass makes you hear the chord itself.
+ * while an inversion over a bass makes you hear the chord itself.
  * The styles come from the shared curve, so what a chord question offers and
  * what a progression question offers move together.
  */
-function voicingPlan(ctx: GenContext): { style: VoicingStyle; bass: boolean; maxNotes: number } {
+function voicingPlan(ctx: GenContext): { style: VoicingStyle; maxNotes: number } {
   const difficulty = clamp(Math.round(ctx.difficulty), 1, 5);
   const style = chooseVoicing(ctx.rng, ctx.settings.voicingMode, difficulty, ctx.voicingFocus);
-  return {
-    style,
-    bass: voicingBass(style, difficulty) && ctx.rng.chance(difficulty <= 2 ? 1 : 0.7),
-    maxNotes: difficulty <= 1 ? 4 : 5,
-  };
+  return { style, maxNotes: difficulty <= 1 ? 4 : 5 };
+}
+
+/**
+ * Voices the chord, then decides about the bass, then voices it again.
+ *
+ * Which way round that goes is the point. Whether the root needs stating
+ * depends on where the voicing put its lowest note, and that is not known
+ * until the voicing exists — so the bass cannot be chosen from the style
+ * alone, which is how a rootless chord came to be played with no root
+ * anywhere in it. The second call is free of randomness and sees the same
+ * inputs, so it returns the same stack with a bass attached.
+ */
+function voiceWithBass(
+  ctx: GenContext,
+  chord: Chord,
+  style: VoicingStyle,
+  maxNotes: number,
+): ReturnType<typeof voiceChord> {
+  const opts = { style, maxNotes, rootPosition: style === 'close' };
+  const dry = voiceChord(chord, opts);
+  const difficulty = clamp(Math.round(ctx.difficulty), 1, 5);
+  // Where the root is already underneath, the bass merely doubles it, and the
+  // curve thins that out as the levels rise. Where it is not, it is not a
+  // choice: see `voicingBass`.
+  const wanted = voicingBass(chord, dry, difficulty) &&
+    (isRootFree(chord, dry) || ctx.rng.chance(difficulty <= 2 ? 1 : 0.7));
+  return wanted ? voiceChord(chord, { ...opts, bass: true }) : dry;
 }
 
 function soundingPitchClasses(voicing: ReturnType<typeof voiceChord>): Set<PitchClass> {
@@ -89,12 +111,7 @@ interface ChordMaterial {
 function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): ChordMaterial {
   const chord = makeChord(rootPc, quality.id);
   const plan = voicingPlan(ctx);
-  const voicing = voiceChord(chord, {
-    style: plan.style,
-    bass: plan.bass,
-    maxNotes: plan.maxNotes,
-    rootPosition: plan.style === 'close',
-  });
+  const voicing = voiceWithBass(ctx, chord, plan.style, plan.maxNotes);
   // The same chord stacked from its root with the root underneath: what the
   // voicing was dressing up, offered after the answer.
   const plain = voiceChord(chord, { style: 'close', rootPosition: true, bass: true, maxNotes: 5 });
@@ -141,9 +158,13 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
 /**
  * What actually sounded.
  *
- * Several of the voicing styles turn the chord over, so the heading uses slash
- * notation and the detail names the inversion — otherwise the reveal reports
- * less than the ear was given.
+ * Two things here are easy to get wrong and both were. An inversion is named
+ * only when the voicing contains the root to be inverted: a rootless chord
+ * has no root, so "first inversion" describes nothing, and the 3rd at the
+ * bottom of one is not a chord turned over but a note the voicing leaves to
+ * the bass. And a slash is written only when a bass note actually sounds and
+ * is not the root — with a root bass under a rootless stack, "Dm7/F" would
+ * name an F that no longer has the bottom of anything.
  */
 function revealFor(
   chord: Chord,
@@ -151,13 +172,14 @@ function revealFor(
   style: VoicingStyle,
   accidental: PracticeSettings['accidental'],
 ) {
-  const bassPc = mod(voicing.all[0], 12);
-  const inverted = inversionByIndex(inversionIndex(chord, voicing));
-  const named = inverted && inverted.index > 0 ? inverted : undefined;
+  const named = namedInversion(chord, voicing);
   const parts = [chordFullName(chord, accidental), voicingLabelFor(style, voicing.form)];
   if (named) parts.splice(1, 0, named.name);
+  const slashPc = voicing.bass !== undefined && mod(voicing.bass, 12) !== mod(chord.rootPc, 12)
+    ? mod(voicing.bass, 12)
+    : chord.rootPc;
   return {
-    heading: slashSymbol(chord, bassPc, accidental),
+    heading: slashSymbol(chord, slashPc, accidental),
     detail: parts.join('  \u00b7  '),
     // The degrees say what the voicing is; the note names say what it was.
     notes: `${voicing.all.map((m) => midiName(m, accidental)).join('  ')}` +

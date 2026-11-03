@@ -5,7 +5,9 @@ import {
   type Chord, type ChordQuality,
 } from '../music/chords';
 import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
-import { NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingLabel } from './voicing-plan';
+import {
+  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingLabel, voicingLabelFor,
+} from './voicing-plan';
 import { Performer, polyphonyGain } from '../audio/performer';
 import { midiName, pcNameDual, type PitchClass } from '../music/pitch';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
@@ -160,7 +162,9 @@ export const voicingExercise: ExerciseType = {
         },
       },
       reveal: {
-        heading: voicingLabel(target),
+        // The form is named here and nowhere in the options: which of the two
+        // rootless shapes played is worth knowing, and is not the question.
+        heading: voicingLabelFor(target, voicing.form),
         detail: `${chordSymbol(chord, ctx.settings.accidental)}  ·  ${chordDegrees(chord, voicing.notes).join(' ')}`,
         notes: voicing.all.map((m) => midiName(m, ctx.settings.accidental)).join('  '),
       },

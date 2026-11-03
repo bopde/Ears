@@ -14,11 +14,14 @@ export type VoicingStyle =
   /** Root position, tones close together. The clearest way to hear a chord. */
   | 'close'
   /**
-   * Any inversion in the right hand, spaced wide.
+   * All the chord tones in close position, in any inversion.
    *
-   * Written to sit over a separate bass note, which is what states the root:
-   * on its own the stack is as likely to be in third inversion as in root
-   * position, so the bass below it is doing the work.
+   * The same notes as `close`, packed the same way — `stack` builds both — and
+   * the only difference is which tone is at the bottom. Written to sit over a
+   * separate bass note, which is what states the root: on its own the stack is
+   * as likely to be in third inversion as in root position, so the bass below
+   * it is doing the work. The id stays `spread` because settings and stats are
+   * keyed by it.
    */
   | 'spread'
   /** Close voicing with the second voice from the top dropped an octave. */
@@ -92,6 +95,14 @@ export interface Voicing {
   /** Everything that sounds, ascending — convenience for the audio layer. */
   all: Midi[];
   style: VoicingStyle;
+  /**
+   * Which rootless shape this is, where it is one at all.
+   *
+   * Set only when the shape actually came out of `rootlessShape`: a triad has
+   * nothing to leave out, so a chord asked for rootless can come back as an
+   * ordinary stack, and calling that "form A" would be a lie.
+   */
+  form?: RootlessForm;
 }
 
 interface Tone {
@@ -367,10 +378,11 @@ export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing 
   // Three styles are fixed shapes rather than a stack to be searched: the
   // order of the notes is what makes them that voicing, so they are built as
   // ordered pitch classes and only their octave is chosen.
-  const shapes = shapesFor(chord, style, opts.rootlessForm ?? 'A', maxNotes, opts.tensions ?? false);
+  const form = opts.rootlessForm ?? 'A';
+  const shapes = shapesFor(chord, style, form, maxNotes, opts.tensions ?? false);
   if (shapes.length) {
     const fitted = fitShapes(shapes, lo, hi, opts.prev ?? []);
-    if (fitted) return withBass(fitted, style, chord, opts);
+    if (fitted) return withBass(fitted, style, chord, opts, style === 'rootless' ? form : undefined);
   }
 
   // Candidate bottom notes: each core tone as the lowest voice (i.e. each
@@ -459,12 +471,13 @@ function withBass(
   style: VoicingStyle,
   chord: Chord,
   opts: VoicingOptions,
+  form?: RootlessForm,
 ): Voicing {
   const bassPitch = mod(opts.bassPc ?? chord.rootPc, 12);
   const bass = opts.bass
     ? foldInto(bassPitch + 48, REGISTER.bass.lo, Math.min(REGISTER.bass.hi, notes[0] - 7))
     : undefined;
-  return { notes, bass, all: bass === undefined ? notes : [bass, ...notes], style };
+  return { notes, bass, all: bass === undefined ? notes : [bass, ...notes], style, form };
 }
 
 /** A shape and how much the engine would rather use it than a later one. */

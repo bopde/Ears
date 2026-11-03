@@ -17,8 +17,10 @@ import type { Rng } from '../lib/rng';
 export type VoicingMode = 'curve' | 'plain' | 'realistic';
 
 export const VOICING_MODES: Array<{ value: VoicingMode; label: string; blurb: string }> = [
-  { value: 'curve', label: 'Mixed', blurb: 'Plain at first, the way a pianist plays by the top levels.' },
-  { value: 'plain', label: 'Plain', blurb: 'Root position over a root bass, every time.' },
+  // "By level" rather than "Mixed": the note-name setting is already called
+  // that, and a settings screen with two Mixeds on it explains neither.
+  { value: 'curve', label: 'By level', blurb: 'Plain at first, the way a pianist plays by the top levels.' },
+  { value: 'plain', label: 'Root position only', blurb: 'Root position over a root bass, every time.' },
   { value: 'realistic', label: 'Realistic', blurb: 'Rootless and drop 2, the way you meet these chords on a stand.' },
 ];
 
@@ -72,6 +74,17 @@ export function voicingBass(style: VoicingStyle, difficulty: number): boolean {
 
 export const voicingLabel = (style: VoicingStyle): string =>
   CONCEPTS.resolve(voicingConceptId(style)).name;
+
+/**
+ * The same name, with the rootless form where there is one.
+ *
+ * Only for describing a voicing that has already sounded. Answer buttons use
+ * `voicingLabel`, because "Rootless A" and "Rootless B" are not two answers
+ * to the question of how a chord is voiced — they are the same answer, and
+ * offering both would make a correct one wrong half the time.
+ */
+export const voicingLabelFor = (style: VoicingStyle, form?: RootlessForm): string =>
+  form === undefined ? voicingLabel(style) : `${voicingLabel(style)} ${form}`;
 
 /** The styles a question can be asked about — the ones the curve can produce. */
 export const NAMEABLE_VOICINGS: VoicingStyle[] = ['close', 'spread', 'drop2', 'rootless', 'shell'];

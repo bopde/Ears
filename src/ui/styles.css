@@ -1156,6 +1156,14 @@ details.disclosure > div { padding-bottom: 1rem; }
   color: var(--fg);
 }
 
+/* Which rootless form a chord took, beside its symbol. */
+.refdegrees__form {
+  margin-left: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 560;
+  color: var(--fg-faint);
+}
+
 /* The degrees run to several chords, so they wrap rather than scroll. */
 .refsuggest__degrees {
   font-family: var(--mono);

@@ -156,7 +156,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
             ariaLabel="Note names"
             value={settings.accidental}
             options={[
-              { value: 'both' as Accidental, label: 'Mixed' },
+              { value: 'both' as Accidental, label: 'Sharps and flats' },
               { value: 'sharp' as Accidental, label: 'Sharps' },
               { value: 'flat' as Accidental, label: 'Flats' },
             ]}

@@ -7,15 +7,38 @@ import { INVERSIONS, inversionConcept } from './inversions';
 import { PITCH_CLASSES, pcNameDual, type PitchClass } from './pitch';
 import { VOICING_STYLES, type VoicingStyle } from './voicing';
 
-/** Display names, kept here so the music layer does not depend on the UI. */
-const VOICING_NAMES: Record<VoicingStyle, string> = {
+/**
+ * The one place a voicing is named, kept here so the music layer does not
+ * depend on the UI and so a style cannot be called two things in two screens.
+ *
+ * A name says which notes are in the voicing, how they are spaced and — only
+ * where that is the difference — what is at the bottom. It never says anything
+ * about voice leading or about the bass, because every style voice-leads
+ * through a progression and every style can be played over a bass; those are
+ * not what tells one shape from another. Tensions modify a voicing rather than
+ * define one, so they are not in the name either.
+ */
+export const VOICING_NAMES: Record<VoicingStyle, string> = {
   close: 'Close, root position',
-  spread: 'Spread',
+  // Not "Spread": the engine stacks these close (see `stack` in voicing.ts),
+  // and what distinguishes them from `close` is the inversion, not the spacing.
+  spread: 'Close, inversion',
   drop2: 'Drop 2',
   rootless: 'Rootless',
   shell: 'Shell',
   quartal: 'Quartal',
-  upperStructure: 'Upper structure',
+  upperStructure: 'Upper-structure triad',
+};
+
+/** The same names where a chip or a tab has no room for the full one. */
+export const VOICING_SHORT: Record<VoicingStyle, string> = {
+  close: 'Root pos.',
+  spread: 'Inversion',
+  drop2: 'Drop 2',
+  rootless: 'Rootless',
+  shell: 'Shell',
+  quartal: 'Quartal',
+  upperStructure: 'Upper str.',
 };
 
 /** Keys get concepts too, so the model can tell C major from G♭ major. */
@@ -51,7 +74,7 @@ export function voicingConcept(style: VoicingStyle): Concept {
     id: conceptId('voicing', style),
     kind: 'voicing',
     name: VOICING_NAMES[style],
-    short: VOICING_NAMES[style],
+    short: VOICING_SHORT[style],
     tier: VOICING_TIER[style] ?? 3,
     tags: ['voicing'],
   };

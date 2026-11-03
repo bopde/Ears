@@ -11,7 +11,7 @@ import { inversionByIndex } from '../music/inversions';
 import { inversionIndex } from '../music/voicing';
 import { mod } from '../lib/util';
 import { arpeggiate, voiceChord, type VoicingStyle } from '../music/voicing';
-import { chooseVoicing, voicingBass, voicingLabel } from './voicing-plan';
+import { chooseVoicing, voicingBass, voicingLabelFor } from './voicing-plan';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
 import { PITCH_CLASSES, midiName, pcName, pcNameDual, type PitchClass } from '../music/pitch';
@@ -154,7 +154,7 @@ function revealFor(
   const bassPc = mod(voicing.all[0], 12);
   const inverted = inversionByIndex(inversionIndex(chord, voicing));
   const named = inverted && inverted.index > 0 ? inverted : undefined;
-  const parts = [chordFullName(chord, accidental), voicingLabel(style)];
+  const parts = [chordFullName(chord, accidental), voicingLabelFor(style, voicing.form)];
   if (named) parts.splice(1, 0, named.name);
   return {
     heading: slashSymbol(chord, bassPc, accidental),

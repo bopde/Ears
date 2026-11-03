@@ -301,7 +301,7 @@ export function SessionScreen({
                   {/* The chord underneath the voicing: what you were listening
                       past. Only offered where the question voiced something. */}
                   {question.playPlain && (
-                    <Button onClick={() => engine.playPlain()}>Hear it plain</Button>
+                    <Button onClick={() => engine.playPlain()}>Hear in root position</Button>
                   )}
                   <Button variant="primary" onClick={() => engine.next()}>
                     Next

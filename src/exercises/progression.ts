@@ -114,6 +114,12 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
     // At the bottom of the curve "close" means root position, not merely
     // the tones packed together: the root has to be the note underneath.
     rootPosition: voicingStyle === 'close',
+    // And close position is the one style that stays plain, so the plainest
+    // setting and the first levels sound the chords and nothing else.
+    // Everywhere else the voicing may add what a pianist would: without this,
+    // the ii–V–I's G7 sounded no 9th in a question while the cheat sheet
+    // taught it with one.
+    tensions: voicingStyle !== 'close',
   });
   const changes = Performer.changes(realised, voicings);
   // Root position over a root bass: the changes with nothing on top of them.

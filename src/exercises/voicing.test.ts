@@ -239,24 +239,50 @@ describe('naming the voicing', () => {
           (c) => chordSymbol(makeChord(q.keyPc!, c.id), settings.accidental) === symbol,
         )!;
         const chord = makeChord(q.keyPc!, quality.id);
-        const heard = new Map<string, string[]>();
-        for (const option of q.fields[0].options) {
-          const style = option.id as VoicingStyle;
+        // Voicing one of these takes three decisions, and two of them are made
+        // once for the whole question rather than per shape: whether tensions
+        // are allowed, and which rootless form. Neither is readable from the
+        // outside, so they are recovered from the audio — the combination that
+        // reproduces the target's notes is the one the question used.
+        const perf = new FakePerformer();
+        q.play(perf.asPerformer());
+        // This exercise schedules note by note rather than as a chord, so the
+        // stack is read back off what was played.
+        const sounded = perf.notes.map((n) => n.midi).sort((a, b) => a - b).join(',');
+        const voiceAs = (style: VoicingStyle, tensions: boolean, form: 'A' | 'B') => {
           const opts = {
             style,
             maxNotes: 5,
+            tensions,
+            rootlessForm: form,
             ...(style === 'close' ? { bottomPc: chord.rootPc } : {}),
           };
-          // The bass follows the voicing rather than the level, so working out
-          // what sounded means voicing it first and asking afterwards.
           const dry = voiceChord(chord, opts);
-          const v = voicingBass(chord, dry, d) ? voiceChord(chord, { ...opts, bass: true }) : dry;
-          const key = v.all.join(',');
-          heard.set(key, [...(heard.get(key) ?? []), style]);
-        }
-        for (const [, styles] of heard) {
-          expect(styles.length, `${d}#${seed} ${styles.join(' and ')} sound the same`).toBe(1);
-        }
+          return voicingBass(chord, dry, d) ? voiceChord(chord, { ...opts, bass: true }) : dry;
+        };
+        const target = q.correct.voicing as VoicingStyle;
+        // Tensions are off below level 3, and above it either way is possible.
+        const colours = (d >= 3 ? [true, false] : [false])
+          .flatMap((t) => (['A', 'B'] as const).map((f) => [t, f] as const))
+          .filter(([t, f]) => voiceAs(target, t, f).all.join(',') === sounded);
+        expect(colours.length, `${d}#${seed}: nothing reproduces what sounded`).toBeGreaterThan(0);
+        // More than one colour can account for the same audio — a rootless
+        // ♯9 chord sounds the same whether or not tensions were allowed,
+        // because it already has a 9th of its own. So the check is that the
+        // options are distinct under *some* colour consistent with what was
+        // heard, which is the most the audio can pin down from outside.
+        const distinctUnder = ([t, f]: readonly [boolean, 'A' | 'B']) => {
+          const heard = new Map<string, string[]>();
+          for (const option of q.fields[0].options) {
+            const style = option.id as VoicingStyle;
+            const key = voiceAs(style, t, f).all.join(',');
+            heard.set(key, [...(heard.get(key) ?? []), style]);
+          }
+          return [...heard.values()].every((styles) => styles.length === 1);
+        };
+        const names = q.fields[0].options.map((o) => o.id).join(', ');
+        expect(colours.some(distinctUnder), `${d}#${seed}: ${names} cannot all sound different`)
+          .toBe(true);
       }
     }
   });

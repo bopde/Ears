@@ -112,7 +112,12 @@ interface Tone {
   essential: boolean;
 }
 
-function selectTones(chord: Chord, style: VoicingStyle, maxNotes: number): Tone[] {
+function selectTones(
+  chord: Chord,
+  style: VoicingStyle,
+  maxNotes: number,
+  tensions: boolean,
+): Tone[] {
   const q = chord.quality;
   const essential = new Set(q.essential ?? q.intervals.filter((i) => i !== 0 && i !== 7));
   let intervals = [...q.intervals];
@@ -122,6 +127,13 @@ function selectTones(chord: Chord, style: VoicingStyle, maxNotes: number): Tone[
   } else if (style === 'rootless' && intervals.length >= 4) {
     intervals = intervals.filter((i) => i !== 0);
   }
+
+  // The notes a pianist adds without being asked, where the caller allows
+  // them. They go on as 9ths and 13ths rather than 2nds and 6ths so the stack
+  // keeps them above the core, and they go on *before* the thinning below, so
+  // a chord that cannot hold them all sheds its 5th to make room — which is
+  // what a pianist does, and why these are worth adding at all.
+  if (tensions) intervals = [...intervals, ...tensionIntervals(chord)];
 
   // Thin from the droppable list first — the 5th is what a pianist leaves out.
   const droppable = [...(q.droppable ?? [7])];
@@ -161,17 +173,51 @@ const ninthOf = (c: Chord) => toneAt(c, (i) => i >= 13 && i <= 15);
  * only where there is no major 3rd for it to clash with, and a 13th only over
  * a dominant 7th that has not already flattened it.
  */
-function availablePcs(chord: Chord, tensions: boolean): Set<number> {
+export function tensionIntervals(chord: Chord): number[] {
   const iv = chord.quality.intervals;
-  const set = new Set(iv.map((i) => mod(chord.rootPc + i, 12)));
-  if (!tensions || iv.length < 4) return set;
-  const add = (semitones: number) => set.add(mod(chord.rootPc + semitones, 12));
-
-  if (ninthOf(chord) === undefined && !iv.some((i) => mod(i, 12) === 2)) add(2);
+  if (iv.length < 4) return [];
+  const out: number[] = [];
+  if (ninthOf(chord) === undefined && !iv.some((i) => mod(i, 12) === 2)) out.push(14);
   // A natural 11th over a major 3rd is the one note everyone agrees to avoid.
-  if (thirdOf(chord) === undefined || mod(thirdOf(chord)!, 12) === 3) add(5);
-  if (iv.some((i) => mod(i, 12) === 10) && !iv.some((i) => mod(i, 12) === 8)) add(9);
+  if (thirdOf(chord) === undefined || mod(thirdOf(chord)!, 12) === 3) out.push(17);
+  if (iv.some((i) => mod(i, 12) === 10) && !iv.some((i) => mod(i, 12) === 8)) out.push(21);
+  return out;
+}
+
+export function availablePcs(chord: Chord, tensions: boolean): Set<number> {
+  const set = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+  if (!tensions) return set;
+  for (const i of tensionIntervals(chord)) set.add(mod(chord.rootPc + i, 12));
   return set;
+}
+
+/**
+ * Whether this chord could have produced the notes that sounded.
+ *
+ * The test a listener actually faces, once voicings are allowed their
+ * tensions. Exact pitch-class equality was the old rule and it is too narrow
+ * in both directions: a rootless Dm7 sounds F A C E, which is not the set a
+ * Dm7 names, and it *is* the set an F major triad names with a 9th added. So
+ * a quality matches the ear when everything heard is a note it could play —
+ * its own tones plus the tensions a voicing of it would add — and when
+ * everything that makes it that quality was heard.
+ *
+ * Sharing this with the exercises is the point: the filter that drops
+ * ambiguous answers and the engine that builds the voicing have to agree
+ * about what a chord may sound, or the filter removes the wrong ones.
+ */
+export function couldSound(
+  chord: Chord,
+  sounding: ReadonlySet<number>,
+  tensions: boolean,
+): boolean {
+  const available = availablePcs(chord, tensions);
+  for (const pc of sounding) {
+    if (!available.has(mod(pc, 12))) return false;
+  }
+  const q = chord.quality;
+  const essential = q.essential ?? q.intervals.filter((i) => i !== 0 && i !== 7);
+  return essential.every((i) => sounding.has(mod(chord.rootPc + i, 12)));
 }
 
 /**
@@ -372,7 +418,7 @@ export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing 
   const lo = opts.lo ?? REGISTER.voicing.lo;
   const hi = opts.hi ?? REGISTER.voicing.hi;
   const maxNotes = opts.maxNotes ?? 5;
-  const tones = selectTones(chord, style, maxNotes);
+  const tones = selectTones(chord, style, maxNotes, opts.tensions ?? false);
   const core = tones.filter((t) => !t.upper);
 
   // Three styles are fixed shapes rather than a stack to be searched: the

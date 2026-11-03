@@ -299,6 +299,17 @@ describe('the output has headroom', () => {
     // in level — which is the old behaviour: turning the app up made it
     // dirtier rather than only louder.
     const compare = (full: Float32Array, half: Float32Array, what: string) => {
+      // The offline renderer has been seen to hand back nonsense once under
+      // load — values in the billions, from a chain that cannot exceed 1. Say
+      // so plainly if it happens again rather than reporting it as a gain
+      // staging fault, which is what the comparison below would call it.
+      for (const [name, data] of [['full', full], ['half', half]] as const) {
+        // A spread over 48,000 samples overflows the call stack.
+        let peak = 0;
+        for (const v of data) peak = Math.max(peak, Math.abs(v));
+        expect(Number.isFinite(peak) && peak <= 1, `${what}: the ${name} render is not audio (peak ${peak})`)
+          .toBe(true);
+      }
       let worst = 0;
       for (let i = 0; i < full.length; i++) worst = Math.max(worst, Math.abs(half[i] - full[i] / 2));
       expect(worst, `${what}: half volume is exactly half the signal`).toBeLessThan(1e-6);

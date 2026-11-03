@@ -5,7 +5,10 @@ import { defaultSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
 import { CONCEPTS } from '../music/catalog';
-import { isSymmetrical, qualityPitchClasses, requireChordQuality, samePitchClasses } from '../music/chords';
+import {
+  isSymmetrical, makeChord, requireChordQuality, samePitchClasses,
+} from '../music/chords';
+import { availablePcs, couldSound } from '../music/voicing';
 import { requireInterval } from '../music/intervals';
 import { requireScale, scalePitchClasses } from '../music/scales';
 import { realiseProgression, requireProgression } from '../music/progressions';
@@ -151,10 +154,16 @@ function checkChord(q: Question, perf: FakePerformer, where: string) {
   const quality = qualityOf(q);
   if (!quality || q.keyPc === null) return;
   const sounded = soundedPcs(perf);
-  const chordPcs = pcSet(q.keyPc, quality.intervals);
+  // The chord's own tones plus the tensions a voicing of it may add. Exact
+  // membership was the old test, and it was right while the exercises voiced
+  // everything plainly: now a rootless chord sounds its 9th, as a pianist
+  // plays it, so the question is whether a note *belongs* to the chord rather
+  // than whether the symbol lists it.
+  const playable = availablePcs(makeChord(q.keyPc, quality.id), true);
   for (const pc of sounded) {
-    if (!chordPcs.has(pc)) {
-      flag('chord: a note sounded that is not in the chord', `${where} ${quality.id} pc ${pc}`);
+    if (!playable.has(pc)) {
+      flag('chord: a note sounded that the chord could not be voiced with',
+        `${where} ${quality.id} pc ${pc}`);
     }
   }
   for (const tone of quality.essential ?? []) {
@@ -162,17 +171,19 @@ function checkChord(q: Question, perf: FakePerformer, where: string) {
       flag('chord: an essential tone was dropped', `${where} ${quality.id} missing +${tone}`);
     }
   }
-  // Could an offered alternative account for exactly these notes?
+  // Could an offered alternative account for these notes? Same rule the
+  // exercise's own filter uses, so this is a cross-check of that filter
+  // rather than a second, weaker opinion beside it.
   const field = q.fields.find((f) => f.key === 'quality');
   if (!field) return;
   for (const option of field.options) {
     if (option.id === q.correct.quality) continue;
     const other = requireChordQuality(option.id);
     const alt = PITCH_CLASSES.find((root) =>
-      samePitchClasses(qualityPitchClasses(other, root), sounded));
+      couldSound(makeChord(root, other.id), sounded, true));
     if (alt !== undefined) {
-      flag('answer: two offered qualities fit the notes exactly',
-        `${where} heard ${quality.id}/${q.keyPc}, but ${other.id}/${alt} is the same notes`);
+      flag('answer: two offered qualities fit the notes',
+        `${where} heard ${quality.id}/${q.keyPc}, but ${other.id}/${alt} fits them too`);
     }
   }
 }
@@ -231,10 +242,13 @@ function checkProgression(q: Question, perf: FakePerformer, where: string) {
   }
   let beat = 0;
   realised.forEach((r, i) => {
-    const chordPcs = pcSet(r.chord.rootPc, r.chord.quality.intervals);
+    // As in checkChord: the chord's own tones plus the tensions a voicing of
+    // it may add, because outside close position the exercises now voice
+    // these chords the way the cheat sheet teaches them.
+    const chordPcs = availablePcs(r.chord, true);
     for (const midi of perf.chords[i].notes) {
       if (!chordPcs.has(mod(midi, 12))) {
-        flag('progression: a chord sounded a note it does not contain',
+        flag('progression: a chord sounded a note it could not be voiced with',
           `${where} ${def.id} chord ${i + 1}`);
       }
     }

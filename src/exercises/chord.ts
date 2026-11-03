@@ -3,10 +3,11 @@ import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, pitchClassField, questionId,
 } from './support';
 import {
-  CHORD_QUALITIES, chordConceptId, chordDegrees, chordFullName, makeChord, nearestQualities,
-  qualityLabel, slashSymbol, spellInChord,
+  CHORD_QUALITIES, chordConceptId, chordFullName, makeChord, nearestQualities,
+  addedTensions, qualityLabel, slashSymbol,
   type Chord, type ChordQuality,
 } from '../music/chords';
+import { soundedChord } from '../audio/reference';
 import { namedInversion } from '../music/inversions';
 import { mod } from '../lib/util';
 import {
@@ -21,6 +22,15 @@ import { clamp } from '../lib/util';
 
 /** A reference pitch the user can measure everything else against. */
 const REFERENCE_PC = 0;
+
+/**
+ * What to tell a listener who hears a note the chord symbol does not name.
+ *
+ * Marking is by the written chord throughout: the extra notes belong to the
+ * voicing, and a learner who answers "m7" to a rootless Dm7 with a 9th on it
+ * has heard the chord correctly.
+ */
+const COLOUR_NOTE = 'Tensions may be added \u2014 name the basic quality.';
 
 function enabledQualities(settings: PracticeSettings): ChordQuality[] {
   const allowed = new Set(settings.chordQualities);
@@ -256,13 +266,22 @@ function revealFor(
   const slashPc = voicing.bass !== undefined && mod(voicing.bass, 12) !== mod(chord.rootPc, 12)
     ? mod(voicing.bass, 12)
     : chord.rootPc;
+  const added = addedTensions(chord, voicing.all);
   return {
     heading: slashSymbol(chord, slashPc, accidental),
     detail: parts.join('  \u00b7  '),
-    // The degrees say what the voicing is; the note names say what it was.
-    notes: `${voicing.all.map((m) => spellInChord(chord, m, accidental)).join('  ')}` +
-      `   \u2014   ${chordDegrees(chord, voicing.notes).join(' ')}`,
+    // What the voicing added on top of the chord as written. The question
+    // asked for the basic quality, so this says where the extra notes came
+    // from rather than leaving them to look like a wrong answer.
+    tag: added.length ? `played with ${formatList(added)}` : undefined,
+    played: soundedChord(chord, voicing, accidental),
   };
+}
+
+/** "9", "9 and 13", "9, ♯11 and 13". */
+export function formatList(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 export const chordQualityExercise: ExerciseType = {
@@ -288,7 +307,13 @@ export const chordQualityExercise: ExerciseType = {
       conceptIds: [chordConceptId(quality.id)],
       difficulty: ctx.difficulty,
       keyPc: rootPc,
-      prompt: { title: 'What quality is this chord?' },
+      prompt: {
+        title: 'What quality is this chord?',
+        // Said only where it is true, so it is never noise. Outside close
+        // position the voicing adds what a pianist would, and the answer is
+        // still the chord underneath: a Dm7 played with a 9th is a Dm7.
+        sub: material.tensions ? COLOUR_NOTE : undefined,
+      },
       fields: [
         {
           key: 'quality',
@@ -339,7 +364,10 @@ export const chordFullExercise: ExerciseType = {
       conceptIds: [chordConceptId(quality.id), keyConceptId(rootPc)],
       difficulty: ctx.difficulty,
       keyPc: rootPc,
-      prompt: { title: 'Name the chord', sub: 'Root, then quality' },
+      prompt: {
+        title: 'Name the chord',
+        sub: material.tensions ? `Root, then quality  \u00b7  ${COLOUR_NOTE}` : 'Root, then quality',
+      },
       fields: [
         pitchClassField('root', 'Root'),
         {

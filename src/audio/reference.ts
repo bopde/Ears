@@ -10,6 +10,7 @@ import {
 import {
   chordDegrees, chordSymbol, slashSymbol, spellInChord, type Chord,
 } from '../music/chords';
+import type { SoundedChord } from '../exercises/types';
 import { VOICING_NAMES, VOICING_SHORT } from '../music/catalog';
 import type { Accidental, Midi, PitchClass } from '../music/pitch';
 import { mod } from '../lib/util';
@@ -293,6 +294,25 @@ export function referenceNoteNames(
       degree: chordDegrees(chord.chord, [b.midi])[0],
     })),
     notes: chord.notes.map((m, i) => ({ name: name(m), degree: degrees[i] })),
+  };
+}
+
+/**
+ * What a voicing sounded, ready for a reveal to print.
+ *
+ * Shared by every question type that shows one, so the bass is separated the
+ * same way everywhere and the degrees always line up one-to-one with the
+ * right-hand notes beside them.
+ */
+export function soundedChord(
+  chord: Chord,
+  voicing: { notes: readonly Midi[]; bass?: Midi },
+  accidental: Accidental = 'both',
+): SoundedChord {
+  return {
+    bass: voicing.bass === undefined ? undefined : spellInChord(chord, voicing.bass, accidental),
+    notes: voicing.notes.map((m) => spellInChord(chord, m, accidental)),
+    degrees: chordDegrees(chord, voicing.notes),
   };
 }
 

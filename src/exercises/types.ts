@@ -29,11 +29,52 @@ export interface Hint {
   play(perf: Performer): number;
 }
 
+/**
+ * What one chord actually sounded, with the bass kept apart from the stack.
+ *
+ * The two are different things and listing them together said they were not:
+ * the names came from everything that sounded and the degrees from the right
+ * hand alone, so with a bass underneath there was one more name than degree
+ * and the reader had to work out which name had no degree. Naming the bass
+ * separately also happens to be the truth about the music — it is the voice
+ * that states the root, and what the hand plays above it is the voicing.
+ */
+export interface SoundedChord {
+  /** The bass note, where one sounded. */
+  bass?: string;
+  /** The right-hand notes, lowest first. */
+  notes: string[];
+  /** One degree per right-hand note, in the same order. */
+  degrees: string[];
+}
+
+/** One chord of a progression, as the reveal lists it. */
+export interface RevealRow {
+  /** The roman numeral, carrying the quality that played. */
+  roman: string;
+  symbol: string;
+  /** True for the chord a "name this one" question asked about. */
+  target?: boolean;
+  played: SoundedChord;
+}
+
 export interface Reveal {
   heading: string;
   detail: string;
   /** Extra line, e.g. the notes that sounded. */
   notes?: string;
+  /**
+   * A short note on what the voicing added — "played with 9".
+   *
+   * Only where something sounded that the chord symbol does not name, so its
+   * absence means the chord was played as written rather than meaning nobody
+   * checked.
+   */
+  tag?: string;
+  /** The single chord this question played, for the chord and voicing types. */
+  played?: SoundedChord;
+  /** One row per chord, for the progression types. Tap a row to open it. */
+  rows?: RevealRow[];
 }
 
 export interface Question {

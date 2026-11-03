@@ -176,11 +176,16 @@ const ninthOf = (c: Chord) => toneAt(c, (i) => i >= 13 && i <= 15);
 export function tensionIntervals(chord: Chord): number[] {
   const iv = chord.quality.intervals;
   if (iv.length < 4) return [];
+  // Never a note the chord already holds. As pitch classes that was harmless
+  // — a set absorbs the repeat — but as intervals to stack it doubled a note:
+  // a 7sus4 has a 4th in it already, and a 13 chord a 13th, and both were
+  // being handed one again an octave up.
+  const has = (semitones: number) => iv.some((i) => mod(i, 12) === mod(semitones, 12));
   const out: number[] = [];
-  if (ninthOf(chord) === undefined && !iv.some((i) => mod(i, 12) === 2)) out.push(14);
+  if (ninthOf(chord) === undefined && !has(2)) out.push(14);
   // A natural 11th over a major 3rd is the one note everyone agrees to avoid.
-  if (thirdOf(chord) === undefined || mod(thirdOf(chord)!, 12) === 3) out.push(17);
-  if (iv.some((i) => mod(i, 12) === 10) && !iv.some((i) => mod(i, 12) === 8)) out.push(21);
+  if ((thirdOf(chord) === undefined || mod(thirdOf(chord)!, 12) === 3) && !has(5)) out.push(17);
+  if (has(10) && !has(8) && !has(9)) out.push(21);
   return out;
 }
 

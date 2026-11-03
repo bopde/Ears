@@ -420,3 +420,20 @@ export const chordConceptId = (qualityId: string) => conceptId('chord', qualityI
 export function qualityIdFromConcept(id: string): string | null {
   return id.startsWith('chord:') ? id.slice('chord:'.length) : null;
 }
+
+/**
+ * The degrees a voicing sounded that the chord symbol does not name.
+ *
+ * What a reveal needs in order to say "played with 9" — and to say nothing
+ * where nothing was added, so the absence of the note means the chord was
+ * played as written rather than meaning nobody looked.
+ */
+export function addedTensions(chord: Chord, notes: readonly Midi[]): string[] {
+  const own = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+  const seen = new Set<string>();
+  for (const midi of notes) {
+    if (own.has(pcOf(midi))) continue;
+    seen.add(chordDegrees(chord, [midi])[0]);
+  }
+  return [...seen];
+}

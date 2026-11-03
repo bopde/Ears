@@ -1,9 +1,11 @@
 import type { ExerciseType, GenContext, Question } from './types';
 import { buildOptions, chooseKey, chooseTarget, optionCount, questionId, tempoFor } from './support';
 import {
-  CHORD_QUALITIES, chordDegrees, chordSymbol, makeChord, spellInChord,
+  CHORD_QUALITIES, addedTensions, chordSymbol, makeChord,
   type Chord, type ChordQuality,
 } from '../music/chords';
+import { soundedChord } from '../audio/reference';
+import { formatList } from './chord';
 import {
   voiceChord, voiceProgression, type RootlessForm, type Voicing, type VoicingStyle,
 } from '../music/voicing';
@@ -145,6 +147,7 @@ export const voicingExercise: ExerciseType = {
     }
     if (!chord || !voicing) return null;
 
+    const added = addedTensions(chord, voicing.all);
     const n = Math.min(optionCount(ctx.difficulty, offered.length), offered.length);
     const distractors = ctx.rng.sample(offered.filter((s) => s !== target), n - 1);
     const gain = polyphonyGain(voicing.all.length);
@@ -211,8 +214,9 @@ export const voicingExercise: ExerciseType = {
         // The form is named here and nowhere in the options: which of the two
         // rootless shapes played is worth knowing, and is not the question.
         heading: voicingLabelFor(target, voicing.form),
-        detail: `${chordSymbol(chord, ctx.settings.accidental)}  ·  ${chordDegrees(chord, voicing.notes).join(' ')}`,
-        notes: voicing.all.map((m) => spellInChord(chord!, m, ctx.settings.accidental)).join('  '),
+        detail: chordSymbol(chord, ctx.settings.accidental),
+        tag: added.length ? `played with ${formatList(added)}` : undefined,
+        played: soundedChord(chord, voicing, ctx.settings.accidental),
       },
       estimatedSeconds: 13 + ctx.difficulty,
     };

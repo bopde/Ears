@@ -8,6 +8,7 @@ import {
   type Chord, type ChordQuality,
 } from '../music/chords';
 import { soundedChord } from '../audio/reference';
+import { approachInto, chooseLever, playVoicing, type Lever } from './levers';
 import { namedInversion } from '../music/inversions';
 import { mod } from '../lib/util';
 import {
@@ -16,7 +17,7 @@ import {
 import { chooseVoicing, voicingBass, voicingLabelFor } from './voicing-plan';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
-import { PITCH_CLASSES, pcName, pcNameDual, type PitchClass } from '../music/pitch';
+import { PITCH_CLASSES, pcName, pcNameDual, type Midi, type PitchClass } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import { clamp } from '../lib/util';
 
@@ -54,6 +55,10 @@ interface VoicingPlan {
   form: RootlessForm;
   /** Whether to double a root that is already at the bottom of the stack. */
   doubleRoot: boolean;
+  /** What is made harder at the top of the curve, if anything. */
+  lever?: Lever;
+  /** The notes the bass walks in on, drawn here so a replay matches. */
+  walk?: Midi[];
 }
 
 function voicingPlan(ctx: GenContext): VoicingPlan {
@@ -67,6 +72,7 @@ function voicingPlan(ctx: GenContext): VoicingPlan {
     // the app was form A, and form B is half of what there is to learn.
     form: ctx.rng.chance(0.5) ? 'A' : 'B',
     doubleRoot: ctx.rng.chance(difficulty <= 2 ? 1 : 0.7),
+    lever: chooseLever(ctx.rng, difficulty),
   };
 }
 
@@ -199,6 +205,11 @@ function buildMaterial(
   // is what the rest of the question has to reason about.
   const allowed = tensions && plan.style !== 'close';
   const voicing = voiceWithBass(difficulty, chord, plan, allowed);
+  // Drawn once, here, rather than inside `play`: a replay has to sound like
+  // the first hearing, and the approach is part of what was heard.
+  const walk = plan.lever === 'walk-in' && voicing.bass !== undefined
+    ? approachInto(ctx.rng, voicing.bass)
+    : undefined;
   // The same chord stacked from its root with the root underneath: what the
   // voicing was dressing up, offered after the answer.
   const plain = voiceChord(chord, { style: 'close', rootPosition: true, bass: true, maxNotes: 5 });
@@ -221,11 +232,15 @@ function buildMaterial(
       }
       return 3.2;
     },
-    play: (perf) => {
-      const origin = perf.origin();
-      perf.chord(voicing, origin, 0, { beats: 4, roll, velocity: 0.7 });
-      return 4 * perf.beatSeconds;
-    },
+    // Above level 3 one thing is made harder, and never two: see levers.ts
+    // for why that is not the same as taking the bass away.
+    play: (perf) => playVoicing(perf, chord, voicing, {
+      lever: plan.lever,
+      walk,
+      roll,
+      seconds: 4 * perf.beatSeconds,
+      velocity: 0.7,
+    }),
     playReveal: (perf) => {
       const origin = perf.origin();
       const notes = arpeggiate(chord, 55);

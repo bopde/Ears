@@ -40,7 +40,9 @@ function flag(category: string, example: string) {
   findings.set(category, f);
 }
 
-const soundedPcs = (perf: FakePerformer) => new Set(perf.notes.map((n) => mod(n.midi, 12)));
+// `struck` rather than every note: an approach walking into a chord is a
+// line arriving, and its notes are outside the chord on purpose.
+const soundedPcs = (perf: FakePerformer) => new Set(perf.struck.map((n) => mod(n.midi, 12)));
 const pcSet = (root: number, intervals: readonly number[]) =>
   new Set(intervals.map((i) => mod(root + i, 12)));
 

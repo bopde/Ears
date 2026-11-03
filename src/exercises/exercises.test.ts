@@ -412,7 +412,9 @@ describe('chord reveals report the voicing they used', () => {
           const q = type.generate(context(difficulty, seed * 379 + difficulty))!;
           const perf = new FakePerformer();
           q.play(perf.asPerformer());
-          const lowest = Math.min(...perf.notes.map((n) => n.midi));
+          // The approach notes of a walking-in bass are below the root by
+          // design; what has to state the root is the chord as it strikes.
+          const lowest = Math.min(...perf.struck.map((n) => n.midi));
           const rootPc = q.keyPc!;
           expect(mod(lowest, 12), `${type.id} at level ${difficulty}, seed ${seed}`).toBe(rootPc);
           expect(q.reveal.heading, `${type.id} heading`).not.toMatch(/\/[A-G]/);

@@ -216,8 +216,8 @@ describe('every question says how it was voiced, and offers it plain', () => {
         const perf = new FakePerformer();
         q.playPlain(perf.asPerformer());
         expect(perf.notes.length, `${id} plays something plain`).toBeGreaterThan(0);
-        const stack = perf.notes.filter((n) => n.instrument !== BASS_INSTRUMENT);
-        const bass = perf.notes.filter((n) => n.instrument === BASS_INSTRUMENT);
+        const stack = perf.struck.filter((n) => n.instrument !== BASS_INSTRUMENT);
+        const bass = perf.struck.filter((n) => n.instrument === BASS_INSTRUMENT);
         expect(bass.length, `${id} has a bass under it`).toBeGreaterThan(0);
         // Every chord is stacked from its root: the lowest note of the stack
         // at any moment shares its pitch class with the bass under it.
@@ -254,9 +254,9 @@ describe('naming the voicing', () => {
         // reproduces the target's notes is the one the question used.
         const perf = new FakePerformer();
         q.play(perf.asPerformer());
-        // This exercise schedules note by note rather than as a chord, so the
-        // stack is read back off what was played.
-        const sounded = perf.notes.map((n) => n.midi).sort((a, b) => a - b).join(',');
+        // `struck` rather than every note: above level 3 the bass may walk
+        // into the chord, and those approach notes are not part of it.
+        const sounded = perf.struck.map((n) => n.midi).sort((a, b) => a - b).join(',');
         const voiceAs = (style: VoicingStyle, tensions: boolean, form: 'A' | 'B') => {
           const opts = {
             style,
@@ -305,8 +305,8 @@ describe('naming the voicing', () => {
         if (!q) continue;
         const perf = new FakePerformer();
         q.play(perf.asPerformer());
-        const stack = perf.notes.filter((n) => n.instrument !== BASS_INSTRUMENT);
-        const bass = perf.notes.filter((n) => n.instrument === BASS_INSTRUMENT);
+        const stack = perf.struck.filter((n) => n.instrument !== BASS_INSTRUMENT);
+        const bass = perf.struck.filter((n) => n.instrument === BASS_INSTRUMENT);
         const lowest = Math.min(...stack.map((n) => n.midi));
         if (mod(lowest, 12) === q.keyPc!) continue;
         rootFree += 1;

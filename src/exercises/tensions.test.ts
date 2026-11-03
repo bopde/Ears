@@ -163,7 +163,7 @@ describe('the exercises sound the chord a pianist would play', () => {
           if (!q) continue;
           const perf = new FakePerformer();
           q.play(perf.asPerformer());
-          const sounded = new Set(perf.notes.map((n) => mod(n.midi, 12)));
+          const sounded = new Set(perf.struck.map((n) => mod(n.midi, 12)));
           const field = q.fields.find((f) => f.key === 'quality')!;
           if (field.options.length < 2) continue;
           for (const option of field.options) {

@@ -32,6 +32,16 @@ export interface ChordPlayOptions {
   /** Spread the voices across the stereo field by pitch. */
   spread?: number;
   instrument?: string;
+  /**
+   * Particular voices played softer, by pitch class.
+   *
+   * A pianist leans on some notes of a chord and lets others sit back, and a
+   * voice that sits back is harder to name. `to` is the share of the chord's
+   * velocity those notes keep.
+   */
+  soften?: { pcs: readonly number[]; to: number };
+  /** Velocity for the bass note, where the usual balance is not wanted. */
+  bassVelocity?: number;
 }
 
 const LOOKAHEAD = 0.09;
@@ -410,18 +420,20 @@ export class Performer {
     const voices = notes.length + (voicing.bass === undefined ? 0 : 1);
     const gain = polyphonyGain(voices);
 
+    const soften = new Set((opts.soften?.pcs ?? []).map((pc) => mod(pc, 12)));
     notes.forEach((midi, i) => {
       const pan = hi > lo ? ((midi - lo) / (hi - lo) - 0.5) * 2 * spread : 0;
+      const held = soften.has(mod(midi, 12)) ? (opts.soften?.to ?? 1) : 1;
       this.note(
         midi,
         base + roll * i + this.jitter(),
         seconds,
-        (opts.velocity ?? 0.68) * (i === 0 ? 1 : 0.94),
+        (opts.velocity ?? 0.68) * (i === 0 ? 1 : 0.94) * held,
         { instrument: opts.instrument, pan, gain },
       );
     });
     if (voicing.bass !== undefined) {
-      this.note(voicing.bass, base + this.jitter(), seconds, 0.72, {
+      this.note(voicing.bass, base + this.jitter(), seconds, opts.bassVelocity ?? 0.72, {
         instrument: BASS_INSTRUMENT,
         gain,
       });

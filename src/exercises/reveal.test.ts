@@ -21,8 +21,8 @@ const context = (difficulty: number, seed: number): GenContext => ({
 
 /** Every note the question scheduled, bass apart from the rest. */
 function heard(perf: FakePerformer) {
-  const bass = perf.notes.filter((n) => n.instrument === BASS_INSTRUMENT).map((n) => n.midi);
-  const stack = perf.notes.filter((n) => n.instrument !== BASS_INSTRUMENT).map((n) => n.midi);
+  const bass = perf.struck.filter((n) => n.instrument === BASS_INSTRUMENT).map((n) => n.midi);
+  const stack = perf.struck.filter((n) => n.instrument !== BASS_INSTRUMENT).map((n) => n.midi);
   return { bass, stack: [...new Set(stack)].sort((a, b) => a - b) };
 }
 
@@ -96,7 +96,7 @@ describe('a reveal describes what was played', () => {
           const chord = makeChord(q.keyPc!, qualityId);
           const perf = new FakePerformer();
           q.play(perf.asPerformer());
-          const added = addedTensions(chord, perf.notes.map((n) => n.midi));
+          const added = addedTensions(chord, perf.struck.map((n) => n.midi));
           if (!added.length) {
             untagged += 1;
             expect(q.reveal.tag, `${id}@${d}#${seed}: nothing was added`).toBeUndefined();

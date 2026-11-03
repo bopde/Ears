@@ -12,7 +12,8 @@ import {
 import {
   NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingBass, voicingLabel, voicingLabelFor,
 } from './voicing-plan';
-import { Performer, polyphonyGain } from '../audio/performer';
+import { Performer } from '../audio/performer';
+import { approachInto, chooseLever, playVoicing } from './levers';
 import { pcNameDual, type PitchClass } from '../music/pitch';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { voicingConceptId } from '../music/catalog';
@@ -150,16 +151,20 @@ export const voicingExercise: ExerciseType = {
     const added = addedTensions(chord, voicing.all);
     const n = Math.min(optionCount(ctx.difficulty, offered.length), offered.length);
     const distractors = ctx.rng.sample(offered.filter((s) => s !== target), n - 1);
-    const gain = polyphonyGain(voicing.all.length);
 
-    const sound = (perf: Performer, roll: number) => {
-      const origin = perf.origin();
-      voicing.notes.forEach((midi, i) => perf.note(midi, origin + i * roll, 3.2, 0.68, { gain }));
-      if (voicing.bass !== undefined) {
-        perf.note(voicing.bass, origin, 3.2, 0.72, { instrument: 'bass', gain });
-      }
-      return 3.4 + roll * voicing.notes.length;
-    };
+    // One thing made harder above level 3, drawn here so a replay sounds like
+    // the first hearing. The reveal plays it plainly: the point of hearing it
+    // again is the shape, which is what the lever was in the way of.
+    const lever = chooseLever(ctx.rng, level);
+    const walk = lever === 'walk-in' && voicing.bass !== undefined
+      ? approachInto(ctx.rng, voicing.bass)
+      : undefined;
+    const sound = (perf: Performer, roll: number, hard: boolean) => playVoicing(
+      perf,
+      chord!,
+      voicing!,
+      { lever: hard ? lever : undefined, walk, roll, seconds: 3.2, velocity: 0.68 },
+    );
 
     return {
       id: questionId('voicing'),
@@ -189,18 +194,13 @@ export const voicingExercise: ExerciseType = {
       voicing: target,
       // Struck as a block: a rolled chord would give the spacing away by
       // laying the notes out one at a time.
-      play: (perf) => sound(perf, 0.008),
-      playReveal: (perf) => sound(perf, 0.16),
+      play: (perf) => sound(perf, 0.008, true),
+      playReveal: (perf) => sound(perf, 0.16, false),
       playPlain: (perf) => {
-        // Plain means plain: no tensions, whatever the question used.
+        // Plain means plain: no tensions and no lever, whatever the question
+        // used. This is the chord underneath, not the question again.
         const plain = voiceIn(chord!, 'close', { difficulty: 1, tensions: false, form: 'A' });
-        const origin = perf.origin();
-        const g = polyphonyGain(plain.all.length);
-        plain.notes.forEach((midi) => perf.note(midi, origin, 3, 0.66, { gain: g }));
-        if (plain.bass !== undefined) {
-          perf.note(plain.bass, origin, 3, 0.72, { instrument: 'bass', gain: g });
-        }
-        return 3.2;
+        return playVoicing(perf, chord!, plain, { roll: 0, seconds: 3, velocity: 0.66 });
       },
       hint: {
         label: 'Bottom of the chord',

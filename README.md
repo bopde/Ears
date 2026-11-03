@@ -128,11 +128,20 @@ builds the app and deploys it on every push to `main`.
    and still hear it as a chord.
 
    ii. The **Voicing** selector above the list decides how all of them are
-   played: *Root position* (the default), *Voice led*, *Shell*, *Rootless*,
-   *Drop 2*, *Quartal* or *Upper structure*. Root position stacks every chord plainly from its root with the
-   root doubled underneath and nothing moving down there, so you can learn
-   the reference sound of a chord before meeting the ways a pianist disguises
-   it. The choice is remembered.
+   played: *Close, root position* (the default), *Close, inversion*, *Shell*,
+   *Rootless*, *Drop 2*, *Quartal* or *Upper-structure triad*. Root position
+   stacks every chord plainly from its root with the root doubled underneath
+   and nothing moving down there, so you can learn the reference sound of a
+   chord before meeting the ways a pianist disguises it. The choice is
+   remembered.
+
+   A name here says which notes are in the voicing, how they are spaced and
+   — only where that is the difference — what is at the bottom. It never says
+   anything about voice leading, because every mode on this page voice-leads;
+   the sheet says so once, under the selector, rather than naming one mode
+   after it. The names come from `VOICING_NAMES` in `src/music/catalog.ts`,
+   which is also where a question gets them, so a style cannot be called one
+   thing on the sheet and another in a quiz.
 
    iii. Each set of changes carries the voicing a player would reach for, named
    and then shown rather than explained: *Rootless · ♭3 5 ♭7 9 · ♭7 9 3 5 ·
@@ -168,9 +177,12 @@ builds the app and deploys it on every push to `main`.
    a hint so the root can be found by ear rather than by absolute pitch.
 
    c. **Inversions** — a triad or seventh sounds with one of its notes in the
-   bass. Name the inversion. The answer is written as a slash chord, and the
-   chord exercises do the same whenever their voicing turned the chord over, so
-   a reveal never reports less than the ear was given.
+   bass. Name the inversion. The answer is written as a slash chord. A chord
+   question writes one only where a bass note sounds and is not the root —
+   with a root bass under a rootless stack, "Dm7/F" would name an F that no
+   longer has the bottom of anything — and a voicing with no root in it is
+   never called an inversion at all, because there is no root in it to turn
+   over.
 
    d. **Intervals** — ascending, descending or harmonic, simple or compound.
 
@@ -201,12 +213,20 @@ builds the app and deploys it on every push to `main`.
    four notes, and then there are two right answers.
 
    j. **Guide tones** — a progression plays; follow the line the 3rds and 7ths
-   make through it. The reveal of a changes question also names the root
-   motion — *Bass falls a fifth, then rises a fourth* — taken from the bass
-   notes that were scheduled, so it cannot describe something other than what
-   played. The wrong answers are the same line with one or two notes
+   make through it. The wrong answers are the same line with one or two notes
    moved to the other guide tone of that chord, so the only way to reject one
    is to have followed the voice the whole way.
+
+   k. **Every reveal says what was played, not what was asked.** A chord
+   question lists the bass on its own line above the stack, because they are
+   different voices and listing them together meant one more name than degree;
+   the degrees sit under the names so the two read as columns. A changes
+   question gives a row per chord, numeral beside symbol, each opening on a
+   tap to show its notes and degrees — read off the voicings that were
+   scheduled, so a row cannot describe something else. The name-one-chord
+   question shows the same rows with the one it asked about marked. The root
+   motion — *Bass falls a fifth, then rises a fourth* — is taken from the bass
+   notes that were scheduled, for the same reason.
 
 ### 4.1 Questions it will not ask
 
@@ -242,9 +262,15 @@ generates several thousand questions and fails the build if either reappears.
 
    ii. Each chord question compares the pitch classes it is about to sound
    against every quality in the pool, rooted on all twelve degrees, and removes
-   any that reproduces the set exactly. Only the quality that was actually
-   played survives. The answer itself is never filtered out, and if the pool
-   were ever reduced below two the unfiltered pool is used instead.
+   any that **could** have sounded them — everything heard is a note it could
+   play, and everything that makes it that quality was heard. Exact equality
+   was the old test and it is too narrow now that voicings add their tensions:
+   a rootless Dm7 sounds F A C E, which no quality names exactly and which an
+   F major triad with a 9th names perfectly. The rule lives in `couldSound` in
+   `src/music/voicing.ts` and is shared with the engine that builds the
+   voicing, so the filter and the engine cannot disagree about what a chord
+   may sound. The answer itself is never filtered out, and if the pool were
+   ever reduced below two the unfiltered pool is used instead.
 
    c. **One ambiguity is deliberately kept.** Aeolian and Phrygian differ in a
    single note — the second degree — and a generated line that happens not to
@@ -266,12 +292,30 @@ to do:
    b. **More alternatives.** Four choices at level 1, eight at level 5.
 
    c. **Thinner voicings.** Level 1 is a rolled, root-position close voicing
-   with a bass note underneath. Level 5 is a rootless inversion with no root
-   anywhere — you hear the chord rather than the stack. Chord questions and
-   changes questions draw on the same curve, in `src/exercises/voicing-plan.ts`,
-   so the two move together. Settings → Display → *Voicings* overrides it:
-   *Plain* is root position whatever the level, *Realistic* is rootless and
-   drop 2 from the start, and *Mixed* is the curve.
+   with a bass note underneath. Level 5 is a rootless inversion — you hear the
+   chord rather than the stack. Chord questions and changes questions draw on
+   the same curve, in `src/exercises/voicing-plan.ts`, so the two move
+   together. Settings → Display → *Voicings* overrides it: *Root position
+   only* whatever the level, *Realistic* for rootless and drop 2 from the
+   start, and *By level* for the curve.
+
+   i. The root is audible at every level. A voicing whose lowest note is not
+   the root does not state it, so one is put underneath — a rootless Dm7
+   without a bass is F A C E, an F major triad with a 9th on it, and "minor
+   7th" is not a defensible answer to what sounded. Where the root is already
+   at the bottom the bass only doubles it, and the curve thins that out above
+   level 3.
+
+   ii. From level 4 one thing is made harder instead, drawn per question and
+   never two at once: the 3rd and 7th played softer, so the notes that say
+   what the chord is have to be dug out; a bass that walks in and lands on
+   the root as the chord strikes; or a bass further under the chord than
+   usual. `src/exercises/levers.ts`.
+
+   iii. From level 4 a set of changes is also comped the way that set of
+   changes is comped — rootless on a ii–V–I, shell on a blues, quartal on
+   modal changes — which the cheat sheet has always shown and the questions
+   used to ignore.
 
    d. **More in the bass.** Levels 1 and 2 play one held root per chord, so
    the root motion is all there is to hear. Level 3 adds the fifth. Levels 4
@@ -408,16 +452,35 @@ chord questions without being told to.
    chord is named for; where it cannot, the engine falls back rather than play
    something else under the name.
 
-   h. The 9th a pianist adds to every rootless voicing is off by default. It is
-   right at a piano and wrong in a question — a rootless Dm7 voiced F A C E
-   sounds a 9th, and "m7" stops being the only defensible answer — so the
-   cheat sheet asks for it and the exercises do not.
+   h. The 9th a pianist adds to every rootless voicing is on everywhere except
+   close position. It was off in the exercises, which meant the cheat sheet
+   taught a rootless Dm7 as F A C E and a question played F A C — an F major
+   triad — and called it the same voicing. Close position stays plain, so the
+   *Root position only* setting and the first level sound exactly what they
+   always did; everywhere else the voicing adds what a pianist would, and the
+   answer is still the chord underneath. The questions say so under the
+   prompt, and the reveal tags what was added: *played with 9*.
 
-   i. `src/exercises/` — one module per exercise type, each implementing the
+   i. In the voicing quiz the colour is drawn once per question and applied to
+   every candidate shape, close included. Per shape it would be the tell:
+   hear a 9th, answer rootless.
+
+   j. A note outside the chord is named for what it is doing in it. Above a
+   seventh the stack keeps going, so 9 semitones over a dominant is a 13th
+   rather than a 6th and 3 are a ♯9 rather than a ♭3 that would contradict
+   the major 3rd below. Under a triad there is no seventh to extend past, and
+   9, 4 and 6 are what they are. Each note is then spelled from the root's
+   letter plus the degree's number — the ♭9 of G is A♭, the ♯9 of C is D♯ —
+   so the letter on screen always agrees with the degree beside it. Where
+   that asks for a double accidental or one of F♭, C♭, E♯ and B♯, the plain
+   enharmonic is used instead: those four are the only names whose octave
+   number stops agreeing with the pitch.
+
+   k. `src/exercises/` — one module per exercise type, each implementing the
    `ExerciseType` interface. A question carries its own audio, its own hint and
    its own reveal, so the session engine never special-cases a type.
 
-   j. `src/learning/` — the skill model, the adaptive selector, local
+   l. `src/learning/` — the skill model, the adaptive selector, local
    persistence and the statistics behind the progress screen.
 
    k. `src/session/` — the session state machine. Questions are generated one at

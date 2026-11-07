@@ -1,7 +1,7 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
 import {
-  LETTERS, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
+  letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
   type Accidental, type Midi, type PitchClass,
 } from './pitch';
 import { mod } from '../lib/util';
@@ -228,14 +228,35 @@ export function romanSuffix(quality: ChordQuality): string {
 export interface Chord {
   rootPc: PitchClass;
   quality: ChordQuality;
+  /**
+   * How the root is written, where something knows.
+   *
+   * A pitch class cannot say whether it is a C♯ or a D♭; a key and a numeral
+   * together can, and a progression has both. Absent on a chord that stands
+   * on its own — a chord-quality question is in no key, so there is nothing
+   * to spell it against and the conventional name is the honest answer.
+   */
+  root?: string;
 }
 
-export function makeChord(rootPc: PitchClass, qualityId: string): Chord {
-  return { rootPc: mod(rootPc, 12), quality: requireChordQuality(qualityId) };
+export function makeChord(rootPc: PitchClass, qualityId: string, root?: string): Chord {
+  return { rootPc: mod(rootPc, 12), quality: requireChordQuality(qualityId), root };
+}
+
+/**
+ * The root as this chord is written.
+ *
+ * An explicit sharps-only or flats-only setting beats the key: someone who
+ * has asked to see flats has asked for all of them. On the default setting
+ * the key decides, and where no key does, the conventional name stands.
+ */
+export function chordRootName(chord: Chord, pref: Accidental = 'both'): string {
+  if (pref !== 'both') return pcName(chord.rootPc, pref);
+  return chord.root ?? pcName(chord.rootPc, 'both');
 }
 
 export function chordSymbol(chord: Chord, pref: Accidental = 'both'): string {
-  return `${pcName(chord.rootPc, pref)}${chord.quality.symbol}`;
+  return `${chordRootName(chord, pref)}${chord.quality.symbol}`;
 }
 
 /**
@@ -250,13 +271,16 @@ export function slashSymbol(
   pref: Accidental = 'both',
 ): string {
   const bass = mod(bassPc, 12);
+  // The bass spelled against the chord rather than from the neutral table:
+  // the G♯ of a C♯m7 is a chord tone and has to be written as one, or the
+  // symbol reads C♯m7/A♭ and names a note the chord does not contain.
   return bass === chord.rootPc
     ? chordSymbol(chord, pref)
-    : `${chordSymbol(chord, pref)}/${pcName(bass, pref)}`;
+    : `${chordSymbol(chord, pref)}/${spellInChord(chord, 60 + bass, pref).replace(/-?\d+$/, '')}`;
 }
 
 export function chordFullName(chord: Chord, pref: Accidental = 'both'): string {
-  return `${pcName(chord.rootPc, pref)} ${chord.quality.name}`;
+  return `${chordRootName(chord, pref)} ${chord.quality.name}`;
 }
 
 /**
@@ -332,7 +356,7 @@ export function chordDegrees(chord: Chord, notes: readonly Midi[]): string[] {
 export function spellInChord(chord: Chord, midi: Midi, pref: Accidental = 'both'): string {
   const degree = chordDegrees(chord, [midi])[0];
   const number = Number(degree.replace(/[^0-9]/g, ''));
-  const letter = LETTERS.indexOf(pcName(chord.rootPc, pref)[0] as typeof LETTERS[number]);
+  const letter = letterIndexOf(chordRootName(chord, pref));
   const spelled = Number.isFinite(number) && number > 0 && letter >= 0
     ? spellOnLetter(pcOf(midi), letter + number - 1)
     : null;
@@ -341,6 +365,20 @@ export function spellInChord(chord: Chord, midi: Midi, pref: Accidental = 'both'
 
 export function chordTones(chord: Chord, rootMidi: Midi): Midi[] {
   return chord.quality.intervals.map((i) => rootMidi + i);
+}
+
+/**
+ * A chord's own tones, each spelled for the degree it is.
+ *
+ * Not by pitch class: the 3rd of a B major 7th is a D♯, because a third is
+ * two letters above B, and printing E♭ beside a chord called B∆7 asks the
+ * reader to translate it before they can play it. Stacked from the chord's
+ * own root — `chordTones` takes the root's pitch, not an octave to build in,
+ * which is a mistake worth only making once.
+ */
+export function chordToneNames(chord: Chord, pref: Accidental = 'both'): string[] {
+  return chordTones(chord, 60 + chord.rootPc)
+    .map((midi) => spellInChord(chord, midi, pref).replace(/-?\d+$/, ''));
 }
 
 export function chordPitchClasses(chord: Chord): PitchClass[] {

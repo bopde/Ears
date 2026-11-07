@@ -1,7 +1,7 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
 import { makeChord, requireChordQuality, romanSuffix, type Chord } from './chords';
-import type { PitchClass } from './pitch';
+import { keyName, letterIndexOf, spellOnLetter, type PitchClass } from './pitch';
 import type { VoicingStyle } from './voicing';
 import { mod } from '../lib/util';
 
@@ -274,6 +274,54 @@ export function romanLabel(chord: ProgressionChord): string {
     : chord.numeral.slice(0, slash) + suffix + chord.numeral.slice(slash);
 }
 
+/** How far up the letters each numeral sits: I is 0, VII is 6. */
+const NUMERAL_STEPS: Record<string, number> = {
+  i: 0, ii: 1, iii: 2, iv: 3, v: 4, vi: 5, vii: 6,
+};
+
+/**
+ * How many letters above the tonic a numeral sits.
+ *
+ * The accidental on the front moves the pitch, never the letter — a ♭II of C
+ * is still written on D, as a D♭ — so it is stripped before counting. A
+ * secondary function adds the two: V/IV is four letters above the IV, which
+ * is itself three above the tonic.
+ *
+ * Returns null for anything it does not recognise, so a caller falls back
+ * rather than spelling a chord on a letter it guessed at.
+ */
+export function numeralSteps(numeral: string): number | null {
+  let total = 0;
+  for (const part of numeral.split('/')) {
+    const bare = part.replace(/[\u266d\u266f]/g, '').toLowerCase();
+    const step = NUMERAL_STEPS[bare];
+    if (step === undefined) return null;
+    total += step;
+  }
+  return total;
+}
+
+/**
+ * How each chord of a progression is written in a given key.
+ *
+ * The key and the numeral together fix the letter, which the pitch class on
+ * its own cannot: the ii of B is a C♯ because it is written on the letter
+ * above B, and the ♭II of C is a D♭ because it is written on the letter
+ * above C — the same two pitches, spelled apart by what they are doing.
+ *
+ * Falls back to the conventional name where the letter would need a double
+ * accidental or one of the four names pitch.ts refuses.
+ */
+export function rootNames(def: ProgressionDef, tonic: PitchClass): Array<string | undefined> {
+  const tonality = def.tonality === 'minor' ? 'minor' : 'major';
+  const letter = letterIndexOf(keyName(tonic, tonality));
+  return def.chords.map((c) => {
+    const steps = letter < 0 ? null : numeralSteps(c.numeral);
+    if (steps === null) return undefined;
+    return spellOnLetter(mod(tonic + c.degree, 12), letter + steps) ?? undefined;
+  });
+}
+
 export interface RealisedChord {
   chord: Chord;
   roman: string;
@@ -284,8 +332,9 @@ export interface RealisedChord {
 
 /** Puts a progression into a concrete key. */
 export function realiseProgression(def: ProgressionDef, tonic: PitchClass): RealisedChord[] {
-  return def.chords.map((c) => ({
-    chord: makeChord(mod(tonic + c.degree, 12), c.quality),
+  const names = rootNames(def, tonic);
+  return def.chords.map((c, i) => ({
+    chord: makeChord(mod(tonic + c.degree, 12), c.quality, names[i]),
     roman: romanLabel(c),
     beats: c.beats ?? def.beatsPerChord,
     degree: mod(c.degree, 12),

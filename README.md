@@ -476,14 +476,41 @@ chord questions without being told to.
    enharmonic is used instead: those four are the only names whose octave
    number stops agreeing with the pitch.
 
-   k. `src/exercises/` — one module per exercise type, each implementing the
+   k. **A chord's root is spelled by the key it is in**, where something knows
+   the key. A pitch class cannot say whether it is a C♯ or a D♭; a key and a
+   numeral together can, and a progression has both. The root's letter is the
+   tonic's letter plus the numeral's step — the ii of B is written on the
+   letter above B, so it is a C♯m7, and its notes follow: C♯ E G♯ B. A ♭ or ♯
+   on the front of a numeral moves the pitch and not the letter, and a
+   secondary function adds both steps, so the V/V of A♭ is a B♭. A chord that
+   stands on its own — a chord-quality question is in no key — keeps the
+   conventional name, because there is nothing to spell it against.
+
+   i. A key in prose is named the way a musician writes it: D♭ in major and
+   C♯ in minor, rather than "C♯/D♭" with the choice left to the reader. The
+   buttons that ask *which* key or pitch keep both spellings, because there
+   the reader is choosing rather than reading.
+
+   ii. Scales get one letter per degree, so B major reads B C♯ D♯ E F♯ G♯ A♯
+   rather than the B D♭ E♭ E F♯ A♭ B♭ a pitch-class table produces, where
+   three letters are missing and two are used twice. An interval's upper note
+   is spelled by the interval's own number: a major 3rd above B is a D♯,
+   because a third is two letters up whatever the accidental works out to.
+
+   iii. The refusal list applies throughout, and it has a visible cost. F♯
+   major wants an E♯ and B Lydian wants one too, so both fall back to the
+   plain table rather than print a name whose octave number would disagree
+   with its pitch. Across the whole progression library the fallback fires on
+   62 roots of 1,872; the rest are spelled from their key.
+
+   l. `src/exercises/` — one module per exercise type, each implementing the
    `ExerciseType` interface. A question carries its own audio, its own hint and
    its own reveal, so the session engine never special-cases a type.
 
-   l. `src/learning/` — the skill model, the adaptive selector, local
+   m. `src/learning/` — the skill model, the adaptive selector, local
    persistence and the statistics behind the progress screen.
 
-   k. `src/session/` — the session state machine. Questions are generated one at
+   n. `src/session/` — the session state machine. Questions are generated one at
    a time, not queued up front, so the model reacts to answers *within* a
    session. `daily.ts` is the exception: it builds all ten up front from a
    date-derived seed, and the engine plays that script instead of selecting

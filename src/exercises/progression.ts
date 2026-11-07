@@ -13,7 +13,10 @@ import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '.
 import { approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel } from './voicing-plan';
 import { Performer, progressionBass, type BassNote } from '../audio/performer';
 import { rootMotionLine, soundedChord } from '../audio/reference';
-import { pcNameDual } from '../music/pitch';
+import { keyName } from '../music/pitch';
+
+/** A modal progression is named like a major key; only minor has its own. */
+const keyTonality = (def: ProgressionDef) => (def.tonality === 'minor' ? 'minor' : 'major');
 import type { PracticeSettings } from '../session/settings';
 import type { Rng } from '../lib/rng';
 import { clamp, mod } from '../lib/util';
@@ -228,7 +231,7 @@ export const progressionExercise: ExerciseType = {
       keyPc: tonic,
       prompt: {
         title: 'What movement is this?',
-        sub: ctx.difficulty <= 2 ? `In ${pcNameDual(tonic)}` : undefined,
+        sub: ctx.difficulty <= 2 ? `In ${keyName(tonic, keyTonality(def))}` : undefined,
       },
       fields: [
         {
@@ -249,7 +252,7 @@ export const progressionExercise: ExerciseType = {
       voicing: changes.voicingStyle,
       hint: {
         label: 'Tonic',
-        description: `Sounds the tonic (${pcNameDual(tonic)}) so you can hear the chords as degrees.`,
+        description: `Sounds the tonic (${keyName(tonic, keyTonality(def))}) so you can hear the chords as degrees.`,
         play: (perf) => {
           perf.note(tonic + 48, perf.origin(), 1.8, 0.6);
           return 1.8;
@@ -336,7 +339,9 @@ export const progressionChordExercise: ExerciseType = {
       keyPc: tonic,
       prompt: {
         title: `Name the ${ordinal} chord`,
-        sub: ctx.difficulty <= 2 ? `${realised.length} chords, in ${pcNameDual(tonic)}` : `${realised.length} chords`,
+        sub: ctx.difficulty <= 2
+          ? `${realised.length} chords, in ${keyName(tonic, keyTonality(def))}`
+          : `${realised.length} chords`,
       },
       fields: [
         {
@@ -357,7 +362,7 @@ export const progressionChordExercise: ExerciseType = {
       voicing: changes.voicingStyle,
       hint: {
         label: 'Tonic',
-        description: `Sounds the tonic (${pcNameDual(tonic)}) so you can place the chord as a degree.`,
+        description: `Sounds the tonic (${keyName(tonic, keyTonality(def))}) so you can place the chord as a degree.`,
         play: (perf) => {
           perf.note(tonic + 48, perf.origin(), 1.8, 0.6);
           return 1.8;
@@ -365,7 +370,7 @@ export const progressionChordExercise: ExerciseType = {
       },
       reveal: {
         heading: chordLabel(target, ctx.settings),
-        detail: `${realised[index].roman} of ${pcNameDual(tonic)}  ·  ${def.name}`,
+        detail: `${realised[index].roman} of ${keyName(tonic, keyTonality(def))}  ·  ${def.name}`,
         notes: voicingLabel(changes.voicingStyle),
         // The same rows the whole-progression question shows, with the one
         // that was asked about marked: where it sat in the sequence is most

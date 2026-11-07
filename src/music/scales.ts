@@ -1,6 +1,8 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
-import type { PitchClass } from './pitch';
+import {
+  keyName, letterIndexOf, pcName, spellOnLetter, type Accidental, type PitchClass,
+} from './pitch';
 import { mod } from '../lib/util';
 
 /** A chord in a modal vamp, as a scale-degree offset plus a quality id. */
@@ -179,3 +181,36 @@ export function scaleConcept(s: ScaleDef): Concept {
 }
 
 export const scaleConceptId = (id: string) => conceptId('mode', id);
+
+/**
+ * The notes of a scale, one letter each.
+ *
+ * A seven-note scale has one note per letter, which is the whole reason the
+ * letters exist: B major is B C♯ D♯ E F♯ G♯ A♯, not the B D♭ E♭ E F♯ A♭ B♭ a
+ * pitch-class table produces, where three letters are missing and two are
+ * used twice.
+ *
+ * All or nothing, deliberately. Where one degree cannot take its letter —
+ * F♯ major wants an E♯ — the whole scale falls back rather than printing a
+ * line half spelled one way and half the other. A scale with more notes than
+ * letters falls back too: the half-whole diminished has eight, and spelling
+ * it this way would hand one letter out twice, which is the fault the rule
+ * exists to fix rather than a smaller version of it.
+ */
+export function scaleNoteNames(
+  tonic: PitchClass,
+  scale: ScaleDef,
+  pref: Accidental = 'both',
+): string[] {
+  const pcs = scalePitchClasses(tonic, scale);
+  if (pref === 'both') {
+    const letter = letterIndexOf(keyName(tonic, scale.degrees.includes(3) ? 'minor' : 'major'));
+    if (letter >= 0) {
+      const spelled = pcs.map((pc, i) => spellOnLetter(pc, letter + i));
+      const usable = spelled.every((name): name is string => name !== null)
+        && new Set(spelled.map((name) => name![0])).size === spelled.length;
+      if (usable) return spelled as string[];
+    }
+  }
+  return pcs.map((pc) => pcName(pc, pref));
+}

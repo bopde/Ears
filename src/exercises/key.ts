@@ -2,7 +2,7 @@ import type { ExerciseType, GenContext, Question } from './types';
 import { approachFromAbove, bassStyleFor } from './voicing-plan';
 import { allowedKeys, pitchClassField, questionId } from './support';
 import { keyConceptId } from '../music/catalog';
-import { pcName, pcNameDual } from '../music/pitch';
+import { keyName, pcName } from '../music/pitch';
 import { chordSymbol } from '../music/chords';
 import {
   PROGRESSIONS, realiseProgression, romanLine, type ProgressionDef,
@@ -98,7 +98,9 @@ export const keyExercise: ExerciseType = {
       return offset + len + 0.4;
     };
 
-    const keyLabel = pcNameDual(tonic);
+    // The reveal names the key; the answer buttons keep the dual form, since
+    // there the reader is choosing rather than reading.
+    const keyLabel = keyName(tonic, material?.tonality === 'minor' ? 'minor' : 'major');
 
     return {
       id: questionId('key'),

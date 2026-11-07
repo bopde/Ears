@@ -14,11 +14,14 @@ export type VoicingStyle =
   /** Root position, tones close together. The clearest way to hear a chord. */
   | 'close'
   /**
-   * Any inversion in the right hand, spaced wide.
+   * All the chord tones in close position, in any inversion.
    *
-   * Written to sit over a separate bass note, which is what states the root:
-   * on its own the stack is as likely to be in third inversion as in root
-   * position, so the bass below it is doing the work.
+   * The same notes as `close`, packed the same way — `stack` builds both — and
+   * the only difference is which tone is at the bottom. Written to sit over a
+   * separate bass note, which is what states the root: on its own the stack is
+   * as likely to be in third inversion as in root position, so the bass below
+   * it is doing the work. The id stays `spread` because settings and stats are
+   * keyed by it.
    */
   | 'spread'
   /** Close voicing with the second voice from the top dropped an octave. */
@@ -92,6 +95,14 @@ export interface Voicing {
   /** Everything that sounds, ascending — convenience for the audio layer. */
   all: Midi[];
   style: VoicingStyle;
+  /**
+   * Which rootless shape this is, where it is one at all.
+   *
+   * Set only when the shape actually came out of `rootlessShape`: a triad has
+   * nothing to leave out, so a chord asked for rootless can come back as an
+   * ordinary stack, and calling that "form A" would be a lie.
+   */
+  form?: RootlessForm;
 }
 
 interface Tone {
@@ -101,7 +112,12 @@ interface Tone {
   essential: boolean;
 }
 
-function selectTones(chord: Chord, style: VoicingStyle, maxNotes: number): Tone[] {
+function selectTones(
+  chord: Chord,
+  style: VoicingStyle,
+  maxNotes: number,
+  tensions: boolean,
+): Tone[] {
   const q = chord.quality;
   const essential = new Set(q.essential ?? q.intervals.filter((i) => i !== 0 && i !== 7));
   let intervals = [...q.intervals];
@@ -111,6 +127,13 @@ function selectTones(chord: Chord, style: VoicingStyle, maxNotes: number): Tone[
   } else if (style === 'rootless' && intervals.length >= 4) {
     intervals = intervals.filter((i) => i !== 0);
   }
+
+  // The notes a pianist adds without being asked, where the caller allows
+  // them. They go on as 9ths and 13ths rather than 2nds and 6ths so the stack
+  // keeps them above the core, and they go on *before* the thinning below, so
+  // a chord that cannot hold them all sheds its 5th to make room — which is
+  // what a pianist does, and why these are worth adding at all.
+  if (tensions) intervals = [...intervals, ...tensionIntervals(chord)];
 
   // Thin from the droppable list first — the 5th is what a pianist leaves out.
   const droppable = [...(q.droppable ?? [7])];
@@ -150,17 +173,56 @@ const ninthOf = (c: Chord) => toneAt(c, (i) => i >= 13 && i <= 15);
  * only where there is no major 3rd for it to clash with, and a 13th only over
  * a dominant 7th that has not already flattened it.
  */
-function availablePcs(chord: Chord, tensions: boolean): Set<number> {
+export function tensionIntervals(chord: Chord): number[] {
   const iv = chord.quality.intervals;
-  const set = new Set(iv.map((i) => mod(chord.rootPc + i, 12)));
-  if (!tensions || iv.length < 4) return set;
-  const add = (semitones: number) => set.add(mod(chord.rootPc + semitones, 12));
-
-  if (ninthOf(chord) === undefined && !iv.some((i) => mod(i, 12) === 2)) add(2);
+  if (iv.length < 4) return [];
+  // Never a note the chord already holds. As pitch classes that was harmless
+  // — a set absorbs the repeat — but as intervals to stack it doubled a note:
+  // a 7sus4 has a 4th in it already, and a 13 chord a 13th, and both were
+  // being handed one again an octave up.
+  const has = (semitones: number) => iv.some((i) => mod(i, 12) === mod(semitones, 12));
+  const out: number[] = [];
+  if (ninthOf(chord) === undefined && !has(2)) out.push(14);
   // A natural 11th over a major 3rd is the one note everyone agrees to avoid.
-  if (thirdOf(chord) === undefined || mod(thirdOf(chord)!, 12) === 3) add(5);
-  if (iv.some((i) => mod(i, 12) === 10) && !iv.some((i) => mod(i, 12) === 8)) add(9);
+  if ((thirdOf(chord) === undefined || mod(thirdOf(chord)!, 12) === 3) && !has(5)) out.push(17);
+  if (has(10) && !has(8) && !has(9)) out.push(21);
+  return out;
+}
+
+export function availablePcs(chord: Chord, tensions: boolean): Set<number> {
+  const set = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+  if (!tensions) return set;
+  for (const i of tensionIntervals(chord)) set.add(mod(chord.rootPc + i, 12));
   return set;
+}
+
+/**
+ * Whether this chord could have produced the notes that sounded.
+ *
+ * The test a listener actually faces, once voicings are allowed their
+ * tensions. Exact pitch-class equality was the old rule and it is too narrow
+ * in both directions: a rootless Dm7 sounds F A C E, which is not the set a
+ * Dm7 names, and it *is* the set an F major triad names with a 9th added. So
+ * a quality matches the ear when everything heard is a note it could play —
+ * its own tones plus the tensions a voicing of it would add — and when
+ * everything that makes it that quality was heard.
+ *
+ * Sharing this with the exercises is the point: the filter that drops
+ * ambiguous answers and the engine that builds the voicing have to agree
+ * about what a chord may sound, or the filter removes the wrong ones.
+ */
+export function couldSound(
+  chord: Chord,
+  sounding: ReadonlySet<number>,
+  tensions: boolean,
+): boolean {
+  const available = availablePcs(chord, tensions);
+  for (const pc of sounding) {
+    if (!available.has(mod(pc, 12))) return false;
+  }
+  const q = chord.quality;
+  const essential = q.essential ?? q.intervals.filter((i) => i !== 0 && i !== 7);
+  return essential.every((i) => sounding.has(mod(chord.rootPc + i, 12)));
 }
 
 /**
@@ -361,16 +423,17 @@ export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing 
   const lo = opts.lo ?? REGISTER.voicing.lo;
   const hi = opts.hi ?? REGISTER.voicing.hi;
   const maxNotes = opts.maxNotes ?? 5;
-  const tones = selectTones(chord, style, maxNotes);
+  const tones = selectTones(chord, style, maxNotes, opts.tensions ?? false);
   const core = tones.filter((t) => !t.upper);
 
   // Three styles are fixed shapes rather than a stack to be searched: the
   // order of the notes is what makes them that voicing, so they are built as
   // ordered pitch classes and only their octave is chosen.
-  const shapes = shapesFor(chord, style, opts.rootlessForm ?? 'A', maxNotes, opts.tensions ?? false);
+  const form = opts.rootlessForm ?? 'A';
+  const shapes = shapesFor(chord, style, form, maxNotes, opts.tensions ?? false);
   if (shapes.length) {
     const fitted = fitShapes(shapes, lo, hi, opts.prev ?? []);
-    if (fitted) return withBass(fitted, style, chord, opts);
+    if (fitted) return withBass(fitted, style, chord, opts, style === 'rootless' ? form : undefined);
   }
 
   // Candidate bottom notes: each core tone as the lowest voice (i.e. each
@@ -459,12 +522,13 @@ function withBass(
   style: VoicingStyle,
   chord: Chord,
   opts: VoicingOptions,
+  form?: RootlessForm,
 ): Voicing {
   const bassPitch = mod(opts.bassPc ?? chord.rootPc, 12);
   const bass = opts.bass
     ? foldInto(bassPitch + 48, REGISTER.bass.lo, Math.min(REGISTER.bass.hi, notes[0] - 7))
     : undefined;
-  return { notes, bass, all: bass === undefined ? notes : [bass, ...notes], style };
+  return { notes, bass, all: bass === undefined ? notes : [bass, ...notes], style, form };
 }
 
 /** A shape and how much the engine would rather use it than a later one. */
@@ -553,6 +617,18 @@ export function voiceProgression(
   }
   return out;
 }
+
+/**
+ * Whether the voicing leaves the root for something else to state.
+ *
+ * The test is the bottom of the right hand, not whether the root appears
+ * anywhere: a stack whose lowest note is the 3rd sounds like a chord rooted
+ * on that 3rd until something underneath says otherwise. A rootless Dm7 is
+ * F A C E — an F major triad with a 9th on it — and nothing in those four
+ * notes argues for D.
+ */
+export const isRootFree = (chord: Chord, voicing: Voicing): boolean =>
+  mod(voicing.notes[0], 12) !== mod(chord.rootPc, 12);
 
 /**
  * Which chord tone is sounding lowest: 0 the root, 1 the third, 2 the fifth,

@@ -72,20 +72,58 @@ export class FakePerformer {
     return at;
   }
 
-  chord(voicing: Voicing, origin: number, beat: number, opts: { beats?: number } = {}): number {
+  chord(
+    voicing: Voicing,
+    origin: number,
+    beat: number,
+    opts: {
+      beats?: number;
+      velocity?: number;
+      soften?: { pcs: readonly number[]; to: number };
+      bassVelocity?: number;
+    } = {},
+  ): number {
     this.chords.push(voicing);
     const beats = opts.beats ?? 4;
+    const soften = new Set((opts.soften?.pcs ?? []).map((pc) => ((pc % 12) + 12) % 12));
     for (const midi of voicing.notes) {
-      this.note(midi, origin + beat * this.beatSeconds, beats * this.beatSeconds);
+      // The velocities matter to a test now that a question can bury a voice,
+      // so the double applies the same trim the performer does.
+      const held = soften.has(((midi % 12) + 12) % 12) ? (opts.soften?.to ?? 1) : 1;
+      this.note(
+        midi,
+        origin + beat * this.beatSeconds,
+        beats * this.beatSeconds,
+        (opts.velocity ?? 0.68) * held,
+      );
     }
     // The real performer sends the bass note to the bass voice, so the double
     // does too: a test that cannot tell them apart cannot check either.
     if (voicing.bass !== undefined) {
-      this.note(voicing.bass, origin + beat * this.beatSeconds, beats * this.beatSeconds, 0.72, {
-        instrument: BASS_INSTRUMENT,
-      });
+      this.note(
+        voicing.bass,
+        origin + beat * this.beatSeconds,
+        beats * this.beatSeconds,
+        opts.bassVelocity ?? 0.72,
+        { instrument: BASS_INSTRUMENT },
+      );
     }
     return beats * this.beatSeconds;
+  }
+
+  /**
+   * The notes that sound with the chord, leaving out whatever led into it.
+   *
+   * A bass walking into a chord is a line arriving, not part of the harmony:
+   * its approach notes are deliberately outside the chord, and a check that
+   * counts them is asking the wrong question. Anything struck from the moment
+   * the right hand enters is the chord.
+   */
+  get struck(): RecordedNote[] {
+    const stack = this.notes.filter((n) => n.instrument !== BASS_INSTRUMENT);
+    if (!stack.length) return [...this.notes];
+    const entry = Math.min(...stack.map((n) => n.time)) - 1e-6;
+    return this.notes.filter((n) => n.time >= entry);
   }
 
   melody(notes: readonly PhraseNote[], origin: number, startBeat = 0): number {

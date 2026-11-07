@@ -7,7 +7,7 @@ import {
   intervalNotes, playChordQuality, playInterval, playProgression, playScale,
 } from '../../audio/demo';
 import {
-  REFERENCE_VOICINGS, VOICING_LESSONS, modeForStyle, playComparison, playReference,
+  REFERENCE_VOICINGS, VOICING_LESSONS, VOICING_SHEET_NOTE, modeForStyle, playComparison, playReference,
   playReferenceChord, referenceBassCaption, referenceDegrees, referenceNoteNames,
   referenceVoicings, rootMotionLine,
   type ReferenceChord, type ReferenceVoicing, type VoicingLesson,
@@ -186,7 +186,12 @@ function VoicingCard({
       <div className="refdegrees">
         {chords.map((c, i) => (
           <span key={i} className="refdegrees__item">
-            <span className="refdegrees__chord">{c.symbol}</span>
+            <span className="refdegrees__chord">
+              {c.symbol}
+              {/* Which of the two rootless shapes this chord took. The degrees
+                  below say the same thing; the letter is what a player calls it. */}
+              {c.voicing.form && <span className="refdegrees__form">{c.voicing.form}</span>}
+            </span>
             <span className="refdegrees__line">{referenceDegrees(c).join('  ')}</span>
           </span>
         ))}
@@ -298,6 +303,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
           <p className="small faint" style={{ marginTop: '0.1rem' }}>
             {REFERENCE_VOICINGS.find((v) => v.id === voicing)?.blurb}
           </p>
+          <p className="small faint">{VOICING_SHEET_NOTE}</p>
           <label className="refroll">
             <input
               type="checkbox"

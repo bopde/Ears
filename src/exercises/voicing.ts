@@ -1,13 +1,20 @@
-import type { ExerciseType, Question } from './types';
+import type { ExerciseType, GenContext, Question } from './types';
 import { buildOptions, chooseKey, chooseTarget, optionCount, questionId, tempoFor } from './support';
 import {
-  CHORD_QUALITIES, chordDegrees, chordSymbol, makeChord,
+  CHORD_QUALITIES, addedTensions, chordSymbol, makeChord,
   type Chord, type ChordQuality,
 } from '../music/chords';
-import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
-import { NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingLabel } from './voicing-plan';
-import { Performer, polyphonyGain } from '../audio/performer';
-import { midiName, pcNameDual, type PitchClass } from '../music/pitch';
+import { soundedChord } from '../audio/reference';
+import { formatList } from './chord';
+import {
+  voiceChord, voiceProgression, type RootlessForm, type Voicing, type VoicingStyle,
+} from '../music/voicing';
+import {
+  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingBass, voicingLabel, voicingLabelFor,
+} from './voicing-plan';
+import { Performer } from '../audio/performer';
+import { approachInto, chooseLever, playVoicing } from './levers';
+import { pcNameDual, type PitchClass } from '../music/pitch';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { voicingConceptId } from '../music/catalog';
 import type { PracticeSettings } from '../session/settings';
@@ -43,13 +50,55 @@ function voicableQualities(settings: PracticeSettings): ChordQuality[] {
  */
 const fingerprint = (v: Voicing) => v.all.join(',');
 
-function voiceIn(chord: Chord, style: VoicingStyle, bass: boolean): Voicing {
-  return voiceChord(chord, {
+/**
+ * One shape of one chord, with a bass under it wherever the root needs one.
+ *
+ * The bass is not a difficulty setting here. A rootless or inverted stack
+ * does not state its own root, and this question prints the chord symbol in
+ * the prompt — so without one the listener is being shown a D minor 7 and
+ * played an F major triad, and asked only about the shape. The level decides
+ * whether a stack that *does* state its root gets the doubling as well.
+ */
+/** What every candidate shape of one question is voiced with. */
+interface Colour {
+  difficulty: number;
+  /** On or off for the whole question, never per shape: see `colourFor`. */
+  tensions: boolean;
+  form: RootlessForm;
+}
+
+/**
+ * Whether this question's chords carry their tensions, decided once.
+ *
+ * Once per question and not once per shape, which is the only part of this
+ * that matters. Rootless voicings add a 9th and close ones do not, so a
+ * listener who hears a 9th and knows that would have the answer before
+ * hearing the shape — the colour would be the tell rather than the voicing.
+ * On or off, every candidate gets the same treatment, and the question stays
+ * about where the notes are.
+ *
+ * Off below level 3, where there is enough to listen past already.
+ */
+function colourFor(ctx: GenContext, difficulty: number): Colour {
+  return {
+    difficulty,
+    tensions: difficulty >= 3 && ctx.rng.chance(0.5),
+    form: ctx.rng.chance(0.5) ? 'A' : 'B',
+  };
+}
+
+function voiceIn(chord: Chord, style: VoicingStyle, colour: Colour): Voicing {
+  const opts = {
     style,
-    bass,
     maxNotes: 5,
+    rootlessForm: colour.form,
+    tensions: colour.tensions,
     ...(style === 'close' ? { bottomPc: chord.rootPc } : {}),
-  });
+  };
+  const dry = voiceChord(chord, opts);
+  return voicingBass(chord, dry, colour.difficulty)
+    ? voiceChord(chord, { ...opts, bass: true })
+    : dry;
 }
 
 export const voicingExercise: ExerciseType = {
@@ -73,14 +122,15 @@ export const voicingExercise: ExerciseType = {
     const rootPc = chooseKey(ctx);
     // A quality whose shapes come out audibly different, so the question has
     // exactly one answer. Everything else in the pool is tried before giving up.
-    const bass = ctx.difficulty <= 3;
+    const level = clamp(Math.round(ctx.difficulty), 1, 5);
+    const colour = colourFor(ctx, level);
     let chord: Chord | null = null;
     let voicing: Voicing | null = null;
     let offered: VoicingStyle[] = [];
     for (const quality of ctx.rng.shuffle([...qualities])) {
       const candidate = makeChord(rootPc, quality.id);
       const byShape = new Map<VoicingStyle, Voicing>();
-      for (const style of shapes) byShape.set(style, voiceIn(candidate, style, bass));
+      for (const style of shapes) byShape.set(style, voiceIn(candidate, style, colour));
       // Pairwise distinct, not merely distinct from the answer: two options
       // that sound the same as each other are two options that cannot both be
       // wrong, and the question would be unanswerable either way.
@@ -98,18 +148,23 @@ export const voicingExercise: ExerciseType = {
     }
     if (!chord || !voicing) return null;
 
+    const added = addedTensions(chord, voicing.all);
     const n = Math.min(optionCount(ctx.difficulty, offered.length), offered.length);
     const distractors = ctx.rng.sample(offered.filter((s) => s !== target), n - 1);
-    const gain = polyphonyGain(voicing.all.length);
 
-    const sound = (perf: Performer, roll: number) => {
-      const origin = perf.origin();
-      voicing.notes.forEach((midi, i) => perf.note(midi, origin + i * roll, 3.2, 0.68, { gain }));
-      if (voicing.bass !== undefined) {
-        perf.note(voicing.bass, origin, 3.2, 0.72, { instrument: 'bass', gain });
-      }
-      return 3.4 + roll * voicing.notes.length;
-    };
+    // One thing made harder above level 3, drawn here so a replay sounds like
+    // the first hearing. The reveal plays it plainly: the point of hearing it
+    // again is the shape, which is what the lever was in the way of.
+    const lever = chooseLever(ctx.rng, level);
+    const walk = lever === 'walk-in' && voicing.bass !== undefined
+      ? approachInto(ctx.rng, voicing.bass)
+      : undefined;
+    const sound = (perf: Performer, roll: number, hard: boolean) => playVoicing(
+      perf,
+      chord!,
+      voicing!,
+      { lever: hard ? lever : undefined, walk, roll, seconds: 3.2, velocity: 0.68 },
+    );
 
     return {
       id: questionId('voicing'),
@@ -139,17 +194,13 @@ export const voicingExercise: ExerciseType = {
       voicing: target,
       // Struck as a block: a rolled chord would give the spacing away by
       // laying the notes out one at a time.
-      play: (perf) => sound(perf, 0.008),
-      playReveal: (perf) => sound(perf, 0.16),
+      play: (perf) => sound(perf, 0.008, true),
+      playReveal: (perf) => sound(perf, 0.16, false),
       playPlain: (perf) => {
-        const plain = voiceIn(chord!, 'close', true);
-        const origin = perf.origin();
-        const g = polyphonyGain(plain.all.length);
-        plain.notes.forEach((midi) => perf.note(midi, origin, 3, 0.66, { gain: g }));
-        if (plain.bass !== undefined) {
-          perf.note(plain.bass, origin, 3, 0.72, { instrument: 'bass', gain: g });
-        }
-        return 3.2;
+        // Plain means plain: no tensions and no lever, whatever the question
+        // used. This is the chord underneath, not the question again.
+        const plain = voiceIn(chord!, 'close', { difficulty: 1, tensions: false, form: 'A' });
+        return playVoicing(perf, chord!, plain, { roll: 0, seconds: 3, velocity: 0.66 });
       },
       hint: {
         label: 'Bottom of the chord',
@@ -160,9 +211,12 @@ export const voicingExercise: ExerciseType = {
         },
       },
       reveal: {
-        heading: voicingLabel(target),
-        detail: `${chordSymbol(chord, ctx.settings.accidental)}  ·  ${chordDegrees(chord, voicing.notes).join(' ')}`,
-        notes: voicing.all.map((m) => midiName(m, ctx.settings.accidental)).join('  '),
+        // The form is named here and nowhere in the options: which of the two
+        // rootless shapes played is worth knowing, and is not the question.
+        heading: voicingLabelFor(target, voicing.form),
+        detail: chordSymbol(chord, ctx.settings.accidental),
+        tag: added.length ? `played with ${formatList(added)}` : undefined,
+        played: soundedChord(chord, voicing, ctx.settings.accidental),
       },
       estimatedSeconds: 13 + ctx.difficulty,
     };

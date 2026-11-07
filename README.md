@@ -128,11 +128,20 @@ builds the app and deploys it on every push to `main`.
    and still hear it as a chord.
 
    ii. The **Voicing** selector above the list decides how all of them are
-   played: *Root position* (the default), *Voice led*, *Shell*, *Rootless*,
-   *Drop 2*, *Quartal* or *Upper structure*. Root position stacks every chord plainly from its root with the
-   root doubled underneath and nothing moving down there, so you can learn
-   the reference sound of a chord before meeting the ways a pianist disguises
-   it. The choice is remembered.
+   played: *Close, root position* (the default), *Close, inversion*, *Shell*,
+   *Rootless*, *Drop 2*, *Quartal* or *Upper-structure triad*. Root position
+   stacks every chord plainly from its root with the root doubled underneath
+   and nothing moving down there, so you can learn the reference sound of a
+   chord before meeting the ways a pianist disguises it. The choice is
+   remembered.
+
+   A name here says which notes are in the voicing, how they are spaced and
+   — only where that is the difference — what is at the bottom. It never says
+   anything about voice leading, because every mode on this page voice-leads;
+   the sheet says so once, under the selector, rather than naming one mode
+   after it. The names come from `VOICING_NAMES` in `src/music/catalog.ts`,
+   which is also where a question gets them, so a style cannot be called one
+   thing on the sheet and another in a quiz.
 
    iii. Each set of changes carries the voicing a player would reach for, named
    and then shown rather than explained: *Rootless · ♭3 5 ♭7 9 · ♭7 9 3 5 ·
@@ -168,9 +177,12 @@ builds the app and deploys it on every push to `main`.
    a hint so the root can be found by ear rather than by absolute pitch.
 
    c. **Inversions** — a triad or seventh sounds with one of its notes in the
-   bass. Name the inversion. The answer is written as a slash chord, and the
-   chord exercises do the same whenever their voicing turned the chord over, so
-   a reveal never reports less than the ear was given.
+   bass. Name the inversion. The answer is written as a slash chord. A chord
+   question writes one only where a bass note sounds and is not the root —
+   with a root bass under a rootless stack, "Dm7/F" would name an F that no
+   longer has the bottom of anything — and a voicing with no root in it is
+   never called an inversion at all, because there is no root in it to turn
+   over.
 
    d. **Intervals** — ascending, descending or harmonic, simple or compound.
 
@@ -201,12 +213,20 @@ builds the app and deploys it on every push to `main`.
    four notes, and then there are two right answers.
 
    j. **Guide tones** — a progression plays; follow the line the 3rds and 7ths
-   make through it. The reveal of a changes question also names the root
-   motion — *Bass falls a fifth, then rises a fourth* — taken from the bass
-   notes that were scheduled, so it cannot describe something other than what
-   played. The wrong answers are the same line with one or two notes
+   make through it. The wrong answers are the same line with one or two notes
    moved to the other guide tone of that chord, so the only way to reject one
    is to have followed the voice the whole way.
+
+   k. **Every reveal says what was played, not what was asked.** A chord
+   question lists the bass on its own line above the stack, because they are
+   different voices and listing them together meant one more name than degree;
+   the degrees sit under the names so the two read as columns. A changes
+   question gives a row per chord, numeral beside symbol, each opening on a
+   tap to show its notes and degrees — read off the voicings that were
+   scheduled, so a row cannot describe something else. The name-one-chord
+   question shows the same rows with the one it asked about marked. The root
+   motion — *Bass falls a fifth, then rises a fourth* — is taken from the bass
+   notes that were scheduled, for the same reason.
 
 ### 4.1 Questions it will not ask
 
@@ -242,9 +262,15 @@ generates several thousand questions and fails the build if either reappears.
 
    ii. Each chord question compares the pitch classes it is about to sound
    against every quality in the pool, rooted on all twelve degrees, and removes
-   any that reproduces the set exactly. Only the quality that was actually
-   played survives. The answer itself is never filtered out, and if the pool
-   were ever reduced below two the unfiltered pool is used instead.
+   any that **could** have sounded them — everything heard is a note it could
+   play, and everything that makes it that quality was heard. Exact equality
+   was the old test and it is too narrow now that voicings add their tensions:
+   a rootless Dm7 sounds F A C E, which no quality names exactly and which an
+   F major triad with a 9th names perfectly. The rule lives in `couldSound` in
+   `src/music/voicing.ts` and is shared with the engine that builds the
+   voicing, so the filter and the engine cannot disagree about what a chord
+   may sound. The answer itself is never filtered out, and if the pool were
+   ever reduced below two the unfiltered pool is used instead.
 
    c. **One ambiguity is deliberately kept.** Aeolian and Phrygian differ in a
    single note — the second degree — and a generated line that happens not to
@@ -266,12 +292,30 @@ to do:
    b. **More alternatives.** Four choices at level 1, eight at level 5.
 
    c. **Thinner voicings.** Level 1 is a rolled, root-position close voicing
-   with a bass note underneath. Level 5 is a rootless inversion with no root
-   anywhere — you hear the chord rather than the stack. Chord questions and
-   changes questions draw on the same curve, in `src/exercises/voicing-plan.ts`,
-   so the two move together. Settings → Display → *Voicings* overrides it:
-   *Plain* is root position whatever the level, *Realistic* is rootless and
-   drop 2 from the start, and *Mixed* is the curve.
+   with a bass note underneath. Level 5 is a rootless inversion — you hear the
+   chord rather than the stack. Chord questions and changes questions draw on
+   the same curve, in `src/exercises/voicing-plan.ts`, so the two move
+   together. Settings → Display → *Voicings* overrides it: *Root position
+   only* whatever the level, *Realistic* for rootless and drop 2 from the
+   start, and *By level* for the curve.
+
+   i. The root is audible at every level. A voicing whose lowest note is not
+   the root does not state it, so one is put underneath — a rootless Dm7
+   without a bass is F A C E, an F major triad with a 9th on it, and "minor
+   7th" is not a defensible answer to what sounded. Where the root is already
+   at the bottom the bass only doubles it, and the curve thins that out above
+   level 3.
+
+   ii. From level 4 one thing is made harder instead, drawn per question and
+   never two at once: the 3rd and 7th played softer, so the notes that say
+   what the chord is have to be dug out; a bass that walks in and lands on
+   the root as the chord strikes; or a bass further under the chord than
+   usual. `src/exercises/levers.ts`.
+
+   iii. From level 4 a set of changes is also comped the way that set of
+   changes is comped — rootless on a ii–V–I, shell on a blues, quartal on
+   modal changes — which the cheat sheet has always shown and the questions
+   used to ignore.
 
    d. **More in the bass.** Levels 1 and 2 play one held root per chord, so
    the root motion is all there is to hear. Level 3 adds the fifth. Levels 4
@@ -356,8 +400,11 @@ chord questions without being told to.
    a. `src/music/` — pure theory. Note spelling, intervals, chord qualities,
    inversions, scales, progressions, voicing and phrase generation. No audio,
    no UI, no React. Roman numerals are derived from the chord quality rather
-   than written out by hand, so a progression that plays a ninth is written as
-   V9 and cannot drift back to V7.
+   than written out by hand, so a blues IV13 is written as IV13 and cannot
+   drift back to IV7. What a chord *is* and what a voicing *sounds* are kept
+   apart: the ii–V–I is written Dm7 · G7 · C∆7 even though every voicing on
+   the cheat sheet sounds a 9th over all three, because the 9th belongs to the
+   voicing and the symbol names the chord.
 
    b. `src/music/concept.ts` — the seam the brief asks for. A **Concept** is one
    trainable idea with a stable id. Exercises declare which concepts a question
@@ -405,16 +452,35 @@ chord questions without being told to.
    chord is named for; where it cannot, the engine falls back rather than play
    something else under the name.
 
-   h. The 9th a pianist adds to every rootless voicing is off by default. It is
-   right at a piano and wrong in a question — a rootless Dm7 voiced F A C E
-   sounds a 9th, and "m7" stops being the only defensible answer — so the
-   cheat sheet asks for it and the exercises do not.
+   h. The 9th a pianist adds to every rootless voicing is on everywhere except
+   close position. It was off in the exercises, which meant the cheat sheet
+   taught a rootless Dm7 as F A C E and a question played F A C — an F major
+   triad — and called it the same voicing. Close position stays plain, so the
+   *Root position only* setting and the first level sound exactly what they
+   always did; everywhere else the voicing adds what a pianist would, and the
+   answer is still the chord underneath. The questions say so under the
+   prompt, and the reveal tags what was added: *played with 9*.
 
-   i. `src/exercises/` — one module per exercise type, each implementing the
+   i. In the voicing quiz the colour is drawn once per question and applied to
+   every candidate shape, close included. Per shape it would be the tell:
+   hear a 9th, answer rootless.
+
+   j. A note outside the chord is named for what it is doing in it. Above a
+   seventh the stack keeps going, so 9 semitones over a dominant is a 13th
+   rather than a 6th and 3 are a ♯9 rather than a ♭3 that would contradict
+   the major 3rd below. Under a triad there is no seventh to extend past, and
+   9, 4 and 6 are what they are. Each note is then spelled from the root's
+   letter plus the degree's number — the ♭9 of G is A♭, the ♯9 of C is D♯ —
+   so the letter on screen always agrees with the degree beside it. Where
+   that asks for a double accidental or one of F♭, C♭, E♯ and B♯, the plain
+   enharmonic is used instead: those four are the only names whose octave
+   number stops agreeing with the pitch.
+
+   k. `src/exercises/` — one module per exercise type, each implementing the
    `ExerciseType` interface. A question carries its own audio, its own hint and
    its own reveal, so the session engine never special-cases a type.
 
-   j. `src/learning/` — the skill model, the adaptive selector, local
+   l. `src/learning/` — the skill model, the adaptive selector, local
    persistence and the statistics behind the progress screen.
 
    k. `src/session/` — the session state machine. Questions are generated one at
@@ -469,9 +535,44 @@ Everything the brief lists as future work attaches at an existing seam.
    well past full scale and digital clipping is the quickest way to make a
    synthesised piano sound cheap. Chords are trimmed by the square root of the
    voice count, loudness is kept separate from velocity so a chord is balanced
-   without being made duller, and a soft limiter sits last in the chain: a
-   straight wire below about 0.78 of full scale, a gentle knee above it, and a
-   ceiling just under 1.
+   without being made duller, and a soft limiter sits near the end of the
+   chain: a straight wire below about 0.78 of full scale, a gentle knee above
+   it, and a ceiling just under 1.
+
+   i. **The volume control is after the limiter**, and it used to be before.
+   That one position was the whole fault: the volume *was* the pre-limiter
+   gain, so turning the app up did not make it louder so much as drive it
+   further into the clipper — and a bass and a chord soft-clipped together
+   intermodulate, which puts a buzz at the bass's frequency on everything
+   above it. The chain's headroom is now a fixed `MASTER_TRIM` instead, and
+   volume only scales what has already been limited. It can make the output
+   quieter; it can no longer make it dirtier. The default moved to the top of
+   the slider for the same reason.
+
+   ii. That trim is 0.6, which is a measurement rather than a taste. Rendered
+   through the real chain, the loudest thing in the catalogue is a rolled
+   quartal voicing of A♭m7 off the cheat sheet; at 0.6 it peaks 2.0 dB under
+   the limiter's knee, where at 0.7 the margin is 0.7 dB and at 1.0 it clips.
+   The whole app is about 3 dB quieter at the same volume setting than it was,
+   and clean where it was not.
+
+   iii. The compressor attacks in 26 ms rather than 6. One cycle of the lowest
+   note the app plays is 18 ms, and a compressor faster than that moves its
+   gain *within* a bass cycle — which is distortion rather than levelling.
+
+   iv. The limiter's WaveShaper is no longer oversampled, which is the
+   opposite of the usual advice and is right here. Oversampling means
+   upsample, shape, filter back down, and that last filter rings: measured
+   through this curve, a sawtooth driven into the knee came out at **1.16** of
+   full scale, in Chromium and in the offline renderer alike. A limiter that
+   can exceed its own ceiling is not a limiter, and the pad voice is three
+   sawtooths. Below the knee all three settings are bit-identical, and above
+   it the curve is a gentle tanh whose harmonics are low-order, so the
+   aliasing this gives up costs less than the ceiling it was breaking.
+
+   v. All four are held by renders in `src/audio/mix.test.ts`, not by
+   reasoning about the curve. The old test asserted that no point of the
+   *curve* exceeded full scale, which was true and was not the question.
 
    d. Safari needs a user gesture before audio will start, so the unlock happens
    on the tap that begins a session. iOS also needs a silent media element
@@ -523,18 +624,41 @@ Everything the brief lists as future work attaches at an existing seam.
 
    i. The fix is the missing fundamental. The ear reconstructs a root from its
    harmonics, which is why a bass guitar is audible through a laptop at all,
-   so the voice is one periodic wave of 24 partials, rolled off at 1.1 kHz.
-   The series runs to a *frequency*, not to a harmonic number: counting
-   harmonics instead leaves the bottom octave as inaudible as it was, because
-   six harmonics of 55 Hz still only reach 330 Hz.
+   so the voice is one periodic wave of 24 partials. The series runs to a
+   *frequency*, not to a harmonic number: counting harmonics instead leaves
+   the bottom octave as inaudible as it was, because six harmonics of 55 Hz
+   still only reach 330 Hz.
 
-   ii. There are exactly two dials, and they are independent.
-   `BASS_TILT` sets the tone — harmonic *h* has amplitude h^-tilt — and
-   `BASS_LEVEL` sets how far under the comping it sits, about 13 dB,
-   measured A-weighted. Turning it down cannot make it smoother, and
-   brightening it cannot make it louder.
+   ii. The lowpass over that series moves, and that is what makes it a string
+   rather than a saw. Hold a cutoff still and every harmonic sustains in fixed
+   proportion, which is the definition of a sawtooth and is what this sounded
+   like. It now opens bright under the fingers — 1.2 to 2.2 kHz across the
+   register, which is what puts the note on a phone — and closes to four times
+   the fundamental, between 220 and 500 Hz, with a time constant of 120 ms.
+   Key-tracked rather than fixed, so the same handful of harmonics survives on
+   every note instead of the top of the register going dull and the bottom
+   still buzzing. The trade is deliberate: the sustain is well under what a
+   phone can radiate, so a phone listener places the note on its attack, which
+   stays above that speaker's corner for at least a tenth of a second.
 
-   iii. The tilt matters more than it looks, because partials a fundamental
+   iii. There are three dials, and they are independent. `BASS_TILT` sets the
+   tone — harmonic *h* has amplitude h^-tilt — the pair of sustain bounds set
+   how far the filter closes, and `BASS_LEVEL` sets how far under the comping
+   it sits: 2 to 4 dB in the comping textures, about 10 in the cheat sheet's
+   held chords. Turning it down cannot make it smoother, and brightening it
+   cannot make it louder.
+
+   iv. That level is measured **K-weighted** (ITU-R BS.1770), and the switch
+   from A-weighting is why it moved so far. A-weighting is a 40-phon curve —
+   the ear at a whisper — and discounts 55 Hz by nearly 29 dB. A bass set
+   through it to measure 13 dB under the comping was in fact sitting 5 to 7 dB
+   *over* it, which is what people heard on headphones. K-weighting discounts
+   the same note by 3.4 dB and is what broadcast loudness is measured with.
+   `src/audio/mix.test.ts` holds the balance by rendering the real chain
+   offline, because what the voices do to each other is the one thing no
+   single-voice measurement can see.
+
+   v. The tilt matters more than it looks, because partials a fundamental
    apart sit well inside one critical band up at 500 Hz and beat against each
    other. Measured as sensory roughness on the lowest note: the sine this
    replaced scores 0.006, a first attempt at a tilt of 0.8 scored 0.088 and
@@ -542,7 +666,7 @@ Everything the brief lists as future work attaches at an existing seam.
    is plucked-string territory. Past about 2 the harmonics get too weak to
    carry the note on a phone, which is what they are for.
 
-   iv. The partials are in plain sine phase. An earlier version spread them
+   vi. The partials are in plain sine phase. An earlier version spread them
    quadratically to flatten the waveform — a standard trick for test signals,
    and the wrong one here. It bought a single dB of crest factor, and at
    55 Hz a period is 18 ms, long enough for that dispersion to be heard as a
@@ -550,22 +674,38 @@ Everything the brief lists as future work attaches at an existing seam.
    flattens the waveform anyway: 2.8 dB of crest against 8.5 for the bright
    wave the trick was propping up.
 
-   v. The result holds across devices. A-weighted, the bass sits within half a
-   decibel of the same place under the comping on a phone, a laptop and a
-   full-range system — which is the point: what you hear no longer depends on
-   what you are listening on. On the quietest note of the register it is some
-   26 dB more audible through a phone than the design it replaced.
+   vii. What that costs, stated plainly, because it is a trade and not a free
+   win. At equal level the new tone delivers over 20 dB more to a phone than
+   the old one did, on the quietest note of the register. But the level came
+   down 9.5 dB, and the sustain a phone would have radiated is now below what
+   it can radiate, so in the mix the bass sits further under the comping on a
+   small speaker than on headphones — about 12 dB further, where the old
+   design was about 9 dB further. A phone listener places each note on its
+   attack and then loses it, which is what the closing filter is for.
 
-   vi. `src/audio/audibility.test.ts` guards both failure modes, since there
-   are two: inaudible, and unpleasant. It models a speaker as a cascaded
-   high-pass and the ear as A-weighting, and asserts how much of each note
+   viii. Raising the settle to buy that back does not work, and the figure is
+   worth recording so nobody tries it twice. Taking the sustain from four
+   times the fundamental to eight moves the phone balance by 1.9 dB and drops
+   the upper-partial loss that makes it sound plucked from 12 dB to 2.7 — it
+   buys almost nothing and spends the whole tone. The dial that controls
+   presence on a phone is `BASS_LEVEL`, and that one is set by the headphone
+   balance.
+
+   ix. `src/audio/audibility.test.ts` guards all three failure modes:
+   inaudible, unpleasant, and static. It models a speaker as a cascaded
+   high-pass and the ear as K-weighting, and asserts how much of each note
    actually reaches a listener — against the old design, so it cannot pass by
-   asserting something any design would meet — and separately that the tone
-   stays under the roughness that made the first attempt buzz. An earlier
-   version of that file measured the *fraction* of the voice's energy that
-   survived instead, which sounds equivalent and is not: the denominator is
-   dominated by a fundamental nobody can hear, so it rewarded brightness for
-   its own sake and passed the design that buzzed.
+   asserting something any design would meet — that the tone stays under the
+   roughness that made the first attempt buzz, and that the filter really does
+   close, by a measured 12 dB of upper partials, while the fundamental rings
+   on. An earlier version of that file measured the *fraction* of the voice's
+   energy that survived instead, which sounds equivalent and is not: the
+   denominator is dominated by a fundamental nobody can hear, so it rewarded
+   brightness for its own sake and passed the design that buzzed.
+
+   x. Four ways of breaking it were checked against that file and each one
+   fails it: cutting the series to six partials, steepening the tilt to 3,
+   dulling the attack, and closing the filter four times faster.
 
 ## 10. Your data
 

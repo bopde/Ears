@@ -7,8 +7,12 @@ import { realiseProgression, type ProgressionDef } from '../music/progressions';
 import {
   voiceChord, voiceProgression, type Voicing, type VoicingOptions, type VoicingStyle,
 } from '../music/voicing';
-import { chordDegrees, chordSymbol, slashSymbol, type Chord } from '../music/chords';
-import { midiName, type Accidental, type Midi, type PitchClass } from '../music/pitch';
+import {
+  chordDegrees, chordSymbol, slashSymbol, spellInChord, type Chord,
+} from '../music/chords';
+import type { SoundedChord } from '../exercises/types';
+import { VOICING_NAMES, VOICING_SHORT } from '../music/catalog';
+import type { Accidental, Midi, PitchClass } from '../music/pitch';
 import { mod } from '../lib/util';
 
 /**
@@ -25,6 +29,7 @@ export type ReferenceVoicing =
 
 export interface VoicingLesson {
   id: ReferenceVoicing;
+  /** Taken from VOICING_NAMES, so a style is called one thing everywhere. */
   label: string;
   short: string;
   /** What the voicing is, as a shape. */
@@ -37,54 +42,89 @@ export interface VoicingLesson {
   demo?: string;
 }
 
-export const REFERENCE_VOICINGS: VoicingLesson[] = [
+const LESSONS: Array<Omit<VoicingLesson, 'label' | 'short'>> = [
   {
-    id: 'root', label: 'Root position', short: 'Root',
+    id: 'root',
     blurb: 'Every chord stacked from its root — 1, 3, 5, 7 and upward — with that root doubled underneath and nothing moving down there.',
     use: 'Learning a chord, and checking one. Nobody comps like this, and that is the point: there is nothing in the way of the chord itself.',
     detail: 'Because every chord here is built the same way, the shapes can be compared directly against each other. It is also the only mode on this page where what you read is exactly what you hear — everywhere else the notes have been rearranged.',
   },
   {
-    id: 'voice-led', label: 'Voice led', short: 'Voice led',
-    blurb: 'Each chord takes whichever inversion moves least from the last, over a root bass.',
-    use: 'Everywhere. It is less a voicing than the rule that decides which one to use next.',
-    detail: 'Watch the note names rather than the chord symbols: between one chord and the next, most of them stay put. That is what voice leading is, and it is why changes played this way sound like one line moving rather than a series of separate grabs.',
+    id: 'voice-led',
+    blurb: 'The same close-position stack as root position, turned over: all the chord tones, packed the same way, with something other than the root at the bottom.',
+    use: 'Everywhere. Through a progression the inversion is the one that moves least from the chord before, and this mode adds the tensions a pianist would — so it is the closest thing here to ordinary comping over a bass.',
+    detail: 'Watch the note names rather than the chord symbols: between one chord and the next, most of them stay put. Which inversion a chord lands in is not part of what the voicing is called, because the choice is made by the chord before it.',
   },
   {
-    id: 'shell', label: 'Shell', short: 'Shell',
+    id: 'shell',
     blurb: 'Root, 3rd and 7th only — three notes, nothing else.',
     use: 'Behind a soloist, and in stride and blues playing, where the left hand has to state the chord and stay out of the way at the same time.',
     detail: 'Three notes is the least that still names a chord. Lose the 3rd and major and minor sound alike; lose the 7th and a dominant and a major 7th do. The 5th says almost nothing on its own, which is why it is the first note to go here and the first to be replaced by a tension everywhere else.',
     demo: 'blues-opening',
   },
   {
-    id: 'rootless', label: 'Rootless', short: 'Rootless',
+    id: 'rootless',
     blurb: 'The root left to the bass, so the hand plays 3rd, 5th, 7th and 9th — or 7th, 9th, 3rd, 5th, which is the same four notes rotated.',
     use: 'Comping with a bass player, which is most of the time. Playing the root as well only doubles what is already there and muddies the bottom.',
     detail: 'The two shapes exist so they can alternate. Take form A on the ii and form B on the V and the hand barely moves — a note or two shifts and the rest stays. Down a chain of fourths that economy is the whole reason to learn both rather than one.',
   },
   {
-    id: 'drop2', label: 'Drop 2', short: 'Drop 2',
+    id: 'drop2',
     blurb: 'A close voicing with the second voice from the top dropped an octave. The same notes, opened out.',
     use: 'Chord melody and horn-section writing, where the top note is the tune and everything underneath has to move without turning to mud.',
     detail: 'Close voicings go muddy below middle C because neighbouring notes are too near each other down there. Spreading one voice an octave down opens a gap in the middle and the chord stays clear. A chord too low to drop without landing in the bass register is left alone here rather than played into it.',
     demo: 'coltrane-cell',
   },
   {
-    id: 'quartal', label: 'Quartal', short: 'Quartal',
+    id: 'quartal',
     blurb: 'Fourths stacked instead of thirds — three perfect fourths and a major third on top is the shape everybody learns from "So What".',
     use: 'Modal playing, where a chord is a colour to sit in rather than a step on the way somewhere.',
     detail: 'Built from fourths, it often has no 3rd in it at all, so it never commits to major or minor. That vagueness is the point: it states a key centre without stating a chord. It also moves in parallel without anything clashing, which is why modal writing slides the same shape up and down a scale.',
     demo: 'so-what',
   },
   {
-    id: 'upperStructure', label: 'Upper structure', short: 'Upper str.',
+    id: 'upperStructure',
     blurb: 'Guide tones underneath — just the 3rd and the 7th — with an ordinary major or minor triad built on the chord’s tensions above them.',
     use: 'Altered dominants, where reading the symbol is harder than playing it.',
     detail: 'The triad is always rooted on a tension — a 9th, a ♯11th, a ♭13th — never on a chord tone, or it would just be the chord again. That is why something as forbidding as G7alt turns out to be a plain E♭ triad in the right hand over two notes in the left. A chord with no tensions of its own has no triad to build, and falls back to rootless.',
     demo: 'minor-ii-V-i-alt',
   },
 ];
+
+/**
+ * Which voicing style each mode of this page is.
+ *
+ * The page's ids are older than the style ids and are stored in settings, so
+ * they stay; this is the one place the two vocabularies meet.
+ */
+const STYLE_FOR_MODE: Record<ReferenceVoicing, VoicingStyle> = {
+  root: 'close',
+  'voice-led': 'spread',
+  shell: 'shell',
+  rootless: 'rootless',
+  drop2: 'drop2',
+  quartal: 'quartal',
+  upperStructure: 'upperStructure',
+};
+
+export const styleForMode = (mode: ReferenceVoicing): VoicingStyle => STYLE_FOR_MODE[mode];
+
+export const REFERENCE_VOICINGS: VoicingLesson[] = LESSONS.map((lesson) => ({
+  ...lesson,
+  label: VOICING_NAMES[STYLE_FOR_MODE[lesson.id]],
+  short: VOICING_SHORT[STYLE_FOR_MODE[lesson.id]],
+}));
+
+/**
+ * One line that belongs to the page rather than to any mode.
+ *
+ * Voice leading is not one of the voicings and never was: it is what every
+ * mode here does between one chord and the next, so naming a mode after it
+ * would say nothing about which notes are in the chord.
+ */
+export const VOICING_SHEET_NOTE =
+  'Every mode voice-leads: through a set of changes each chord takes the shape '
+  + 'that moves least from the one before it.';
 
 /** The voicings the Voicings tab teaches — voice leading is a rule, not a shape. */
 export const VOICING_LESSONS = REFERENCE_VOICINGS.filter((v) => v.id !== 'voice-led');
@@ -242,14 +282,37 @@ export function referenceNoteNames(
   accidental: Accidental = 'both',
 ): { bass: BassDisplay[]; notes: NoteDisplay[] } {
   const degrees = chordDegrees(chord.chord, chord.notes);
+  // Spelled against the chord, so the letter agrees with the degree beside
+  // it: a ♭9 is the letter a 9th up, not whichever enharmonic a pitch-class
+  // table happens to prefer.
+  const name = (midi: Midi) => spellInChord(chord.chord, midi, accidental);
   return {
     bass: chord.bass.map((b) => ({
-      name: midiName(b.midi, accidental),
+      name: name(b.midi),
       role: b.role,
       tag: BASS_ROLE_TAG[b.role],
       degree: chordDegrees(chord.chord, [b.midi])[0],
     })),
-    notes: chord.notes.map((m, i) => ({ name: midiName(m, accidental), degree: degrees[i] })),
+    notes: chord.notes.map((m, i) => ({ name: name(m), degree: degrees[i] })),
+  };
+}
+
+/**
+ * What a voicing sounded, ready for a reveal to print.
+ *
+ * Shared by every question type that shows one, so the bass is separated the
+ * same way everywhere and the degrees always line up one-to-one with the
+ * right-hand notes beside them.
+ */
+export function soundedChord(
+  chord: Chord,
+  voicing: { notes: readonly Midi[]; bass?: Midi },
+  accidental: Accidental = 'both',
+): SoundedChord {
+  return {
+    bass: voicing.bass === undefined ? undefined : spellInChord(chord, voicing.bass, accidental),
+    notes: voicing.notes.map((m) => spellInChord(chord, m, accidental)),
+    degrees: chordDegrees(chord, voicing.notes),
   };
 }
 

@@ -51,7 +51,12 @@ export const PROGRESSIONS: ProgressionDef[] = [
   // ── Foundational cadences ────────────────────────────────────────────────
   P({ id: 'ii-V-I', name: 'ii–V–I', short: 'ii V I', tonality: 'major', tier: 1,
       beatsPerChord: 4, core: true, voicing: 'rootless', devices: ['ii-V-I'], tags: ['cadence', 'major-key'],
-      chords: [C(2, 'm7', 'ii'), C(7, '9', 'V'), C(0, 'maj7', 'I')],
+      // Written as a plain dominant 7th, not a 9th, although it sounds a 9th
+      // in every voicing on the cheat sheet. So do the ii and the I, and
+      // spelling only one of the three as an extended chord said that the V
+      // was doing something the others were not. The voicing adds the tension;
+      // the symbol names the chord.
+      chords: [C(2, 'm7', 'ii'), C(7, '7', 'V'), C(0, 'maj7', 'I')],
       blurb: 'The backbone of jazz harmony: root motion down a fifth each time.' }),
   P({ id: 'I-IV-V-I', name: 'I–IV–V–I', short: 'I IV V I', tonality: 'major', tier: 1,
       beatsPerChord: 4, core: true, devices: ['cadence'], tags: ['cadence', 'major-key'],
@@ -250,8 +255,14 @@ export function requireProgression(id: string): ProgressionDef {
 }
 
 /**
- * Roman numeral with the quality written out: V9 rather than V7 when a ninth
- * is what plays.
+ * Roman numeral with the quality written out: IV13 rather than IV7 when a
+ * thirteenth is what the chord *is*.
+ *
+ * The distinction is between the chord and the voicing. A chord written as a
+ * 13th has the 13th in its definition and would be a different chord without
+ * it; a plain V7 comped rootless sounds a 9th as well, and is still a V7. The
+ * numeral follows the quality, so it can never understate the chord, and the
+ * cheat sheet prints the degrees the voicing actually sounds beside it.
  */
 export function romanLabel(chord: ProgressionChord): string {
   const suffix = romanSuffix(requireChordQuality(chord.quality));

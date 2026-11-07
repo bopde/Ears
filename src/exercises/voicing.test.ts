@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EXERCISE_TYPES, getExerciseType } from './registry';
 import type { GenContext, Question } from './types';
-import { chooseVoicing, voicingChoices, voicingLabel, NAMEABLE_VOICINGS, VOICING_MODE_IDS } from './voicing-plan';
+import {
+  chooseVoicing, voicingBass, voicingChoices, voicingLabel, NAMEABLE_VOICINGS, VOICING_MODE_IDS,
+} from './voicing-plan';
 import { defaultSettings, normaliseSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
@@ -161,7 +163,15 @@ describe('the difficulty curve', () => {
         for (let seed = 0; seed < 12; seed++) {
           const q = type.generate({ ...context(5, seed * 31 + 3), settings: tuned });
           if (!q) continue;
-          expect(expected, `${id}/${mode} used ${q.voicing}`).toContain(q.voicing);
+          // A progression may also use the voicing it names for itself, which
+          // the curve's list does not have to contain: a modal vamp asks for
+          // quartal and an altered minor ii–V for an upper structure, and
+          // outside root-position-only mode they get it.
+          const own = PROGRESSIONS.find(
+            (p) => p.id === q.correct.progression || `progression:${p.id}` === q.conceptIds[0],
+          )?.voicing;
+          const allowed = mode !== 'plain' && own ? [...expected, own] : expected;
+          expect(allowed, `${id}/${mode} used ${q.voicing}`).toContain(q.voicing);
         }
       }
     }
@@ -206,8 +216,8 @@ describe('every question says how it was voiced, and offers it plain', () => {
         const perf = new FakePerformer();
         q.playPlain(perf.asPerformer());
         expect(perf.notes.length, `${id} plays something plain`).toBeGreaterThan(0);
-        const stack = perf.notes.filter((n) => n.instrument !== BASS_INSTRUMENT);
-        const bass = perf.notes.filter((n) => n.instrument === BASS_INSTRUMENT);
+        const stack = perf.struck.filter((n) => n.instrument !== BASS_INSTRUMENT);
+        const bass = perf.struck.filter((n) => n.instrument === BASS_INSTRUMENT);
         expect(bass.length, `${id} has a bass under it`).toBeGreaterThan(0);
         // Every chord is stacked from its root: the lowest note of the stack
         // at any moment shares its pitch class with the bass under it.
@@ -237,24 +247,74 @@ describe('naming the voicing', () => {
           (c) => chordSymbol(makeChord(q.keyPc!, c.id), settings.accidental) === symbol,
         )!;
         const chord = makeChord(q.keyPc!, quality.id);
-        const bass = d <= 3;
-        const heard = new Map<string, string[]>();
-        for (const option of q.fields[0].options) {
-          const style = option.id as VoicingStyle;
-          const v = voiceChord(chord, {
+        // Voicing one of these takes three decisions, and two of them are made
+        // once for the whole question rather than per shape: whether tensions
+        // are allowed, and which rootless form. Neither is readable from the
+        // outside, so they are recovered from the audio — the combination that
+        // reproduces the target's notes is the one the question used.
+        const perf = new FakePerformer();
+        q.play(perf.asPerformer());
+        // `struck` rather than every note: above level 3 the bass may walk
+        // into the chord, and those approach notes are not part of it.
+        const sounded = perf.struck.map((n) => n.midi).sort((a, b) => a - b).join(',');
+        const voiceAs = (style: VoicingStyle, tensions: boolean, form: 'A' | 'B') => {
+          const opts = {
             style,
-            bass,
             maxNotes: 5,
+            tensions,
+            rootlessForm: form,
             ...(style === 'close' ? { bottomPc: chord.rootPc } : {}),
-          });
-          const key = v.all.join(',');
-          heard.set(key, [...(heard.get(key) ?? []), style]);
-        }
-        for (const [, styles] of heard) {
-          expect(styles.length, `${d}#${seed} ${styles.join(' and ')} sound the same`).toBe(1);
-        }
+          };
+          const dry = voiceChord(chord, opts);
+          return voicingBass(chord, dry, d) ? voiceChord(chord, { ...opts, bass: true }) : dry;
+        };
+        const target = q.correct.voicing as VoicingStyle;
+        // Tensions are off below level 3, and above it either way is possible.
+        const colours = (d >= 3 ? [true, false] : [false])
+          .flatMap((t) => (['A', 'B'] as const).map((f) => [t, f] as const))
+          .filter(([t, f]) => voiceAs(target, t, f).all.join(',') === sounded);
+        expect(colours.length, `${d}#${seed}: nothing reproduces what sounded`).toBeGreaterThan(0);
+        // More than one colour can account for the same audio — a rootless
+        // ♯9 chord sounds the same whether or not tensions were allowed,
+        // because it already has a 9th of its own. So the check is that the
+        // options are distinct under *some* colour consistent with what was
+        // heard, which is the most the audio can pin down from outside.
+        const distinctUnder = ([t, f]: readonly [boolean, 'A' | 'B']) => {
+          const heard = new Map<string, string[]>();
+          for (const option of q.fields[0].options) {
+            const style = option.id as VoicingStyle;
+            const key = voiceAs(style, t, f).all.join(',');
+            heard.set(key, [...(heard.get(key) ?? []), style]);
+          }
+          return [...heard.values()].every((styles) => styles.length === 1);
+        };
+        const names = q.fields[0].options.map((o) => o.id).join(', ');
+        expect(colours.some(distinctUnder), `${d}#${seed}: ${names} cannot all sound different`)
+          .toBe(true);
       }
     }
+  });
+
+  it('states the root under every shape that does not state its own', () => {
+    // The chord symbol is printed in the prompt, so a rootless voicing with
+    // no bass shows a listener D minor 7 and plays them an F major triad.
+    let rootFree = 0;
+    for (let d = 1; d <= 5; d++) {
+      for (let seed = 0; seed < 30; seed++) {
+        const q = type.generate(context(d, seed * 211 + d));
+        if (!q) continue;
+        const perf = new FakePerformer();
+        q.play(perf.asPerformer());
+        const stack = perf.struck.filter((n) => n.instrument !== BASS_INSTRUMENT);
+        const bass = perf.struck.filter((n) => n.instrument === BASS_INSTRUMENT);
+        const lowest = Math.min(...stack.map((n) => n.midi));
+        if (mod(lowest, 12) === q.keyPc!) continue;
+        rootFree += 1;
+        expect(bass.length, `${d}#${seed}: root-free voicing with no bass`).toBeGreaterThan(0);
+        expect(mod(bass[0].midi, 12), `${d}#${seed}: the bass states the root`).toBe(q.keyPc!);
+      }
+    }
+    expect(rootFree, 'root-free shapes really do come up').toBeGreaterThan(30);
   });
 
   it('asks only about shapes the exercises can produce', () => {

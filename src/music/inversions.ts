@@ -1,5 +1,8 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
+import type { Chord } from './chords';
+import type { Voicing } from './voicing';
+import { mod } from '../lib/util';
 
 /**
  * Inversions, as a registry like everything else.
@@ -57,6 +60,28 @@ export function requireInversion(id: string): InversionDef {
 /** The inversion that puts the tone at this position in the bass. */
 export function inversionByIndex(index: number): InversionDef | undefined {
   return INVERSIONS.find((i) => i.index === index);
+}
+
+/**
+ * What to call this voicing's inversion, if anything.
+ *
+ * Two cases are not inversions and used to be named as though they were. A
+ * voicing that leaves the root out has no root to turn over: the 3rd at the
+ * bottom of a rootless Dm7 is a note the voicing hands to the bass, not a
+ * chord stood on its head, and "first inversion" describes nothing that
+ * happened. And where a bass note sounds, the inversion is whatever *it* is
+ * playing — a rootless stack over a root bass is in root position however the
+ * notes above are arranged.
+ *
+ * Returns undefined for root position too, because naming that says nothing.
+ */
+export function namedInversion(chord: Chord, voicing: Voicing): InversionDef | undefined {
+  const rootPc = mod(chord.rootPc, 12);
+  if (!voicing.notes.some((m) => mod(m, 12) === rootPc)) return undefined;
+  const bassPc = mod(voicing.all[0], 12);
+  const index = chord.quality.intervals.findIndex((i) => mod(chord.rootPc + i, 12) === bassPc);
+  if (index <= 0) return undefined;
+  return inversionByIndex(index);
 }
 
 /** The inversions a chord of this many tones actually has. */

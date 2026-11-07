@@ -144,21 +144,36 @@ describe('difficulty', () => {
     expect(hard, `level 5 (${hard.toFixed(3)}) > level 1 (${easy.toFixed(3)})`).toBeGreaterThan(easy);
   });
 
-  it('strips the bass and the root out of chord voicings at the top level', () => {
+  it('keeps a bass under every chord voicing that does not state its own root', () => {
+    // This used to assert the opposite — that the top level strips the bass
+    // out — and the top level is where the voicings are rootless and inverted.
+    // A rootless Dm7 with no bass is F A C E: an F major triad with a 9th on
+    // it, and "minor 7th" was being marked right for a chord nobody played.
+    // The curve still thins the bass where the root is already at the bottom.
     const type = EXERCISE_TYPES.find((t) => t.id === 'chord-quality')!;
-    let easyWithBass = 0;
-    let hardWithBass = 0;
-    for (let seed = 0; seed < 40; seed++) {
-      const easyPerf = new FakePerformer();
-      type.generate(context(1, seed * 13 + 1))!.play(easyPerf.asPerformer());
-      if (easyPerf.chords[0]?.bass !== undefined) easyWithBass += 1;
-
-      const hardPerf = new FakePerformer();
-      type.generate(context(5, seed * 13 + 1))!.play(hardPerf.asPerformer());
-      if (hardPerf.chords[0]?.bass !== undefined) hardWithBass += 1;
+    let rootFree = 0;
+    let rootAtBottomWithoutBass = 0;
+    for (let difficulty = 1; difficulty <= 5; difficulty++) {
+      for (let seed = 0; seed < 40; seed++) {
+        const perf = new FakePerformer();
+        const q = type.generate(context(difficulty, seed * 13 + 1))!;
+        q.play(perf.asPerformer());
+        const voicing = perf.chords[0];
+        const rootPc = q.keyPc!;
+        if (mod(voicing.notes[0], 12) === rootPc) {
+          if (voicing.bass === undefined) rootAtBottomWithoutBass += 1;
+          continue;
+        }
+        rootFree += 1;
+        expect(voicing.bass, `level ${difficulty} seed ${seed}: root-free voicing`)
+          .toBeDefined();
+        expect(mod(voicing.bass!, 12), 'and the bass states the root').toBe(rootPc);
+      }
     }
-    expect(easyWithBass).toBe(40);
-    expect(hardWithBass).toBe(0);
+    // Both halves have to be reachable or the assertion above proves nothing.
+    expect(rootFree, 'the curve really does produce root-free voicings').toBeGreaterThan(20);
+    expect(rootAtBottomWithoutBass, 'and still drops the doubling sometimes')
+      .toBeGreaterThan(0);
   });
 });
 
@@ -383,27 +398,41 @@ describe('inversion questions sound what they claim', () => {
 });
 
 describe('chord reveals report the voicing they used', () => {
-  it('writes a slash chord whenever the voicing inverted it', () => {
+  it('never leaves a note other than the root at the bottom, so never writes a slash', () => {
+    // The old version of this asserted a slash whenever the lowest sounding
+    // note was not the root. There are no such questions any more: whatever
+    // the voicing does, a bass states the root underneath it. The assertion
+    // that is left is the stronger one.
     const chordTypes = EXERCISE_TYPES.filter((t) => t.id.startsWith('chord-') && t.id !== 'chord-inversion');
-    let slashes = 0;
+    let inverted = 0;
+    let rootless = 0;
     for (const type of chordTypes) {
       for (let difficulty = 1; difficulty <= 5; difficulty++) {
         for (let seed = 0; seed < 30; seed++) {
           const q = type.generate(context(difficulty, seed * 379 + difficulty))!;
           const perf = new FakePerformer();
           q.play(perf.asPerformer());
-          const lowest = Math.min(...perf.notes.map((n) => n.midi));
+          // The approach notes of a walking-in bass are below the root by
+          // design; what has to state the root is the chord as it strikes.
+          const lowest = Math.min(...perf.struck.map((n) => n.midi));
           const rootPc = q.keyPc!;
-          const heading = q.reveal.heading;
-          if (mod(lowest, 12) === rootPc) {
-            expect(heading, `${type.id} root position`).not.toMatch(/\/[A-G]/);
-          } else {
-            slashes++;
-            expect(heading, `${type.id} inverted`).toMatch(/\/[A-G]/);
+          expect(mod(lowest, 12), `${type.id} at level ${difficulty}, seed ${seed}`).toBe(rootPc);
+          expect(q.reveal.heading, `${type.id} heading`).not.toMatch(/\/[A-G]/);
+          const stack = perf.chords[0].notes;
+          if (mod(stack[0], 12) !== rootPc) inverted += 1;
+          // A voicing with no root in it has no root to turn over, so calling
+          // it an inversion describes something that did not happen.
+          if (!stack.some((m) => mod(m, 12) === rootPc)) {
+            rootless += 1;
+            expect(q.reveal.detail, `${type.id} rootless at level ${difficulty}, seed ${seed}`)
+              .not.toMatch(/inversion/i);
           }
         }
       }
     }
-    expect(slashes, 'the harder voicings really do invert').toBeGreaterThan(0);
+    // Non-vacuous: the stacks above the bass really are turned over, and some
+    // of them really do leave the root out.
+    expect(inverted, 'the harder voicings really do invert').toBeGreaterThan(0);
+    expect(rootless, 'and some leave the root out altogether').toBeGreaterThan(0);
   });
 });

@@ -1,4 +1,7 @@
-import { VOICING_STYLES, type RootlessForm, type VoicingStyle } from '../music/voicing';
+import {
+  VOICING_STYLES, isRootFree, type RootlessForm, type Voicing, type VoicingStyle,
+} from '../music/voicing';
+import type { Chord } from '../music/chords';
 import { CONCEPTS, voicingConceptId } from '../music/catalog';
 import { PROGRESSIONS } from '../music/progressions';
 import type { PracticeSettings } from '../session/settings';
@@ -17,8 +20,10 @@ import type { Rng } from '../lib/rng';
 export type VoicingMode = 'curve' | 'plain' | 'realistic';
 
 export const VOICING_MODES: Array<{ value: VoicingMode; label: string; blurb: string }> = [
-  { value: 'curve', label: 'Mixed', blurb: 'Plain at first, the way a pianist plays by the top levels.' },
-  { value: 'plain', label: 'Plain', blurb: 'Root position over a root bass, every time.' },
+  // "By level" rather than "Mixed": the note-name setting is already called
+  // that, and a settings screen with two Mixeds on it explains neither.
+  { value: 'curve', label: 'By level', blurb: 'Plain at first, the way a pianist plays by the top levels.' },
+  { value: 'plain', label: 'Root position only', blurb: 'Root position over a root bass, every time.' },
   { value: 'realistic', label: 'Realistic', blurb: 'Rootless and drop 2, the way you meet these chords on a stand.' },
 ];
 
@@ -44,34 +49,87 @@ export function voicingChoices(mode: VoicingMode, difficulty: number): VoicingSt
 }
 
 /**
+ * Whether a progression's own recommendation is allowed to steer the choice.
+ *
+ * Only where the curve has stopped holding the learner's hand. Up to level 3
+ * the point is to hear the changes at all, and a ii–V–I comped rootless is
+ * one more thing in the way of that; from level 4 the point is to meet them
+ * as they are played, and then "what would a pianist reach for here" is
+ * exactly the right question. Root position only means root position only.
+ */
+function recommendationApplies(mode: VoicingMode, difficulty: number): boolean {
+  if (mode === 'plain') return false;
+  if (mode === 'realistic') return true;
+  return clamp(Math.round(difficulty), 1, 5) >= 4;
+}
+
+/** How much more often the recommended style comes up where it applies. */
+const RECOMMENDED_WEIGHT = 3;
+
+/**
  * Picks one of them, leaning towards whichever the learner hears least well.
  *
  * `focus` comes from the learning model: the same chord heard in close
  * position and rootless is two different listening problems, and a learner who
  * has one and not the other should meet the other more often.
+ *
+ * `recommended` is the voicing the progression itself names — rootless for a
+ * ii–V–I, shell for a blues, quartal for modal changes. The cheat sheet has
+ * shown it all along and the exercises ignored it, so a learner could read
+ * that these changes are comped rootless and never once hear them that way.
+ * The two weights multiply: a recommended style the learner is also weak at
+ * is the most worth playing, and the model should not have to choose.
  */
 export function chooseVoicing(
   rng: Rng,
   mode: VoicingMode,
   difficulty: number,
   focus: readonly string[] = [],
+  recommended?: VoicingStyle,
 ): VoicingStyle {
-  const choices = voicingChoices(mode, difficulty);
+  const base = voicingChoices(mode, difficulty);
+  const steer = recommended !== undefined && recommendationApplies(mode, difficulty);
+  const choices = steer && !base.includes(recommended)
+    ? [...base, recommended]
+    : base;
   if (choices.length === 1) return choices[0];
   return rng.weighted(choices, (style) => {
     const rank = focus.indexOf(style);
-    return rank === -1 ? 1 : 2.5 / (1 + rank * 0.5);
+    const weak = rank === -1 ? 1 : 2.5 / (1 + rank * 0.5);
+    return weak * (steer && style === recommended ? RECOMMENDED_WEIGHT : 1);
   });
 }
 
-/** Whether a question at this level puts a bass note under the voicing. */
-export function voicingBass(style: VoicingStyle, difficulty: number): boolean {
-  if (style === 'rootless') return false;
-  return difficulty <= 3;
+/**
+ * Whether a question puts a bass note under the voicing.
+ *
+ * The root has to be audible somewhere, and a voicing whose lowest note is
+ * not the root does not state it. Those get a bass at every level — a
+ * rootless Dm7 without one is an F major triad with a 9th on top, and "minor
+ * 7th" stops being a defensible answer to what sounded. An inversion is the
+ * same problem in a milder form: C E G over no bass is as much an E minor
+ * ♭6 as a C major.
+ *
+ * Where the root is already at the bottom of the stack, the bass only doubles
+ * it, so it is a help rather than a necessity and the curve may take it away.
+ */
+export function voicingBass(chord: Chord, voicing: Voicing, difficulty: number): boolean {
+  return isRootFree(chord, voicing) || difficulty <= 3;
 }
 
 export const voicingLabel = (style: VoicingStyle): string =>
   CONCEPTS.resolve(voicingConceptId(style)).name;
+
+/**
+ * The same name, with the rootless form where there is one.
+ *
+ * Only for describing a voicing that has already sounded. Answer buttons use
+ * `voicingLabel`, because "Rootless A" and "Rootless B" are not two answers
+ * to the question of how a chord is voiced — they are the same answer, and
+ * offering both would make a correct one wrong half the time.
+ */
+export const voicingLabelFor = (style: VoicingStyle, form?: RootlessForm): string =>
+  form === undefined ? voicingLabel(style) : `${voicingLabel(style)} ${form}`;
 
 /** The styles a question can be asked about — the ones the curve can produce. */
 export const NAMEABLE_VOICINGS: VoicingStyle[] = ['close', 'spread', 'drop2', 'rootless', 'shell'];

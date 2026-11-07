@@ -429,8 +429,22 @@ p { margin: 0; }
 
 .prompt__sub { font-size: 0.85rem; color: var(--fg-dim); }
 
-.transport { display: flex; gap: 0.5rem; }
-.transport .btn { flex: 1; }
+/*
+ * Three buttons, one of which says "Hear in root position". They do not fit
+ * across a 380px phone in one line, and a button that overflows takes the
+ * page with it — so they wrap, and each keeps a width it can be read at.
+ */
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.transport .btn {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
 
 .playing-dot {
   width: 0.5rem;
@@ -517,7 +531,13 @@ p { margin: 0; }
   flex-direction: column;
   gap: 0.75rem;
   animation: rise 0.16s ease-out;
+  /* A flex item is as wide as its content unless told otherwise, so without
+     this a long voicing pushes the whole page sideways instead of scrolling
+     inside its own row. */
+  min-width: 0;
 }
+
+.feedback > div { min-width: 0; }
 
 .feedback--right { border-color: var(--ok); background: var(--ok-soft); }
 .feedback--wrong { border-color: var(--bad); background: var(--bad-soft); }
@@ -546,6 +566,142 @@ p { margin: 0; }
 
 .feedback__detail { font-size: 0.92rem; color: var(--fg-dim); }
 .feedback__notes { font-family: var(--mono); font-size: 0.78rem; color: var(--fg-faint); }
+
+/* What the voicing added on top of the chord as written. */
+.feedback__tag {
+  margin-left: 0.5rem;
+  font-family: var(--sans, inherit);
+  font-size: 0.72rem;
+  font-weight: 560;
+  letter-spacing: 0.01em;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+/* ── What sounded ────────────────────────────────────────────────────────── */
+
+/*
+ * The bass sits on its own line above the stack, because it is a different
+ * voice rather than the bottom of the same one.
+ */
+.sounded {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.3rem 0 0.1rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+
+.sounded__bass {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--accent);
+}
+
+.sounded__label {
+  font-family: var(--sans, inherit);
+  font-size: 0.65rem;
+  font-weight: 560;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+/* Note over degree, so the two lines read as columns. Long voicings scroll
+   rather than wrapping, which would break that alignment. */
+.sounded__stack {
+  display: flex;
+  gap: 0.6rem;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0.1rem;
+}
+
+.sounded__stack::-webkit-scrollbar { display: none; }
+
+.sounded__note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+}
+
+.sounded__name { white-space: nowrap; }
+
+.sounded__degree {
+  font-size: 0.7rem;
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+/* ── One row per chord ───────────────────────────────────────────────────── */
+
+.revrows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.45rem 0 0.1rem;
+}
+
+.revrow {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.5rem;
+  background: var(--bg-elev);
+  padding: 0.1rem 0.5rem 0.1rem;
+}
+
+.revrow--target {
+  border-color: var(--accent);
+}
+
+/* The head never wraps: a numeral that falls onto a second line stops
+   reading as a label for the symbol beside it. */
+.revrow__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.revrow__roman {
+  font-size: 0.76rem;
+  color: var(--fg-faint);
+  min-width: 3.2rem;
+}
+
+.revrow__symbol {
+  font-size: 0.95rem;
+  font-weight: 560;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.revrow--target .revrow__symbol { color: var(--accent); }
+
+.revrow__more {
+  font-size: 1rem;
+  color: var(--fg-faint);
+}
+
+.revrow .sounded { padding-bottom: 0.45rem; }
 
 /* ── Shared result ───────────────────────────────────────────────────────── */
 
@@ -1154,6 +1310,14 @@ details.disclosure > div { padding-bottom: 1rem; }
   font-size: 0.76rem;
   font-weight: 560;
   color: var(--fg);
+}
+
+/* Which rootless form a chord took, beside its symbol. */
+.refdegrees__form {
+  margin-left: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 560;
+  color: var(--fg-faint);
 }
 
 /* The degrees run to several chords, so they wrap rather than scroll. */

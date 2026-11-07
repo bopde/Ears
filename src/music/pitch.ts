@@ -32,6 +32,39 @@ export function pcNameDual(pc: PitchClass): string {
   return SHARP_NAMES[i] === FLAT_NAMES[i] ? SHARP_NAMES[i] : `${SHARP_NAMES[i]}/${FLAT_NAMES[i]}`;
 }
 
+/** The seven letters, and the pitch class each names without an accidental. */
+export const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
+const LETTER_PCS = [0, 2, 4, 5, 7, 9, 11];
+
+/**
+ * Four spellings this app will not write, however the theory asks for them.
+ *
+ * Each is a letter away from where a reader expects it — F♭ is an E, B♯ is a
+ * C in the next octave — and a practice tool that prints one has made a
+ * learner translate before they can play. They are also the only names where
+ * the octave number stops agreeing with the pitch, which would make "B♯3"
+ * sound a semitone above B3 rather than below C4.
+ */
+const UNSPELLABLE = new Set(['F♭', 'C♭', 'E♯', 'B♯']);
+
+/**
+ * Spells a pitch class on a given letter, or says it cannot be done readably.
+ *
+ * Returns null for a double accidental and for the four names above, so a
+ * caller can fall back to the plain enharmonic: a C diminished 7th is written
+ * with an A rather than a B𝄫, which is what anyone reading it would play.
+ */
+export function spellOnLetter(pc: PitchClass, letterIndex: number): string | null {
+  const index = mod(letterIndex, 7);
+  let delta = mod(pc - LETTER_PCS[index], 12);
+  if (delta > 6) delta -= 12;
+  if (Math.abs(delta) > 1) return null;
+  const name = delta === 0
+    ? LETTERS[index]
+    : `${LETTERS[index]}${delta > 0 ? '\u266f' : '\u266d'}`;
+  return UNSPELLABLE.has(name) ? null : name;
+}
+
 export const pcOf = (midi: Midi): PitchClass => mod(Math.round(midi), 12);
 
 export const octaveOf = (midi: Midi): number => Math.floor(Math.round(midi) / 12) - 1;

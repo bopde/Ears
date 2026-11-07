@@ -1,4 +1,4 @@
-import type { ExerciseType, GenContext, Question } from './types';
+import type { ExerciseType, GenContext, Question, RevealRow } from './types';
 import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, questionId, tempoFor,
 } from './support';
@@ -9,10 +9,10 @@ import {
 import {
   CHORD_QUALITIES, chordConceptId, chordSymbol, makeChord, nearestQualities, type Chord,
 } from '../music/chords';
-import { voiceChord, voiceProgression, type VoicingStyle } from '../music/voicing';
+import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
 import { approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel } from './voicing-plan';
-import { Performer, progressionBass } from '../audio/performer';
-import { rootMotionLine } from '../audio/reference';
+import { Performer, progressionBass, type BassNote } from '../audio/performer';
+import { rootMotionLine, soundedChord } from '../audio/reference';
 import { pcNameDual } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import type { Rng } from '../lib/rng';
@@ -88,6 +88,10 @@ function enabledProgressions(settings: PracticeSettings): ProgressionDef[] {
 interface Changes {
   realised: RealisedChord[];
   voicingStyle: VoicingStyle;
+  /** The voicings that were scheduled, so a reveal can list what sounded. */
+  voicings: Voicing[];
+  /** The bass under them, in the order it is struck. */
+  bass: BassNote[];
   /** One line naming the root motion, as the bass plays it. */
   motion: string;
   play: (perf: Performer) => number;
@@ -107,13 +111,21 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
   // The same curve the chord questions use. Hearing a ii–V–I in close position
   // and missing it rootless is a gap in one direction, not two, so both kinds
   // of question have to be able to produce both.
-  const voicingStyle = chooseVoicing(ctx.rng, ctx.settings.voicingMode, level, ctx.voicingFocus);
+  const voicingStyle = chooseVoicing(
+    ctx.rng, ctx.settings.voicingMode, level, ctx.voicingFocus, def.voicing,
+  );
   const voicings = voiceProgression(chords, {
     style: voicingStyle,
     maxNotes: 5,
     // At the bottom of the curve "close" means root position, not merely
     // the tones packed together: the root has to be the note underneath.
     rootPosition: voicingStyle === 'close',
+    // And close position is the one style that stays plain, so the plainest
+    // setting and the first levels sound the chords and nothing else.
+    // Everywhere else the voicing may add what a pianist would: without this,
+    // the ii–V–I's G7 sounded no 9th in a question while the cheat sheet
+    // taught it with one.
+    tensions: voicingStyle !== 'close',
   });
   const changes = Performer.changes(realised, voicings);
   // Root position over a root bass: the changes with nothing on top of them.
@@ -123,12 +135,15 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
   );
   const totalBeats = realised.reduce((n, r) => n + r.beats, 0);
 
+  const line = progressionBass(changes, style, { approachFromAbove: fromAbove });
   return {
     realised,
     voicingStyle,
+    voicings,
+    bass: line,
     // The same call the performer makes, so the description and the audio are
     // reading from one line rather than two that happen to agree.
-    motion: rootMotionLine(progressionBass(changes, style, { approachFromAbove: fromAbove })),
+    motion: rootMotionLine(line),
     play: (perf) => {
       perf.configure({ tempo: tempoFor(ctx, 118) });
       return perf.progression(changes, perf.origin(), {
@@ -151,6 +166,42 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
 
 const chordLabel = (chord: Chord, settings: PracticeSettings) => chordSymbol(chord, settings.accidental);
 
+/**
+ * One row per chord of the progression, read off the voicings that played.
+ *
+ * The reveal used to be a single line of symbols, which answered "what were
+ * the chords" and nothing else. What a listener who missed it wants is which
+ * numeral each symbol was and what the notes under it were, and neither fits
+ * on one line — so each chord gets a row, and the notes stay folded away
+ * until the row is tapped.
+ *
+ * The bass is matched to its chord by beat rather than by index: a walking
+ * line plays four notes to a chord and the first of them is the one that
+ * states the root.
+ */
+function revealRows(
+  changes: Changes,
+  settings: PracticeSettings,
+  targetIndex?: number,
+): RevealRow[] {
+  let beat = 0;
+  return changes.realised.map((r, i) => {
+    const start = beat;
+    beat += r.beats;
+    const bass = changes.bass.find((b) => b.beat >= start && b.beat < beat && b.role === 'root');
+    return {
+      roman: r.roman,
+      symbol: chordLabel(r.chord, settings),
+      target: targetIndex === i ? true : undefined,
+      played: soundedChord(
+        r.chord,
+        { notes: changes.voicings[i].notes, bass: bass?.midi },
+        settings.accidental,
+      ),
+    };
+  });
+}
+
 export const progressionExercise: ExerciseType = {
   id: 'progression',
   name: 'Chord changes',
@@ -168,8 +219,6 @@ export const progressionExercise: ExerciseType = {
 
     const n = progressionOptionCount(ctx.difficulty, def, pool);
     const distractors = sameLengthDistractors(ctx.rng, def, pool, n - 1, ctx.difficulty);
-
-    const symbols = changes.realised.map((r) => chordLabel(r.chord, ctx.settings)).join('  |  ');
 
     return {
       id: questionId('progression'),
@@ -211,8 +260,9 @@ export const progressionExercise: ExerciseType = {
         // What to listen for next time: the motion between the roots, read off
         // the bass notes that were actually scheduled rather than off the
         // numerals, so it cannot describe something other than what played.
-        detail: `${romanLine(def)}  ·  ${changes.motion}`,
-        notes: `${symbols}   —   ${voicingLabel(changes.voicingStyle)}`,
+        detail: changes.motion,
+        notes: voicingLabel(changes.voicingStyle),
+        rows: revealRows(changes, ctx.settings),
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 12,
     };
@@ -316,8 +366,11 @@ export const progressionChordExercise: ExerciseType = {
       reveal: {
         heading: chordLabel(target, ctx.settings),
         detail: `${realised[index].roman} of ${pcNameDual(tonic)}  ·  ${def.name}`,
-        notes: `${realised.map((r) => chordLabel(r.chord, ctx.settings)).join('  |  ')}` +
-          `   —   ${voicingLabel(changes.voicingStyle)}`,
+        notes: voicingLabel(changes.voicingStyle),
+        // The same rows the whole-progression question shows, with the one
+        // that was asked about marked: where it sat in the sequence is most
+        // of what there was to hear.
+        rows: revealRows(changes, ctx.settings, index),
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 14,
     };

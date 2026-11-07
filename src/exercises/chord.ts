@@ -3,23 +3,35 @@ import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, pitchClassField, questionId,
 } from './support';
 import {
-  CHORD_QUALITIES, chordConceptId, chordDegrees, chordFullName, makeChord, nearestQualities,
-  qualityLabel, qualityPitchClasses, samePitchClasses, slashSymbol,
+  CHORD_QUALITIES, chordConceptId, chordFullName, makeChord, nearestQualities,
+  addedTensions, qualityLabel, slashSymbol,
   type Chord, type ChordQuality,
 } from '../music/chords';
-import { inversionByIndex } from '../music/inversions';
-import { inversionIndex } from '../music/voicing';
+import { soundedChord } from '../audio/reference';
+import { approachInto, chooseLever, playVoicing, type Lever } from './levers';
+import { namedInversion } from '../music/inversions';
 import { mod } from '../lib/util';
-import { arpeggiate, voiceChord, type VoicingStyle } from '../music/voicing';
-import { chooseVoicing, voicingBass, voicingLabel } from './voicing-plan';
+import {
+  arpeggiate, couldSound, isRootFree, voiceChord, type RootlessForm, type VoicingStyle,
+} from '../music/voicing';
+import { chooseVoicing, voicingBass, voicingLabelFor } from './voicing-plan';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
-import { PITCH_CLASSES, midiName, pcName, pcNameDual, type PitchClass } from '../music/pitch';
+import { PITCH_CLASSES, pcName, pcNameDual, type Midi, type PitchClass } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import { clamp } from '../lib/util';
 
 /** A reference pitch the user can measure everything else against. */
 const REFERENCE_PC = 0;
+
+/**
+ * What to tell a listener who hears a note the chord symbol does not name.
+ *
+ * Marking is by the written chord throughout: the extra notes belong to the
+ * voicing, and a learner who answers "m7" to a rootless Dm7 with a 9th on it
+ * has heard the chord correctly.
+ */
+const COLOUR_NOTE = 'Tensions may be added \u2014 name the basic quality.';
 
 function enabledQualities(settings: PracticeSettings): ChordQuality[] {
   const allowed = new Set(settings.chordQualities);
@@ -32,18 +44,68 @@ function enabledQualities(settings: PracticeSettings): ChordQuality[] {
  *
  * This is the real difficulty lever for chord recognition: a root-position
  * close voicing with a bass note underneath hands you the root and the stack,
- * while a rootless inversion with no bass makes you hear the chord itself.
+ * while an inversion over a bass makes you hear the chord itself.
  * The styles come from the shared curve, so what a chord question offers and
  * what a progression question offers move together.
  */
-function voicingPlan(ctx: GenContext): { style: VoicingStyle; bass: boolean; maxNotes: number } {
+interface VoicingPlan {
+  style: VoicingStyle;
+  maxNotes: number;
+  /** Which of the two rootless shapes, where the style is one that has them. */
+  form: RootlessForm;
+  /** Whether to double a root that is already at the bottom of the stack. */
+  doubleRoot: boolean;
+  /** What is made harder at the top of the curve, if anything. */
+  lever?: Lever;
+  /** The notes the bass walks in on, drawn here so a replay matches. */
+  walk?: Midi[];
+}
+
+function voicingPlan(ctx: GenContext): VoicingPlan {
   const difficulty = clamp(Math.round(ctx.difficulty), 1, 5);
   const style = chooseVoicing(ctx.rng, ctx.settings.voicingMode, difficulty, ctx.voicingFocus);
   return {
     style,
-    bass: voicingBass(style, difficulty) && ctx.rng.chance(difficulty <= 2 ? 1 : 0.7),
     maxNotes: difficulty <= 1 ? 4 : 5,
+    // A single chord has no chord before it to alternate from, so the form is
+    // drawn rather than threaded. Without this every single-chord question in
+    // the app was form A, and form B is half of what there is to learn.
+    form: ctx.rng.chance(0.5) ? 'A' : 'B',
+    doubleRoot: ctx.rng.chance(difficulty <= 2 ? 1 : 0.7),
+    lever: chooseLever(ctx.rng, difficulty),
   };
+}
+
+/**
+ * Voices the chord, then decides about the bass, then voices it again.
+ *
+ * Which way round that goes is the point. Whether the root needs stating
+ * depends on where the voicing put its lowest note, and that is not known
+ * until the voicing exists — so the bass cannot be chosen from the style
+ * alone, which is how a rootless chord came to be played with no root
+ * anywhere in it. The second call is free of randomness and sees the same
+ * inputs, so it returns the same stack with a bass attached.
+ */
+function voiceWithBass(
+  difficulty: number,
+  chord: Chord,
+  plan: VoicingPlan,
+  tensions: boolean,
+): ReturnType<typeof voiceChord> {
+  const opts = {
+    style: plan.style,
+    maxNotes: plan.maxNotes,
+    rootPosition: plan.style === 'close',
+    rootlessForm: plan.form,
+    tensions,
+  };
+  const dry = voiceChord(chord, opts);
+  // Where the root is already underneath, the bass merely doubles it, and the
+  // curve thins that out as the levels rise. Where it is not, it is not a
+  // choice: see `voicingBass`.
+  const wanted = voicingBass(chord, dry, difficulty) &&
+    (isRootFree(chord, dry) || plan.doubleRoot);
+  return wanted ? voiceChord(chord, { ...opts, bass: true }) : dry;
 }
 
 function soundingPitchClasses(voicing: ReturnType<typeof voiceChord>): Set<PitchClass> {
@@ -64,12 +126,54 @@ function unambiguous(
   target: ChordQuality,
   sounding: Set<PitchClass>,
 ): ChordQuality[] {
+  // Not "sounds exactly this quality's notes", which was the old test and is
+  // too narrow once voicings may add tensions: a rootless Dm7 sounds F A C E,
+  // which no quality names exactly and which an F major triad plus a 9th
+  // names perfectly well. `couldSound` is the voicing engine's own account of
+  // what a chord may play, so the filter and the engine cannot disagree.
+  // Rivals are always allowed their own tensions, whatever this question was
+  // voiced with. A listener cannot know which setting produced what they
+  // heard, so a quality that could account for it is a defensible answer
+  // whether or not this particular question would have voiced it that way.
   const matchesEar = (q: ChordQuality) =>
-    PITCH_CLASSES.some((root) => samePitchClasses(qualityPitchClasses(q, root), sounding));
-  const kept = pool.filter((q) => q === target || !matchesEar(q));
-  // Two options is the least a question can offer; below that, take the pool
-  // as it stands rather than hand back something unanswerable.
-  return kept.length >= 2 ? kept : pool;
+    PITCH_CLASSES.some((root) => couldSound(makeChord(root, q.id), sounding, true));
+  return pool.filter((q) => q === target || !matchesEar(q));
+}
+
+/**
+ * The chord as it will sound, and the qualities still worth offering.
+ *
+ * Tensions are on wherever the style is not close position, because that is
+ * how these chords are played and how the cheat sheet already teaches them.
+ * Close position stays plain, so the plainest setting and the first level
+ * sound exactly what they used to.
+ *
+ * Adding them can cost an option: every tension is a note some other quality
+ * might claim, and the filter below drops any quality that could account for
+ * what sounded. Where that leaves a question with no second answer, the
+ * voicing gives up its tensions rather than the question giving up its
+ * options — the same chord, played plainly. It is a safety net rather than a
+ * road: over two thousand generated questions it never came into play.
+ */
+function materialFor(
+  ctx: GenContext,
+  pool: ChordQuality[],
+  quality: ChordQuality,
+  rootPc: number,
+): { material: ChordMaterial; offered: ChordQuality[] } {
+  const plan = voicingPlan(ctx);
+  let last: { material: ChordMaterial; offered: ChordQuality[] } | null = null;
+  for (const tensions of [true, false]) {
+    const material = buildMaterial(ctx, quality, rootPc, plan, tensions);
+    const offered = unambiguous(pool, quality, soundingPitchClasses(material.voicing));
+    last = { material, offered };
+    // Two options is the least a question can offer.
+    if (offered.length >= 2) return last;
+  }
+  // Even plain, this chord is indistinguishable from others in the pool —
+  // a diminished seventh, say. Offer the pool as it stands rather than hand
+  // back something unanswerable.
+  return { material: last!.material, offered: pool };
 }
 
 function qualityOption(q: ChordQuality) {
@@ -81,20 +185,31 @@ interface ChordMaterial {
   rootPc: number;
   voicing: ReturnType<typeof voiceChord>;
   style: VoicingStyle;
+  /** Whether the voicing was allowed notes the chord does not itself name. */
+  tensions: boolean;
   play: (perf: import('../audio/performer').Performer) => number;
   playReveal: (perf: import('../audio/performer').Performer) => number;
   playPlain: (perf: import('../audio/performer').Performer) => number;
 }
 
-function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): ChordMaterial {
+function buildMaterial(
+  ctx: GenContext,
+  quality: ChordQuality,
+  rootPc: number,
+  plan: VoicingPlan,
+  tensions: boolean,
+): ChordMaterial {
   const chord = makeChord(rootPc, quality.id);
-  const plan = voicingPlan(ctx);
-  const voicing = voiceChord(chord, {
-    style: plan.style,
-    bass: plan.bass,
-    maxNotes: plan.maxNotes,
-    rootPosition: plan.style === 'close',
-  });
+  const difficulty = clamp(Math.round(ctx.difficulty), 1, 5);
+  // Close position stays plain whatever is asked for, so the effective answer
+  // is what the rest of the question has to reason about.
+  const allowed = tensions && plan.style !== 'close';
+  const voicing = voiceWithBass(difficulty, chord, plan, allowed);
+  // Drawn once, here, rather than inside `play`: a replay has to sound like
+  // the first hearing, and the approach is part of what was heard.
+  const walk = plan.lever === 'walk-in' && voicing.bass !== undefined
+    ? approachInto(ctx.rng, voicing.bass)
+    : undefined;
   // The same chord stacked from its root with the root underneath: what the
   // voicing was dressing up, offered after the answer.
   const plain = voiceChord(chord, { style: 'close', rootPosition: true, bass: true, maxNotes: 5 });
@@ -107,6 +222,7 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
     rootPc,
     voicing,
     style: plan.style,
+    tensions: allowed,
     playPlain: (perf) => {
       const origin = perf.origin();
       const gain = polyphonyGain(plain.all.length);
@@ -116,11 +232,15 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
       }
       return 3.2;
     },
-    play: (perf) => {
-      const origin = perf.origin();
-      perf.chord(voicing, origin, 0, { beats: 4, roll, velocity: 0.7 });
-      return 4 * perf.beatSeconds;
-    },
+    // Above level 3 one thing is made harder, and never two: see levers.ts
+    // for why that is not the same as taking the bass away.
+    play: (perf) => playVoicing(perf, chord, voicing, {
+      lever: plan.lever,
+      walk,
+      roll,
+      seconds: 4 * perf.beatSeconds,
+      velocity: 0.7,
+    }),
     playReveal: (perf) => {
       const origin = perf.origin();
       const notes = arpeggiate(chord, 55);
@@ -141,9 +261,13 @@ function buildMaterial(ctx: GenContext, quality: ChordQuality, rootPc: number): 
 /**
  * What actually sounded.
  *
- * Several of the voicing styles turn the chord over, so the heading uses slash
- * notation and the detail names the inversion — otherwise the reveal reports
- * less than the ear was given.
+ * Two things here are easy to get wrong and both were. An inversion is named
+ * only when the voicing contains the root to be inverted: a rootless chord
+ * has no root, so "first inversion" describes nothing, and the 3rd at the
+ * bottom of one is not a chord turned over but a note the voicing leaves to
+ * the bass. And a slash is written only when a bass note actually sounds and
+ * is not the root — with a root bass under a rootless stack, "Dm7/F" would
+ * name an F that no longer has the bottom of anything.
  */
 function revealFor(
   chord: Chord,
@@ -151,18 +275,28 @@ function revealFor(
   style: VoicingStyle,
   accidental: PracticeSettings['accidental'],
 ) {
-  const bassPc = mod(voicing.all[0], 12);
-  const inverted = inversionByIndex(inversionIndex(chord, voicing));
-  const named = inverted && inverted.index > 0 ? inverted : undefined;
-  const parts = [chordFullName(chord, accidental), voicingLabel(style)];
+  const named = namedInversion(chord, voicing);
+  const parts = [chordFullName(chord, accidental), voicingLabelFor(style, voicing.form)];
   if (named) parts.splice(1, 0, named.name);
+  const slashPc = voicing.bass !== undefined && mod(voicing.bass, 12) !== mod(chord.rootPc, 12)
+    ? mod(voicing.bass, 12)
+    : chord.rootPc;
+  const added = addedTensions(chord, voicing.all);
   return {
-    heading: slashSymbol(chord, bassPc, accidental),
+    heading: slashSymbol(chord, slashPc, accidental),
     detail: parts.join('  \u00b7  '),
-    // The degrees say what the voicing is; the note names say what it was.
-    notes: `${voicing.all.map((m) => midiName(m, accidental)).join('  ')}` +
-      `   \u2014   ${chordDegrees(chord, voicing.notes).join(' ')}`,
+    // What the voicing added on top of the chord as written. The question
+    // asked for the basic quality, so this says where the extra notes came
+    // from rather than leaving them to look like a wrong answer.
+    tag: added.length ? `played with ${formatList(added)}` : undefined,
+    played: soundedChord(chord, voicing, accidental),
   };
+}
+
+/** "9", "9 and 13", "9, ♯11 and 13". */
+export function formatList(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 export const chordQualityExercise: ExerciseType = {
@@ -177,9 +311,7 @@ export const chordQualityExercise: ExerciseType = {
     const quality = chooseTarget(ctx, pool, (q) => chordConceptId(q.id), (q) => q.tier);
     if (!quality) return null;
     const rootPc = chooseKey(ctx);
-    const material = buildMaterial(ctx, quality, rootPc);
-
-    const offered = unambiguous(pool, quality, soundingPitchClasses(material.voicing));
+    const { material, offered } = materialFor(ctx, pool, quality, rootPc);
     const n = optionCount(ctx.difficulty, offered.length);
     const distractors = pickDistractors(ctx.rng, quality, offered, n - 1, ctx.difficulty, nearestQualities);
     const chord = makeChord(rootPc, quality.id);
@@ -190,7 +322,13 @@ export const chordQualityExercise: ExerciseType = {
       conceptIds: [chordConceptId(quality.id)],
       difficulty: ctx.difficulty,
       keyPc: rootPc,
-      prompt: { title: 'What quality is this chord?' },
+      prompt: {
+        title: 'What quality is this chord?',
+        // Said only where it is true, so it is never noise. Outside close
+        // position the voicing adds what a pianist would, and the answer is
+        // still the chord underneath: a Dm7 played with a 9th is a Dm7.
+        sub: material.tensions ? COLOUR_NOTE : undefined,
+      },
       fields: [
         {
           key: 'quality',
@@ -230,9 +368,7 @@ export const chordFullExercise: ExerciseType = {
     const quality = chooseTarget(ctx, pool, (q) => chordConceptId(q.id), (q) => q.tier);
     if (!quality) return null;
     const rootPc = chooseKey(ctx);
-    const material = buildMaterial(ctx, quality, rootPc);
-
-    const offered = unambiguous(pool, quality, soundingPitchClasses(material.voicing));
+    const { material, offered } = materialFor(ctx, pool, quality, rootPc);
     const n = optionCount(ctx.difficulty, offered.length);
     const distractors = pickDistractors(ctx.rng, quality, offered, n - 1, ctx.difficulty, nearestQualities);
     const chord = makeChord(rootPc, quality.id);
@@ -243,7 +379,10 @@ export const chordFullExercise: ExerciseType = {
       conceptIds: [chordConceptId(quality.id), keyConceptId(rootPc)],
       difficulty: ctx.difficulty,
       keyPc: rootPc,
-      prompt: { title: 'Name the chord', sub: 'Root, then quality' },
+      prompt: {
+        title: 'Name the chord',
+        sub: material.tensions ? `Root, then quality  \u00b7  ${COLOUR_NOTE}` : 'Root, then quality',
+      },
       fields: [
         pitchClassField('root', 'Root'),
         {

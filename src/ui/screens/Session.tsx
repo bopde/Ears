@@ -3,9 +3,10 @@ import { useApp } from '../state';
 import { SessionEngine, type SessionSummary } from '../../session/engine';
 import { buildDailyQuestions, dailyNumber, dailySettings } from '../../session/daily';
 import { AnswerGrid } from '../components/AnswerGrid';
-import { Button, TopBar } from '../components/ui';
+import { Button, TopBar, clsx } from '../components/ui';
 import { CheckIcon, CrossIcon, HintIcon, NextIcon, ReplayIcon } from '../components/Icons';
 import { formatClock } from '../../lib/util';
+import type { RevealRow, SoundedChord } from '../../exercises/types';
 
 export function SessionScreen({
   daily,
@@ -287,8 +288,17 @@ export function SessionScreen({
                   {state.outcome.hintUsed && <span className="badge">Hint used</span>}
                 </div>
                 <div>
-                  <div className="feedback__heading">{question.reveal.heading}</div>
+                  <div className="feedback__heading">
+                    {question.reveal.heading}
+                    {question.reveal.tag && (
+                      <span className="feedback__tag">{question.reveal.tag}</span>
+                    )}
+                  </div>
                   <div className="feedback__detail">{question.reveal.detail}</div>
+                  {question.reveal.played && <Sounded played={question.reveal.played} />}
+                  {question.reveal.rows && (
+                    <RevealRows key={questionId} rows={question.reveal.rows} />
+                  )}
                   {question.reveal.notes && (
                     <div className="feedback__notes">{question.reveal.notes}</div>
                   )}
@@ -301,7 +311,7 @@ export function SessionScreen({
                   {/* The chord underneath the voicing: what you were listening
                       past. Only offered where the question voiced something. */}
                   {question.playPlain && (
-                    <Button onClick={() => engine.playPlain()}>Hear it plain</Button>
+                    <Button onClick={() => engine.playPlain()}>Hear in root position</Button>
                   )}
                   <Button variant="primary" onClick={() => engine.next()}>
                     Next
@@ -313,6 +323,64 @@ export function SessionScreen({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One chord as it sounded: the bass apart, then the stack with its degrees.
+ *
+ * The degrees sit under the names rather than beside them so the two lines
+ * line up column by column, which is the only way to read which degree
+ * belongs to which note without counting.
+ */
+function Sounded({ played }: { played: SoundedChord }) {
+  return (
+    <div className="sounded">
+      {played.bass && (
+        <span className="sounded__bass">
+          <span className="sounded__label">Bass</span>
+          {played.bass}
+        </span>
+      )}
+      <span className="sounded__stack">
+        {played.notes.map((name, i) => (
+          <span key={`${name}-${i}`} className="sounded__note">
+            <span className="sounded__name">{name}</span>
+            <span className="sounded__degree">{played.degrees[i]}</span>
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The chords of a progression, one per row, each opening to show its notes.
+ *
+ * Folded away by default because the answer is the progression, not the
+ * notes: someone who got it right wants the numerals and nothing else, and
+ * someone who did not wants to open the chord they lost.
+ */
+function RevealRows({ rows }: { rows: RevealRow[] }) {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <div className="revrows">
+      {rows.map((row, i) => (
+        <div key={i} className={clsx('revrow', row.target && 'revrow--target')}>
+          <button
+            type="button"
+            className="revrow__head"
+            onClick={() => setOpen(open === i ? null : i)}
+            aria-expanded={open === i}
+          >
+            <span className="revrow__roman">{row.roman}</span>
+            <span className="revrow__symbol">{row.symbol}</span>
+            <span className="revrow__more">{open === i ? '−' : '+'}</span>
+          </button>
+          {open === i && <Sounded played={row.played} />}
+        </div>
+      ))}
     </div>
   );
 }

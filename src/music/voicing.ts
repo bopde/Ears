@@ -14,14 +14,16 @@ export type VoicingStyle =
   /** Root position, tones close together. The clearest way to hear a chord. */
   | 'close'
   /**
-   * All the chord tones in close position, in any inversion.
+   * All the chord tones in close position, with any tone at the bottom.
    *
-   * The same notes as `close`, packed the same way — `stack` builds both — and
-   * the only difference is which tone is at the bottom. Written to sit over a
-   * separate bass note, which is what states the root: on its own the stack is
-   * as likely to be in third inversion as in root position, so the bass below
-   * it is doing the work. The id stays `spread` because settings and stats are
-   * keyed by it.
+   * The same notes as `close`, packed the same way — `stack` builds both —
+   * and the only difference is which tone the hands have underneath. Through
+   * a set of changes that choice is made by voice leading: each chord takes
+   * whichever position sits nearest the one before, which is what the name
+   * says and why it says nothing about inversions. Which inversion the chord
+   * is in is settled by the bass underneath, not by this.
+   *
+   * The id stays `spread` because settings and stats are keyed by it.
    */
   | 'spread'
   /** Close voicing with the second voice from the top dropped an octave. */

@@ -10,7 +10,7 @@ import {
   voiceChord, voiceProgression, type RootlessForm, type Voicing, type VoicingStyle,
 } from '../music/voicing';
 import {
-  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingBass, voicingLabel, voicingLabelFor,
+  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, handsLabel, voicingAnswerLabel, voicingBass,
 } from './voicing-plan';
 import { Performer } from '../audio/performer';
 import { approachInto, chooseLever, playVoicing } from './levers';
@@ -185,7 +185,7 @@ export const voicingExercise: ExerciseType = {
           label: 'Shape',
           options: buildOptions(ctx.rng, target, distractors, (s) => ({
             id: s,
-            label: voicingLabel(s),
+            label: voicingAnswerLabel(s),
           })),
           columns: 1,
         },
@@ -211,9 +211,10 @@ export const voicingExercise: ExerciseType = {
         },
       },
       reveal: {
-        // The form is named here and nowhere in the options: which of the two
-        // rootless shapes played is worth knowing, and is not the question.
-        heading: voicingLabelFor(target, voicing.form),
+        // What the hands did, with the tone they had underneath — and the
+        // rootless form, which is worth knowing and is not the question, so
+        // it appears here and nowhere in the options.
+        heading: handsLabel(chord, voicing),
         detail: chordSymbol(chord, ctx.settings.accidental),
         tag: added.length ? `played with ${formatList(added)}` : undefined,
         played: soundedChord(chord, voicing, ctx.settings.accidental),

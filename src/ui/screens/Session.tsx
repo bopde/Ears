@@ -376,6 +376,7 @@ function RevealRows({ rows }: { rows: RevealRow[] }) {
           >
             <span className="revrow__roman">{row.roman}</span>
             <span className="revrow__symbol">{row.symbol}</span>
+            {row.bottom && <span className="revrow__bottom">{row.bottom} on the bottom</span>}
             <span className="revrow__more">{open === i ? '−' : '+'}</span>
           </button>
           {open === i && <Sounded played={row.played} />}

@@ -7,10 +7,13 @@ import {
   type ProgressionDef, type RealisedChord,
 } from '../music/progressions';
 import {
-  CHORD_QUALITIES, chordConceptId, chordSymbol, makeChord, nearestQualities, type Chord,
+  CHORD_QUALITIES, chordConceptId, chordDegrees, chordSymbol, makeChord, nearestQualities,
+  slashSymbol, type Chord,
 } from '../music/chords';
 import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
-import { approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel } from './voicing-plan';
+import {
+  approachFromAbove, bassStyleFor, bottomTone, chooseVoicing, voicingLabel,
+} from './voicing-plan';
 import { Performer, progressionBass, type BassNote } from '../audio/performer';
 import { rootMotionLine, soundedChord } from '../audio/reference';
 import { keyName } from '../music/pitch';
@@ -191,14 +194,30 @@ function revealRows(
   return changes.realised.map((r, i) => {
     const start = beat;
     beat += r.beats;
-    const bass = changes.bass.find((b) => b.beat >= start && b.beat < beat && b.role === 'root');
+    // The note the bass lands on at the top of the bar, whatever it is doing:
+    // a walking line plays four to a chord and only the first of them is
+    // under the change.
+    const landing = changes.bass.find((b) => b.beat >= start && b.beat < beat);
+    const bassPc = landing === undefined ? r.chord.rootPc : mod(landing.midi, 12);
+    const onRoot = bassPc === mod(r.chord.rootPc, 12);
+    // Which inversion the chord is in is the bass's business. While it lands
+    // on the root the numeral stands as written; when it does not, the
+    // numeral says so — I/3 — and the symbol becomes a slash chord.
+    const figure = onRoot
+      ? undefined
+      : chordDegrees(r.chord, [landing!.midi])[0].replace(/[^0-9]/g, '');
     return {
-      roman: r.roman,
-      symbol: chordLabel(r.chord, settings),
+      roman: figure ? `${r.roman}/${figure}` : r.roman,
+      symbol: onRoot
+        ? chordLabel(r.chord, settings)
+        : slashSymbol(r.chord, bassPc, settings.accidental),
+      // What the hands have underneath, read off the voicing that was
+      // scheduled rather than worked out again from the chord.
+      bottom: bottomTone(r.chord, changes.voicings[i]),
       target: targetIndex === i ? true : undefined,
       played: soundedChord(
         r.chord,
-        { notes: changes.voicings[i].notes, bass: bass?.midi },
+        { notes: changes.voicings[i].notes, bass: landing?.midi },
         settings.accidental,
       ),
     };

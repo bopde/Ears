@@ -50,9 +50,20 @@ export interface SoundedChord {
 
 /** One chord of a progression, as the reveal lists it. */
 export interface RevealRow {
-  /** The roman numeral, carrying the quality that played. */
+  /**
+   * The roman numeral, carrying the quality that played — and the bass, where
+   * the bass is not on the root: I/3 says the third is underneath.
+   */
   roman: string;
   symbol: string;
+  /**
+   * What the hands have at the bottom, where that is not the root.
+   *
+   * Per chord rather than once for the whole progression, because each chord
+   * has its own bottom note: a set of changes voiced to move as little as
+   * possible puts a different tone underneath almost every bar.
+   */
+  bottom?: string;
   /** True for the chord a "name this one" question asked about. */
   target?: boolean;
   played: SoundedChord;

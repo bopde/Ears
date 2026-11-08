@@ -683,12 +683,14 @@ p { margin: 0; }
   font-size: 0.76rem;
   color: var(--fg-faint);
   min-width: 3.2rem;
+  flex: none;
 }
 
 .revrow__symbol {
   font-size: 0.95rem;
   font-weight: 560;
-  flex: 1;
+  /* Takes what is left, and gives it up before the bottom-tone note does. */
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -696,9 +698,25 @@ p { margin: 0; }
 
 .revrow--target .revrow__symbol { color: var(--accent); }
 
+/*
+ * What the hands have at the bottom of this chord. It shares the line rather
+ * than taking one of its own, and both it and the symbol clip rather than
+ * wrap: a numeral that falls onto a second line stops labelling the symbol
+ * beside it.
+ */
+.revrow__bottom {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .revrow__more {
   font-size: 1rem;
   color: var(--fg-faint);
+  flex: none;
 }
 
 .revrow .sounded { padding-bottom: 0.45rem; }

@@ -26,7 +26,12 @@ export interface AppValue {
   storageOk: boolean;
 }
 
-const AppContext = createContext<AppValue | null>(null);
+/**
+ * Exported so a test can mount a screen over a stand-in performer: the real
+ * one wants an AudioContext, which does not exist outside a browser. Nothing
+ * in the app should reach for this — `useApp` is the way in.
+ */
+export const AppContext = createContext<AppValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfileState] = useState<Profile>(() => loadProfile());

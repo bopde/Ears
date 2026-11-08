@@ -70,6 +70,18 @@ export const TuneIcon = ({ size = 22 }: IconProps) => (
   </svg>
 );
 
+/**
+ * Points down when there is something below to open, up when there is not.
+ *
+ * Rotated by CSS rather than drawn twice, so the two states are the same
+ * shape turning over and the eye can follow it.
+ */
+export const ChevronIcon = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
 export const CheckIcon = ({ size = 20 }: IconProps) => (
   <svg {...base(size)} strokeWidth={2.4}>
     <path d="m4.5 12.5 5 5 10-11" />

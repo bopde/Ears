@@ -321,7 +321,7 @@ export function soundedChord(
  *
  * The music layer names a `VoicingStyle`, which is what a voicing *is*; the
  * cheat sheet's modes are how it offers them, and plain close voicings are
- * offered as root position.
+ * offered as the basic chords. The id stays `root`.
  */
 export function modeForStyle(style: VoicingStyle): ReferenceVoicing {
   switch (style) {
@@ -415,7 +415,7 @@ export function playReferenceChord(
 }
 
 /**
- * The same changes twice: root position first, then the voicing.
+ * The same changes twice: the basic chords first, then the voicing.
  *
  * Hearing them back to back is the only way to tell what a voicing adds from
  * what the harmony was doing anyway, which is hard to do when they only ever

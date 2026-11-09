@@ -106,7 +106,7 @@ export interface Question {
   /** A slower, plainer rendering offered after the answer. */
   playReveal?(perf: Performer): number;
   /**
-   * The same material in root position over a root bass.
+   * The same material as basic chords: close, nothing added, over a root bass.
    *
    * The thing a learner wants after getting a rootless drop-2 voicing wrong is
    * not the same voicing again but the chord underneath it, and that is a

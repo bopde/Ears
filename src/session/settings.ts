@@ -131,8 +131,9 @@ export function defaultSettings(): PracticeSettings {
     theme: 'auto',
     answerDelay: 3,
     referenceKey: 0,
-    // Root position by default: a learner should meet the plain chord before
-    // any of the voicings that disguise it.
+    // The basic chord by default: a learner should meet it before any of the
+    // voicings that disguise it. The id stays `root`, as the reference sheet
+    // has always called this mode.
     referenceVoicing: 'root',
     // The curve: plain at the bottom, the way a pianist plays at the top.
     voicingMode: 'curve',

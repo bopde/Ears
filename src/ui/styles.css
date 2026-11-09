@@ -430,7 +430,7 @@ p { margin: 0; }
 .prompt__sub { font-size: 0.85rem; color: var(--fg-dim); }
 
 /*
- * Three buttons, one of which says "Hear in root position". They do not fit
+ * Three buttons, one of which says "Hear the basic chord". They do not fit
  * across a 380px phone in one line, and a button that overflows takes the
  * page with it — so they wrap, and each keeps a width it can be read at.
  */

@@ -143,7 +143,7 @@ function ChordCard({
  * One voicing, taught.
  *
  * What it is, where a player reaches for it, and the degrees it actually
- * sounds over a set of changes — then the same changes in root position and
+ * sounds over a set of changes — then the same changes as basic chords and
  * in the voicing, back to back, which is the part that does the teaching.
  */
 function VoicingCard({
@@ -202,7 +202,7 @@ function VoicingCard({
           {playing === `voicing-${lesson.id}` ? 'Playing' : 'Play'}
         </Button>
         <Button size="sm" variant="ghost" onClick={onCompare}>
-          {playing === `compare-${lesson.id}` ? 'Comparing' : 'Compare with root position'}
+          {playing === `compare-${lesson.id}` ? 'Comparing' : 'Compare with the basic chords'}
         </Button>
       </div>
     </section>

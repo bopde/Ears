@@ -82,7 +82,7 @@ describe('a voicing is called one thing', () => {
     ];
     expect(new Set(labels).size, labels.join(' / ')).toBe(labels.length);
     expect(VOICING_MODES.find((m) => m.value === 'curve')?.label).toBe('By level');
-    expect(VOICING_MODES.find((m) => m.value === 'plain')?.label).toBe('Root position only');
+    expect(VOICING_MODES.find((m) => m.value === 'plain')?.label).toBe('Basic chords only');
     expect(ACCIDENTALS).toContain('both');
   });
 

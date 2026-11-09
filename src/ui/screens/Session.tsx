@@ -349,9 +349,12 @@ export function SessionScreen({
                     Hear again
                   </Button>
                   {/* The chord underneath the voicing: what you were listening
-                      past. Only offered where the question voiced something. */}
+                      past. Not "root position" — the chord you just heard was
+                      usually in root position already; what this takes away is
+                      the voicing and what it added. Only offered where the
+                      question voiced something. */}
                   {question.playPlain && (
-                    <Button onClick={() => engine.playPlain()}>Hear in root position</Button>
+                    <Button onClick={() => engine.playPlain()}>Hear the basic chord</Button>
                   )}
                   <Button variant="primary" onClick={() => engine.next()}>
                     Next

@@ -23,7 +23,15 @@ export const VOICING_MODES: Array<{ value: VoicingMode; label: string; blurb: st
   // "By level" rather than "Mixed": the note-name setting is already called
   // that, and a settings screen with two Mixeds on it explains neither.
   { value: 'curve', label: 'By level', blurb: 'Plain at first, the way a pianist plays by the top levels.' },
-  { value: 'plain', label: 'Root position only', blurb: 'Root position over a root bass, every time.' },
+  // "Basic chords", not "root position": root position is a fact about the
+  // bass, and this mode is about the hands as well — close, nothing added,
+  // the root underneath. The id stays `plain`, so a saved setting still
+  // means what it meant.
+  {
+    value: 'plain',
+    label: 'Basic chords only',
+    blurb: 'Close voicings, root on the bottom, no tensions, over a root bass.',
+  },
   { value: 'realistic', label: 'Realistic', blurb: 'Rootless and drop 2, the way you meet these chords on a stand.' },
 ];
 
@@ -55,7 +63,7 @@ export function voicingChoices(mode: VoicingMode, difficulty: number): VoicingSt
  * the point is to hear the changes at all, and a ii–V–I comped rootless is
  * one more thing in the way of that; from level 4 the point is to meet them
  * as they are played, and then "what would a pianist reach for here" is
- * exactly the right question. Root position only means root position only.
+ * exactly the right question. Basic chords only means basic chords only.
  */
 function recommendationApplies(mode: VoicingMode, difficulty: number): boolean {
   if (mode === 'plain') return false;

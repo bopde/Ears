@@ -4,9 +4,9 @@ import type { GenContext } from './types';
 import { bottomTone, isVoicingStyle, voicingLabel } from './voicing-plan';
 import { defaultSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
-import { FakePerformer } from '../test-support';
+import { FakePerformer, soundingOf } from '../test-support';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
-import { PITCH_CLASSES, letterIndexOf, octaveOf, spellOnLetter } from '../music/pitch';
+import { octaveOf } from '../music/pitch';
 import { mod } from '../lib/util';
 
 const settings = defaultSettings();
@@ -145,19 +145,3 @@ describe('each chord of a progression says what was under it', () => {
     }
   });
 });
-
-/**
- * What a written name sounds, whichever letter it was spelled on.
- *
- * C♯3 and D♭3 are the same key on the piano, so a test that wants to know
- * the name points at the right note has to go through the spelling rather
- * than compare strings — the key decides the letter.
- */
-function soundingOf(name: string): { pc: number; octave: number } {
-  const letter = name.replace(/-?\d+$/, '');
-  const octave = Number(name.slice(letter.length));
-  const index = letterIndexOf(letter);
-  const pc = PITCH_CLASSES.find((c) => spellOnLetter(c, index) === letter);
-  if (pc === undefined || !Number.isInteger(octave)) throw new Error(`Unreadable name: ${name}`);
-  return { pc, octave };
-}

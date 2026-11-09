@@ -1,17 +1,34 @@
 import type { ExerciseType, GenContext, Question } from './types';
-import { approachFromAbove, bassStyleFor } from './voicing-plan';
+import { approachFromAbove, bassStyleFor, voicingLabel } from './voicing-plan';
 import { allowedKeys, pitchClassField, questionId } from './support';
+import { revealRows } from './rows';
+import { formatList } from './chord';
 import { keyConceptId } from '../music/catalog';
 import { keyName, pcName } from '../music/pitch';
-import { chordSymbol } from '../music/chords';
-import {
-  PROGRESSIONS, realiseProgression, romanLine, type ProgressionDef,
-} from '../music/progressions';
+import { addedTensions } from '../music/chords';
+import { PROGRESSIONS, realiseProgression, type ProgressionDef } from '../music/progressions';
 import { voiceProgression } from '../music/voicing';
-import { Performer } from '../audio/performer';
+import { Performer, progressionBass } from '../audio/performer';
+import { rootMotionLine } from '../audio/reference';
 import { generatePhrase } from '../music/phrase';
 import { requireScale } from '../music/scales';
 import { clamp } from '../lib/util';
+
+/**
+ * How this question comps its changes.
+ *
+ * Voice-led close position throughout, which is what a pianist would do
+ * behind someone finding the key — the hands move as little as possible and
+ * the harmony stays out of the way.
+ *
+ * No added tensions, unlike the progression questions. They comp in five
+ * voices and a 9th goes on top of the chord; this question comps in four, so
+ * the engine pays for a tension by dropping the 5th — switching them on made
+ * every I∆7 in a level-one I–IV–V–I come out 1 3 7 9, rootless-sounding and
+ * missing the one interval that most plainly says "here is home". What the
+ * chords are written with still sounds, and the reveal names it.
+ */
+const KEY_VOICING = 'spread' as const;
 
 /** The pitch the user is given to measure from. */
 const REFERENCE_PC = 0;
@@ -75,8 +92,16 @@ export const keyExercise: ExerciseType = {
     });
 
     const realised = material ? realiseProgression(material, tonic) : [];
-    const voicings = voiceProgression(realised.map((r) => r.chord), { style: 'spread', maxNotes: 4 });
+    const voicings = voiceProgression(realised.map((r) => r.chord), {
+      style: KEY_VOICING,
+      maxNotes: 4,
+    });
     const changes = Performer.changes(realised, voicings);
+    const bassStyle = bassStyleFor(ctx.difficulty);
+    const fromAbove = approachFromAbove(ctx.settings, ctx.difficulty);
+    // The same call the performer makes, so the reveal reads off the line
+    // that sounded rather than one that happens to agree with it.
+    const bass = progressionBass(changes, bassStyle, { approachFromAbove: fromAbove });
 
     const playReference = (perf: Performer, origin: number) => {
       perf.note(REFERENCE_PC + 60, origin, 1.3, 0.55);
@@ -92,11 +117,18 @@ export const keyExercise: ExerciseType = {
         return offset + len + 0.6;
       }
       const len = perf.progression(changes, origin + offset, {
-        style: bassStyleFor(ctx.difficulty),
-        approachFromAbove: approachFromAbove(ctx.settings, ctx.difficulty),
+        style: bassStyle,
+        approachFromAbove: fromAbove,
       });
       return offset + len + 0.4;
     };
+
+    // Every degree the voicings sounded that the chord symbols do not name,
+    // gathered across the changes and counted in order: you can hear a 9th in
+    // a cadence without being able to say which chord carried it.
+    const tensions = [...new Set(
+      realised.flatMap((r, i) => addedTensions(r.chord, voicings[i].all)),
+    )].sort((a, b) => Number(a.replace(/\D/g, '')) - Number(b.replace(/\D/g, '')));
 
     // The reveal names the key; the answer buttons keep the dual form, since
     // there the reader is choosing rather than reading.
@@ -130,14 +162,26 @@ export const keyExercise: ExerciseType = {
           'Sounds a reference pitch. Finding the key relative to it is the skill being trained — not absolute pitch.',
         play: (perf) => playReference(perf, perf.origin()),
       },
+      // Only where chords played: a melodic-only question has no voicing to
+      // name and no changes to list.
+      voicing: material ? KEY_VOICING : undefined,
       reveal: {
         heading: `${keyLabel} ${material?.tonality === 'minor' ? 'minor' : 'major'}`,
+        // The numerals used to be a second line here, beside the name. They
+        // are in the rows now, each against the symbol it belongs to, so this
+        // line carries what the rows cannot: how the roots moved, read off
+        // the bass that was scheduled.
         detail: melodicOnly
           ? 'Melodic line, no harmony'
-          : `${material?.name ?? ''}  ·  ${material ? romanLine(material) : ''}`,
-        notes: material
-          ? realised.map((r) => chordSymbol(r.chord, ctx.settings.accidental)).join('  |  ')
-          : undefined,
+          : [material?.name, rootMotionLine(bass)].filter(Boolean).join('  ·  '),
+        tag: tensions.length ? `played with ${formatList(tensions)}` : undefined,
+        notes: material ? voicingLabel(KEY_VOICING) : undefined,
+        // One row per chord — the numeral, the symbol, what the hands had
+        // underneath, and the notes themselves a tap away. The question is
+        // about the key, but the changes are what you were given to find it
+        // in, and a line of symbols left no way to check them against what
+        // you heard.
+        rows: material ? revealRows(realised, voicings, bass, ctx.settings) : undefined,
       },
       estimatedSeconds: 17 + ctx.difficulty * 2,
     };

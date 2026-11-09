@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { getExerciseType } from './registry';
+import { chordToneNames, makeChord } from '../music/chords';
 import type { GenContext, Question } from './types';
 import { defaultSettings, normaliseSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { PROGRESSIONS, progressionConceptId } from '../music/progressions';
-import { SHARP_NAMES, FLAT_NAMES, PITCH_CLASSES, keyName } from '../music/pitch';
+import { SHARP_NAMES, FLAT_NAMES, PITCH_CLASSES } from '../music/pitch';
 import type { Accidental } from '../music/pitch';
 
 const settings = defaultSettings();
@@ -106,14 +107,21 @@ describe('questions say which key they are in, the way a musician would', () => 
     expect(q.fields[0].options.some((o) => o.label.includes('/'))).toBe(true);
   });
 
-  it('leaves a chord-quality question spelled as it always was', () => {
-    // There is no key, so there is nothing to spell it against.
+  it('leaves a chord-quality question on one of the two names for its root', () => {
+    // There is no key, so there is nothing to spell it against: the root is
+    // the conventional name, or the other side of it where the chord cannot
+    // be written from the conventional one — D♭m7 is C♯m7, because D♭ F♭
+    // A♭ C♭ is two names this app will not print.
     for (let d = 1; d <= 5; d++) {
       for (let seed = 0; seed < 20; seed++) {
         const q = getExerciseType('chord-quality')!.generate(context(d, seed * 13 + d));
         if (!q) continue;
-        expect(q.reveal.heading.startsWith(keyName(q.keyPc!, 'major'))
-          || q.reveal.heading.startsWith(FLAT_NAMES[q.keyPc!])).toBe(true);
+        const root = q.reveal.heading.match(/^[A-G][♯♭]?/)?.[0];
+        expect([SHARP_NAMES[q.keyPc!], FLAT_NAMES[q.keyPc!]], q.reveal.heading).toContain(root);
+        // Which of the two, and why, is the root speller's own rule and is
+        // tested against it in music/keyspelling.test.ts. What matters here
+        // is that a question never prints a third name for the note.
+        expect(chordToneNames(chordOf(q))[0], q.reveal.heading).toBe(root);
       }
     }
   });
@@ -139,3 +147,8 @@ describe('questions say which key they are in, the way a musician would', () => 
     }
   });
 });
+
+/** The chord a chord-quality question asked about, from its own answer. */
+function chordOf(q: Question) {
+  return makeChord(q.keyPc!, q.correct.quality);
+}

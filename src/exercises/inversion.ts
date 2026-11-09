@@ -4,7 +4,9 @@ import {
   CHORD_QUALITIES, chordConceptId, chordFullName, isSymmetrical, makeChord, slashSymbol,
   spellInChord, type ChordQuality,
 } from '../music/chords';
-import { inversionConceptId, inversionsFor, type InversionDef } from '../music/inversions';
+import {
+  bassToneOf, inversionConceptId, inversionsFor, type InversionDef,
+} from '../music/inversions';
 import { voiceChord, type VoicingStyle } from '../music/voicing';
 import { pcName } from '../music/pitch';
 import { polyphonyGain } from '../audio/performer';
@@ -36,6 +38,21 @@ export function invertibleQualities(settings: PracticeSettings): ChordQuality[] 
 function voicingStyle(difficulty: number): VoicingStyle {
   return difficulty >= 4 ? 'spread' : 'close';
 }
+
+/**
+ * From which level the answers are slash chords rather than inversion names.
+ *
+ * "First inversion" is how the idea is taught and "C7/E" is how it is
+ * written: a chart never says first inversion, it says the chord over the
+ * note. Once the names are in the ear the useful skill is reading the bass
+ * as a letter, so the top of the curve asks for what a player would see.
+ *
+ * Both forms grade the same answer — the option ids stay the inversion ids,
+ * and so do the concepts — so a learner's history carries straight across.
+ */
+const SLASH_FROM = 4;
+
+const asksForSlash = (difficulty: number) => difficulty >= SLASH_FROM;
 
 export const inversionExercise: ExerciseType = {
   id: 'chord-inversion',
@@ -85,7 +102,20 @@ export const inversionExercise: ExerciseType = {
     });
 
     const options = inversionsFor(quality.intervals.length);
-    const toOption = (i: InversionDef) => ({ id: i.id, label: i.name, sub: i.bassTone });
+    const slash = asksForSlash(ctx.difficulty);
+    // The same chord over each bass note it holds: C7, C7/E, C7/G, C7/B♭.
+    // The bass is spelled against the chord, so a C♯m7's third is written E
+    // and never F♭ — see `slashSymbol`.
+    const toOption = (i: InversionDef) => (slash
+      ? {
+        id: i.id,
+        label: slashSymbol(
+          chord, mod(rootPc + quality.intervals[i.index], 12), ctx.settings.accidental,
+        ),
+      }
+      // Which tone is underneath, said twice over, would hand the answer to
+      // anyone who knows the chord — so at this end the symbol stands alone.
+      : { id: i.id, label: i.name, sub: bassToneOf(chord, i) });
     // Rolling the chord at the easy end lets the bass be heard arriving first.
     const roll = ctx.difficulty <= 2 ? 0.1 : 0.012;
 
@@ -96,13 +126,16 @@ export const inversionExercise: ExerciseType = {
       difficulty: ctx.difficulty,
       keyPc: rootPc,
       prompt: {
-        title: 'Which inversion is this?',
+        title: slash ? 'Which slash chord is this?' : 'Which inversion is this?',
         sub: ctx.difficulty <= 2 ? `A ${quality.name.toLowerCase()} chord` : undefined,
       },
       fields: [
         {
+          // The key stays `inversion` whichever way the question is asked:
+          // it is what the answer is graded against, and what the learning
+          // model has been keeping records under all along.
           key: 'inversion',
-          label: 'Inversion',
+          label: slash ? 'Chord' : 'Inversion',
           options: buildOptions(
             ctx.rng,
             inversion,
@@ -140,7 +173,9 @@ export const inversionExercise: ExerciseType = {
       },
       reveal: {
         heading: slashSymbol(chord, bassPc, ctx.settings.accidental),
-        detail: `${inversion.name} — ${inversion.bassTone} of ${chordFullName(chord, ctx.settings.accidental)} is in the bass`,
+        // The heading is the slash chord, so this names the inversion beside
+        // it: whichever form the question asked for, the reveal teaches both.
+        detail: `${inversion.name}  ·  ${bassToneOf(chord, inversion)} of ${chordFullName(chord, ctx.settings.accidental)} is in the bass`,
         notes: voicing.all.map((m) => spellInChord(chord, m, ctx.settings.accidental)).join('  '),
       },
       estimatedSeconds: 10 + clamp(ctx.difficulty, 1, 5),

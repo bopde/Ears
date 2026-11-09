@@ -82,13 +82,61 @@ describe('a chord is spelled for the key it is in', () => {
     expect(chordSymbol(chord, 'both'), 'the key decides by default').toBe('C♯m7');
   });
 
-  it('leaves a chord with no key alone', () => {
+  it('leaves a chord with no key alone, unless it cannot be written', () => {
     // A chord-quality question is in no key; there is nothing to spell it
-    // against, so the conventional name stands.
-    const bare = makeChord(1, 'm7');
-    expect(bare.root).toBeUndefined();
-    expect(chordSymbol(bare)).toBe(pcName(1, 'both') + 'm7');
-    expect(chordSymbol(bare)).toBe('D♭m7');
+    // against, so the conventional name stands — and for 405 of the 432
+    // chords this app can build, it does.
+    const dominant = makeChord(1, '7');
+    expect(dominant.root).toBeUndefined();
+    expect(chordSymbol(dominant)).toBe(pcName(1, 'both') + '7');
+    expect(chordSymbol(dominant)).toBe('D♭7');
+
+    // The exception is a chord the conventional name cannot write. D♭m7 is
+    // D♭ F♭ A♭ C♭, and this app prints neither F♭ nor C♭, so the speller
+    // fell back and the chord came out D♭ E A♭ B — a minor seventh with no
+    // F and no C in it, and an inversion reading D♭m7/E, a slash onto a
+    // note the symbol says is not there. The same four notes from C♯ are
+    // C♯ E G♯ B, each on its own letter.
+    const minor = makeChord(1, 'm7');
+    expect(chordSymbol(minor)).toBe('C♯m7');
+    expect(chordToneNames(minor)).toEqual(['C♯', 'E', 'G♯', 'B']);
+    expect(slashSymbol(minor, 4)).toBe('C♯m7/E');
+    // And an explicit setting still beats all of it.
+    expect(chordSymbol(minor, 'flat')).toBe('D♭m7');
+  });
+
+  it('moves the root only where moving it helps', () => {
+    // Two things make a chord read badly from a given root: a degree the
+    // app refuses to print, and two tones landing on one letter. Both are
+    // counted, fewer wins, and the conventional name takes every tie.
+    const symbol = (rootPc: number, quality: string) =>
+      chordSymbol(makeChord(rootPc, quality));
+
+    // Clean from the conventional name: it stays, even though the other
+    // name would also be clean.
+    expect(symbol(1, '7')).toBe('D♭7');
+    expect(symbol(6, '7')).toBe('F♯7');
+    expect(symbol(10, 'm7')).toBe('B♭m7');
+
+    // Unwritable from the conventional name, clean from the other: it moves.
+    expect(symbol(1, 'm7')).toBe('C♯m7');
+    expect(symbol(8, 'm7')).toBe('G♯m7');
+    // F♯∆7 wants an E♯ for its seventh and prints an F instead — a major
+    // seventh with the root's own letter in it. G♭ B♭ D♭ F is clean.
+    expect(symbol(6, 'maj7')).toBe('G♭∆7');
+
+    // Only the core votes — the tones inside the octave, which are the ones
+    // that say which chord it is. A tension needs a fallback whichever way
+    // it is written, so letting it decide would turn settled symbols over
+    // for nothing. A D♭7♭9's core is D♭ F A♭ C♭, one name short either way;
+    // its ♭9 is where the two spellings differ, and it does not get a vote.
+    expect(symbol(1, '7b9')).toBe('D♭7♭9');
+    expect(symbol(1, '7alt')).toBe('D♭7alt');
+    expect(symbol(1, '7b13')).toBe('D♭7♭13');
+    expect(symbol(1, '13b9')).toBe('D♭13♭9');
+    // Nor does a plain 13th or an untroubled ♭9 move anything.
+    expect(symbol(1, '13')).toBe('D♭13');
+    expect(symbol(10, '7b9')).toBe('B♭7♭9');
   });
 
   it('falls back rather than writing a double accidental', () => {

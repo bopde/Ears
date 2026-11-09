@@ -1,6 +1,6 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
-import type { Chord } from './chords';
+import { chordDegrees, type Chord } from './chords';
 import type { Voicing } from './voicing';
 import { mod } from '../lib/util';
 
@@ -39,6 +39,34 @@ export const INVERSIONS: InversionDef[] = [
     tags: ['inversion', 'seventh'], bassTone: 'the 7th',
     blurb: 'The 7th is in the bass. Only a seventh chord has one, and it leans hard downward.' },
 ];
+
+/**
+ * Which tone of *this* chord the inversion puts underneath.
+ *
+ * `bassTone` on the definition is a generic: thirds stacked on thirds, so
+ * index 1 is the 3rd and index 3 the 7th. That is true of most chords and
+ * false of five of the ones this app inverts — a 6 chord's fourth tone is
+ * its 6th, a sus4's second tone is its 4th, a sus2's is its 9th — and a
+ * reveal reading "D6/B · the 7th is in the bass" is arguing with its own
+ * heading. Read off the chord's own interval list instead, which is where
+ * `index` points in the first place.
+ *
+ * The accidental is dropped, because this names a position rather than a
+ * pitch: the bass note of a minor chord's first inversion is its 3rd, and
+ * "the ♭3rd" would be reading the degree row aloud rather than saying which
+ * tone is underneath. The degree itself is on the reveal already.
+ */
+export function bassToneOf(chord: Chord, inversion: InversionDef): string {
+  const interval = chord.quality.intervals[inversion.index];
+  if (interval === undefined) return inversion.bassTone;
+  const degree = chordDegrees(chord, [60 + chord.rootPc + interval])[0];
+  const number = Number(degree.replace(/\D/g, ''));
+  if (!Number.isInteger(number) || number <= 0) return inversion.bassTone;
+  if (number === 1) return 'the root';
+  const teen = number % 100;
+  const suffix = teen >= 11 && teen <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][number % 10] ?? 'th');
+  return `the ${number}${suffix}`;
+}
 
 const registry = new Map(INVERSIONS.map((i) => [i.id, i]));
 

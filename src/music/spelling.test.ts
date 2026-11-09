@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CHORD_QUALITIES, chordDegrees, degreeName, makeChord, spellInChord,
+  CHORD_QUALITIES, chordDegrees, degreeName, makeChord, spellInChord, chordRootName,
 } from './chords';
 import { LETTERS, PITCH_CLASSES, midiName, pcName, pcOf, spellOnLetter } from './pitch';
 import { availablePcs, voiceChord, VOICING_STYLES } from './voicing';
@@ -122,7 +122,11 @@ describe('a note is spelled the way its degree is written', () => {
             checked += 1;
             const [degree] = chordDegrees(chord, [midi]);
             const number = Number(degree.replace(/[^0-9]/g, ''));
-            const rootLetter = LETTERS.indexOf(pcName(rootPc)[0] as typeof LETTERS[number]);
+            // The root's own letter, as the chord is written: a chord the
+            // conventional name cannot spell is printed from the other side,
+            // and its degrees are counted from there.
+            const rootLetter =
+              LETTERS.indexOf(chordRootName(chord)[0] as typeof LETTERS[number]);
             const wanted = spellOnLetter(pcOf(midi), rootLetter + number - 1);
             const got = spellInChord(chord, midi).replace(/-?\d+$/, '');
             if (wanted === null) {

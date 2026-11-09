@@ -1,7 +1,7 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
 import {
-  letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
+  FLAT_NAMES, SHARP_NAMES, letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
   type Accidental, type Midi, type PitchClass,
 } from './pitch';
 import { mod } from '../lib/util';
@@ -244,15 +244,72 @@ export function makeChord(rootPc: PitchClass, qualityId: string, root?: string):
 }
 
 /**
+ * How badly a chord reads when it is written from this root.
+ *
+ * A chord is written one letter per degree — root, third, fifth, seventh —
+ * and the letter is decided by the root's. Where a degree then wants a name
+ * nobody prints (F♭, C♭, E♯, B♯, or a double accidental) the speller falls
+ * back to the plain enharmonic, and the chord stops matching its own
+ * symbol: D♭m7 is D♭ F♭ A♭ C♭ and comes out D♭ E A♭ B, a minor seventh
+ * with no F and no C in it, whose first inversion reads D♭m7/E — a slash
+ * onto a note the symbol says is not there. This counts how often that
+ * happens.
+ *
+ * Only the chord's core is counted — the tones inside the octave, which are
+ * the ones that say which chord it is. A tension is colour and routinely
+ * needs a fallback whichever root it is written from, so letting it vote
+ * turns a settled symbol over for nothing: an E♭7♭9's ♭9 is an F♭ and its
+ * core is spotless, and nobody writes that chord D♯7♭9.
+ */
+function spellingFaults(rootName: string, rootPc: PitchClass, quality: ChordQuality): number {
+  const letter = letterIndexOf(rootName);
+  if (letter < 0) return Number.MAX_SAFE_INTEGER;
+  let fallbacks = 0;
+  for (const interval of quality.intervals) {
+    if (interval >= 12) continue;
+    const number = Number(degreeName(interval).replace(/[^0-9]/g, ''));
+    const wanted = Number.isFinite(number) && number > 0
+      ? spellOnLetter(mod(rootPc + interval, 12), letter + number - 1)
+      : null;
+    if (wanted === null) fallbacks += 1;
+  }
+  return fallbacks;
+}
+
+/**
  * The root as this chord is written.
  *
  * An explicit sharps-only or flats-only setting beats the key: someone who
  * has asked to see flats has asked for all of them. On the default setting
- * the key decides, and where no key does, the conventional name stands.
+ * the key decides, and where no key does, the conventional name stands —
+ * unless the other one writes the chord better.
+ *
+ * That last clause is what keeps a symbol and its notes from arguing. The
+ * conventional name for the black key above C is D♭, and D♭m7 is a chord
+ * whose third is F♭ and whose seventh is C♭ — two names this app refuses to
+ * print. The speller falls back, the chord comes out D♭ E A♭ B, and an
+ * inversion of it reads D♭m7/E: a slash onto a note the symbol says is not
+ * in the chord. Spelled from C♯ the same four notes are C♯ E G♯ B, each on
+ * its own letter, and C♯m7/E says exactly what sounded.
+ *
+ * "Better" means fewer degrees the app cannot print, and the conventional
+ * name wins every tie — which is 400 of the 432 chords this app can build.
+ * The 32 that move are the minor and diminished chords on D♭, E♭, A♭ and
+ * B♭, which want a C♭ or an F♭ and are written from the sharp side
+ * anyway, and the F♯ major sevenths, which want an E♯.
  */
 export function chordRootName(chord: Chord, pref: Accidental = 'both'): string {
   if (pref !== 'both') return pcName(chord.rootPc, pref);
-  return chord.root ?? pcName(chord.rootPc, 'both');
+  if (chord.root) return chord.root;
+  const neutral = pcName(chord.rootPc, 'both');
+  const other = neutral === SHARP_NAMES[chord.rootPc]
+    ? FLAT_NAMES[chord.rootPc]
+    : SHARP_NAMES[chord.rootPc];
+  if (other === neutral) return neutral;
+  return spellingFaults(other, chord.rootPc, chord.quality)
+    < spellingFaults(neutral, chord.rootPc, chord.quality)
+    ? other
+    : neutral;
 }
 
 export function chordSymbol(chord: Chord, pref: Accidental = 'both'): string {

@@ -51,9 +51,9 @@ const LESSONS: Array<Omit<VoicingLesson, 'label' | 'short'>> = [
   },
   {
     id: 'voice-led',
-    blurb: 'The same close-position stack as root position, turned over: all the chord tones, packed the same way, with something other than the root at the bottom.',
-    use: 'Everywhere. Through a progression the inversion is the one that moves least from the chord before, and this mode adds the tensions a pianist would — so it is the closest thing here to ordinary comping over a bass.',
-    detail: 'Watch the note names rather than the chord symbols: between one chord and the next, most of them stay put. Which inversion a chord lands in is not part of what the voicing is called, because the choice is made by the chord before it.',
+    blurb: 'The same close-position stack as the mode above, with whichever tone sits nearest the chord before at the bottom: all the chord tones, packed the same way, arranged to move as little as possible.',
+    use: 'Everywhere. The hands take the position that moves least from the chord before, and this mode adds the tensions a pianist would — so it is the closest thing here to ordinary comping over a bass.',
+    detail: 'Watch the note names rather than the chord symbols: between one chord and the next, most of them stay put. What the hands have underneath is a separate question from what the chord is: with the root in the bass these are all root-position chords, however the notes above are stacked.',
   },
   {
     id: 'shell',

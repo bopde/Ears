@@ -1,7 +1,7 @@
 import type { ExerciseType, GenContext, Question } from './types';
 import { buildOptions, chooseKey, chooseTarget, optionCount, questionId, tempoFor } from './support';
 import {
-  CHORD_QUALITIES, addedTensions, chordSymbol, makeChord,
+  CHORD_QUALITIES, addedTensions, chordSymbol, makeChord, spellInChord,
   type Chord, type ChordQuality,
 } from '../music/chords';
 import { soundedChord } from '../audio/reference';
@@ -10,11 +10,11 @@ import {
   voiceChord, voiceProgression, type RootlessForm, type Voicing, type VoicingStyle,
 } from '../music/voicing';
 import {
-  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, voicingBass, voicingLabel, voicingLabelFor,
+  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, handsLabel, voicingAnswerLabel, voicingBass,
 } from './voicing-plan';
 import { Performer } from '../audio/performer';
 import { approachInto, chooseLever, playVoicing } from './levers';
-import { pcNameDual, type PitchClass } from '../music/pitch';
+import { keyName, pcNameDual, type PitchClass } from '../music/pitch';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { voicingConceptId } from '../music/catalog';
 import type { PracticeSettings } from '../session/settings';
@@ -185,7 +185,7 @@ export const voicingExercise: ExerciseType = {
           label: 'Shape',
           options: buildOptions(ctx.rng, target, distractors, (s) => ({
             id: s,
-            label: voicingLabel(s),
+            label: voicingAnswerLabel(s),
           })),
           columns: 1,
         },
@@ -211,9 +211,10 @@ export const voicingExercise: ExerciseType = {
         },
       },
       reveal: {
-        // The form is named here and nowhere in the options: which of the two
-        // rootless shapes played is worth knowing, and is not the question.
-        heading: voicingLabelFor(target, voicing.form),
+        // What the hands did, with the tone they had underneath — and the
+        // rootless form, which is worth knowing and is not the question, so
+        // it appears here and nowhere in the options.
+        heading: handsLabel(chord, voicing),
         detail: chordSymbol(chord, ctx.settings.accidental),
         tag: added.length ? `played with ${formatList(added)}` : undefined,
         played: soundedChord(chord, voicing, ctx.settings.accidental),
@@ -297,8 +298,18 @@ export const guideToneExercise: ExerciseType = {
 
     const n = Math.min(optionCount(ctx.difficulty, wrong.length + 1), wrong.length + 1);
     const distractors = ctx.rng.sample(wrong, n - 1);
+    // Answer options stay dual: there the reader is choosing, and either
+    // spelling has to be recognisable.
     const spell = (ids: string) =>
       ids.split('-').map((pc) => pcNameDual(Number(pc) as PitchClass)).join('  →  ');
+    // The reveal names each tone as the 3rd or 7th of the chord it belongs
+    // to, which is what the question was asking you to follow. In B that
+    // reads E → E → D♯ rather than three pairs of alternatives.
+    const spellInKey = (pcs: readonly PitchClass[]) =>
+      pcs
+        .map((pc, i) => spellInChord(realised[i].chord, 60 + pc, ctx.settings.accidental)
+          .replace(/-?\d+$/, ''))
+        .join('  →  ');
 
     return {
       id: questionId('guide-tones'),
@@ -356,8 +367,8 @@ export const guideToneExercise: ExerciseType = {
         },
       },
       reveal: {
-        heading: spell(answer),
-        detail: `${def.name}  ·  in ${pcNameDual(tonic)}`,
+        heading: spellInKey(line),
+        detail: `${def.name}  ·  in ${keyName(tonic, def.tonality === 'minor' ? 'minor' : 'major')}`,
         notes: realised
           .map((r, i) => `${chordSymbol(r.chord, ctx.settings.accidental)} ${
             line[i] === tones[i].third ? '3rd' : '7th'}`)

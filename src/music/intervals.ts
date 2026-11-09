@@ -1,5 +1,9 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
+import {
+  letterIndexOf, midiName, octaveOf, pcOf, spellOnLetter,
+  type Accidental, type Midi,
+} from './pitch';
 
 export type IntervalDirection = 'ascending' | 'descending' | 'harmonic';
 
@@ -103,3 +107,46 @@ export function intervalConcept(i: IntervalDef): Concept {
 }
 
 export const intervalConceptId = (id: string) => conceptId('interval', id);
+
+/**
+ * How many letters an interval spans: a 3rd is two letters up, a 5th four.
+ *
+ * Read off the short name, which already carries the number — "M3" is a
+ * third whatever it is called elsewhere. Two have no number in them: a
+ * unison is a first, and an octave an eighth. A tritone has no settled
+ * number at all, which is the point of its name, so it is written as the
+ * augmented fourth it usually is.
+ */
+export function intervalLetterSteps(interval: IntervalDef): number | null {
+  if (interval.short === 'U') return 0;
+  if (interval.short === '8ve') return 7;
+  if (interval.short === 'TT') return 3;
+  const digits = interval.short.replace(/[^0-9]/g, '');
+  return digits ? Number(digits) - 1 : null;
+}
+
+/**
+ * The two notes of an interval, the upper one spelled as the interval says.
+ *
+ * A major 3rd above B is a D♯, not the E♭ a pitch-class table reaches for:
+ * a third is two letters up whatever the accidental works out to. The lower
+ * note keeps today's spelling, because nothing here says what key it is in —
+ * it is the thing the upper note is measured from.
+ */
+export function intervalNoteNames(
+  interval: IntervalDef,
+  lower: Midi,
+  upper: Midi,
+  pref: Accidental = 'both',
+): { lower: string; upper: string } {
+  const low = midiName(lower, pref);
+  const steps = intervalLetterSteps(interval);
+  const letter = letterIndexOf(low);
+  const spelled = pref === 'both' && steps !== null && letter >= 0
+    ? spellOnLetter(pcOf(upper), letter + steps)
+    : null;
+  return {
+    lower: low,
+    upper: spelled === null ? midiName(upper, pref) : `${spelled}${octaveOf(upper)}`,
+  };
+}

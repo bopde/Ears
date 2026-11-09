@@ -5,7 +5,9 @@ import {
 import { BASS_INSTRUMENT } from './audio/instruments';
 import type { Voicing } from './music/voicing';
 import type { PhraseNote } from './music/phrase';
-import { REGISTER, foldInto } from './music/pitch';
+import {
+  PITCH_CLASSES, REGISTER, foldInto, letterIndexOf, spellOnLetter,
+} from './music/pitch';
 
 export interface RecordedNote {
   midi: number;
@@ -185,4 +187,20 @@ export class FakePerformer {
   asPerformer(): Performer {
     return this as unknown as Performer;
   }
+}
+
+/**
+ * What a written name sounds, whichever letter it was spelled on.
+ *
+ * C♯3 and D♭3 are the same key on the piano, so a test that wants to know
+ * the name points at the right note has to go through the spelling rather
+ * than compare strings — the key decides the letter.
+ */
+export function soundingOf(name: string): { pc: number; octave: number } {
+  const letter = name.replace(/-?\d+$/, '');
+  const octave = Number(name.slice(letter.length));
+  const index = letterIndexOf(letter);
+  const pc = PITCH_CLASSES.find((c) => spellOnLetter(c, index) === letter);
+  if (pc === undefined || !Number.isInteger(octave)) throw new Error(`Unreadable name: ${name}`);
+  return { pc, octave };
 }

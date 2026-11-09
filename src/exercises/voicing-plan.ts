@@ -1,7 +1,7 @@
 import {
   VOICING_STYLES, isRootFree, type RootlessForm, type Voicing, type VoicingStyle,
 } from '../music/voicing';
-import type { Chord } from '../music/chords';
+import { chordDegrees, type Chord } from '../music/chords';
 import { CONCEPTS, voicingConceptId } from '../music/catalog';
 import { PROGRESSIONS } from '../music/progressions';
 import type { PracticeSettings } from '../session/settings';
@@ -130,6 +130,73 @@ export const voicingLabel = (style: VoicingStyle): string =>
  */
 export const voicingLabelFor = (style: VoicingStyle, form?: RootlessForm): string =>
   form === undefined ? voicingLabel(style) : `${voicingLabel(style)} ${form}`;
+
+/**
+ * How a shape is offered as an answer.
+ *
+ * `spread` is the one that needs different words here. Over a set of changes
+ * it is the voicing that takes whichever position sits nearest the chord
+ * before, which is what "voice-led" means — but a voicing question plays one
+ * chord, and there is no chord before it for the voicing to have led from.
+ * What a listener can actually hear is that something other than the root is
+ * underneath the hands, so that is what the option says.
+ */
+export const voicingAnswerLabel = (style: VoicingStyle): string =>
+  style === 'spread' ? 'Close, another tone on the bottom' : voicingLabel(style);
+
+/** Both close styles are the same arrangement of notes; only the bottom differs. */
+const CLOSE_FAMILY: ReadonlySet<VoicingStyle> = new Set<VoicingStyle>(['close', 'spread']);
+
+/**
+ * The chord member a degree names, as an ordinal: "♭3" is the 3rd.
+ *
+ * The alteration is dropped on purpose. This says which member of the chord
+ * the hands have underneath, and whether that third is major or minor is a
+ * question about the chord rather than about the arrangement — the degrees
+ * printed beside the notes answer it already.
+ */
+function ordinalOf(degree: string): string | null {
+  const number = Number(degree.replace(/[^0-9]/g, ''));
+  if (!Number.isInteger(number) || number <= 0) return null;
+  if (number === 1) return 'root';
+  const teen = number % 100;
+  if (teen >= 11 && teen <= 13) return `${number}th`;
+  return `${number}${['th', 'st', 'nd', 'rd'][number % 10] ?? 'th'}`;
+}
+
+/**
+ * Which member of the chord the hands have on the bottom, where saying so
+ * tells the reader something.
+ *
+ * Nothing for a root on the bottom: the chord symbol already implies it, the
+ * way a jazz chart does. Nothing either for a voicing with no root in it at
+ * all — its own name says the root is absent, and "3rd on the bottom" would
+ * be describing the consequence rather than the voicing.
+ */
+export function bottomTone(chord: Chord, voicing: Voicing): string | undefined {
+  const rootPc = mod(chord.rootPc, 12);
+  if (!voicing.notes.some((midi) => mod(midi, 12) === rootPc)) return undefined;
+  const tone = ordinalOf(chordDegrees(chord, [voicing.notes[0]])[0]);
+  return tone === null || tone === 'root' ? undefined : tone;
+}
+
+/**
+ * How the hands were arranged, for a voicing that has already sounded.
+ *
+ * The voicing's family, and the tone underneath where that is not the root.
+ * Never "root position" or "inversion": those describe the bass, which this
+ * does not know about and which `namedInversion` reports separately.
+ */
+export function handsLabel(chord: Chord, voicing: Voicing): string {
+  const family = CLOSE_FAMILY.has(voicing.style)
+    ? 'Close'
+    : voicingLabelFor(voicing.style, voicing.form);
+  const tone = bottomTone(chord, voicing);
+  if (tone) return `${family}  ·  ${tone} on the bottom`;
+  // A close voicing says so, because "Close" alone would leave a reader
+  // wondering what was underneath. The others do not need it.
+  return CLOSE_FAMILY.has(voicing.style) ? `${family}, root on the bottom` : family;
+}
 
 /** The styles a question can be asked about — the ones the curve can produce. */
 export const NAMEABLE_VOICINGS: VoicingStyle[] = ['close', 'spread', 'drop2', 'rootless', 'shell'];

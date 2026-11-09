@@ -13,12 +13,12 @@ import {
   type ReferenceChord, type ReferenceVoicing, type VoicingLesson,
 } from '../../audio/reference';
 import {
-  CHORD_GROUP_ORDER, CHORD_QUALITIES, chordPitchClasses, chordSymbol, makeChord,
+  CHORD_GROUP_ORDER, CHORD_QUALITIES, chordSymbol, chordToneNames, makeChord,
 } from '../../music/chords';
-import { INTERVALS } from '../../music/intervals';
-import { SCALES, scalePitchClasses } from '../../music/scales';
+import { INTERVALS, intervalNoteNames } from '../../music/intervals';
+import { SCALES, scaleNoteNames } from '../../music/scales';
 import { PROGRESSIONS, romanLine } from '../../music/progressions';
-import { PITCH_CLASSES, midiName, pcName, pcNameDual } from '../../music/pitch';
+import { PITCH_CLASSES, keyName, pcName } from '../../music/pitch';
 import { groupBy } from '../../lib/util';
 
 type Tab = 'progressions' | 'voicings' | 'chords' | 'intervals' | 'modes';
@@ -274,7 +274,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
         <div className="field">
           <div className="field__label">
             <span>{tab === 'intervals' ? 'From' : 'Key'}</span>
-            <span>{pcNameDual(key)}</span>
+            <span>{keyName(key)}</span>
           </div>
           <div className="row row--wrap" style={{ gap: '0.3rem' }}>
             {PITCH_CLASSES.map((pc) => (
@@ -388,7 +388,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
               key={lesson.id}
               lesson={lesson}
               chords={chords}
-              demo={`${def.short} in ${pcNameDual(key)}`}
+              demo={`${def.short} in ${keyName(key, def.tonality === 'minor' ? 'minor' : 'major')}`}
               playing={playing}
               onPlay={() =>
                 void play(`voicing-${lesson.id}`, (perf) => playReference(perf, chords))}
@@ -409,9 +409,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
                 <Row
                   key={quality.id}
                   title={`${chordSymbol(makeChord(key, quality.id), accidental)} — ${quality.name}`}
-                  concrete={chordPitchClasses(makeChord(key, quality.id))
-                    .map((pc) => pcName(pc, accidental))
-                    .join('  ')}
+                  concrete={chordToneNames(makeChord(key, quality.id), accidental).join('  ')}
                   blurb={quality.blurb}
                   active={playing === quality.id}
                   onPlay={() => void play(quality.id, (perf) => playChordQuality(perf, quality, key))}
@@ -432,11 +430,12 @@ export function Reference({ onBack }: { onBack: () => void }) {
             <Group key={title} title={title}>
               {items.map((interval) => {
                 const [lo, hi] = intervalNotes(interval, key);
+                const named = intervalNoteNames(interval, lo, hi, accidental);
                 return (
                   <Row
                     key={interval.id}
                     title={interval.name}
-                    concrete={`${midiName(lo, accidental)}  →  ${midiName(hi, accidental)}`}
+                    concrete={`${named.lower}  →  ${named.upper}`}
                     detail={`${interval.semitones} semitone${interval.semitones === 1 ? '' : 's'}`}
                     blurb={interval.blurb}
                     active={playing === interval.id}
@@ -459,9 +458,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
                   <Row
                     key={scale.id}
                     title={`${pcName(key, accidental)} ${scale.name}`}
-                    concrete={scalePitchClasses(key, scale)
-                      .map((pc) => pcName(pc, accidental))
-                      .join('  ')}
+                    concrete={scaleNoteNames(key, scale, accidental).join('  ')}
                     detail={scale.spelling}
                     blurb={scale.blurb}
                     active={playing === scale.id}
@@ -474,7 +471,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
         )}
 
       <p className="small faint" style={{ textAlign: 'center' }}>
-        Everything the exercises draw on. Tap any row to hear it in {pcNameDual(key)}.
+        Everything the exercises draw on. Tap any row to hear it in {keyName(key)}.
       </p>
     </div>
   );

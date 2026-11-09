@@ -1,4 +1,4 @@
-import type { ExerciseType, GenContext, Question, RevealRow } from './types';
+import type { ExerciseType, GenContext, Question } from './types';
 import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, questionId, tempoFor,
 } from './support';
@@ -10,10 +10,16 @@ import {
   CHORD_QUALITIES, chordConceptId, chordSymbol, makeChord, nearestQualities, type Chord,
 } from '../music/chords';
 import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
-import { approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel } from './voicing-plan';
+import {
+  approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel,
+} from './voicing-plan';
 import { Performer, progressionBass, type BassNote } from '../audio/performer';
-import { rootMotionLine, soundedChord } from '../audio/reference';
-import { pcNameDual } from '../music/pitch';
+import { rootMotionLine } from '../audio/reference';
+import { revealRows } from './rows';
+import { keyName } from '../music/pitch';
+
+/** A modal progression is named like a major key; only minor has its own. */
+const keyTonality = (def: ProgressionDef) => (def.tonality === 'minor' ? 'minor' : 'major');
 import type { PracticeSettings } from '../session/settings';
 import type { Rng } from '../lib/rng';
 import { clamp, mod } from '../lib/util';
@@ -166,41 +172,6 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
 
 const chordLabel = (chord: Chord, settings: PracticeSettings) => chordSymbol(chord, settings.accidental);
 
-/**
- * One row per chord of the progression, read off the voicings that played.
- *
- * The reveal used to be a single line of symbols, which answered "what were
- * the chords" and nothing else. What a listener who missed it wants is which
- * numeral each symbol was and what the notes under it were, and neither fits
- * on one line — so each chord gets a row, and the notes stay folded away
- * until the row is tapped.
- *
- * The bass is matched to its chord by beat rather than by index: a walking
- * line plays four notes to a chord and the first of them is the one that
- * states the root.
- */
-function revealRows(
-  changes: Changes,
-  settings: PracticeSettings,
-  targetIndex?: number,
-): RevealRow[] {
-  let beat = 0;
-  return changes.realised.map((r, i) => {
-    const start = beat;
-    beat += r.beats;
-    const bass = changes.bass.find((b) => b.beat >= start && b.beat < beat && b.role === 'root');
-    return {
-      roman: r.roman,
-      symbol: chordLabel(r.chord, settings),
-      target: targetIndex === i ? true : undefined,
-      played: soundedChord(
-        r.chord,
-        { notes: changes.voicings[i].notes, bass: bass?.midi },
-        settings.accidental,
-      ),
-    };
-  });
-}
 
 export const progressionExercise: ExerciseType = {
   id: 'progression',
@@ -228,7 +199,7 @@ export const progressionExercise: ExerciseType = {
       keyPc: tonic,
       prompt: {
         title: 'What movement is this?',
-        sub: ctx.difficulty <= 2 ? `In ${pcNameDual(tonic)}` : undefined,
+        sub: ctx.difficulty <= 2 ? `In ${keyName(tonic, keyTonality(def))}` : undefined,
       },
       fields: [
         {
@@ -249,7 +220,7 @@ export const progressionExercise: ExerciseType = {
       voicing: changes.voicingStyle,
       hint: {
         label: 'Tonic',
-        description: `Sounds the tonic (${pcNameDual(tonic)}) so you can hear the chords as degrees.`,
+        description: `Sounds the tonic (${keyName(tonic, keyTonality(def))}) so you can hear the chords as degrees.`,
         play: (perf) => {
           perf.note(tonic + 48, perf.origin(), 1.8, 0.6);
           return 1.8;
@@ -262,7 +233,7 @@ export const progressionExercise: ExerciseType = {
         // numerals, so it cannot describe something other than what played.
         detail: changes.motion,
         notes: voicingLabel(changes.voicingStyle),
-        rows: revealRows(changes, ctx.settings),
+        rows: revealRows(changes.realised, changes.voicings, changes.bass, ctx.settings),
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 12,
     };
@@ -336,7 +307,9 @@ export const progressionChordExercise: ExerciseType = {
       keyPc: tonic,
       prompt: {
         title: `Name the ${ordinal} chord`,
-        sub: ctx.difficulty <= 2 ? `${realised.length} chords, in ${pcNameDual(tonic)}` : `${realised.length} chords`,
+        sub: ctx.difficulty <= 2
+          ? `${realised.length} chords, in ${keyName(tonic, keyTonality(def))}`
+          : `${realised.length} chords`,
       },
       fields: [
         {
@@ -357,7 +330,7 @@ export const progressionChordExercise: ExerciseType = {
       voicing: changes.voicingStyle,
       hint: {
         label: 'Tonic',
-        description: `Sounds the tonic (${pcNameDual(tonic)}) so you can place the chord as a degree.`,
+        description: `Sounds the tonic (${keyName(tonic, keyTonality(def))}) so you can place the chord as a degree.`,
         play: (perf) => {
           perf.note(tonic + 48, perf.origin(), 1.8, 0.6);
           return 1.8;
@@ -365,12 +338,12 @@ export const progressionChordExercise: ExerciseType = {
       },
       reveal: {
         heading: chordLabel(target, ctx.settings),
-        detail: `${realised[index].roman} of ${pcNameDual(tonic)}  ·  ${def.name}`,
+        detail: `${realised[index].roman} of ${keyName(tonic, keyTonality(def))}  ·  ${def.name}`,
         notes: voicingLabel(changes.voicingStyle),
         // The same rows the whole-progression question shows, with the one
         // that was asked about marked: where it sat in the sequence is most
         // of what there was to hear.
-        rows: revealRows(changes, ctx.settings, index),
+        rows: revealRows(changes.realised, changes.voicings, changes.bass, ctx.settings, index),
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 14,
     };

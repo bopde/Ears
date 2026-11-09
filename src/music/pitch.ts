@@ -17,6 +17,33 @@ export const FLAT_NAMES = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A�
  */
 const NEUTRAL_NAMES = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 
+/**
+ * How a key is named when a musician writes it down.
+ *
+ * Not the neutral table: the two differ, and where they differ the neutral one
+ * is wrong. The key a semitone above C is D♭ in major and C♯ in minor,
+ * because the major scale on D♭ spells with five flats and the minor scale on
+ * C♯ with four sharps — whereas calling it "C♯/D♭" everywhere makes the
+ * reader decide, which is the one thing a key signature exists to settle.
+ *
+ * These are conventions rather than derivations: the number of accidentals
+ * decides, and where it ties (F♯ against G♭ major) the commoner one wins.
+ */
+const MAJOR_TONICS = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+const MINOR_TONICS = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'B♭', 'B'];
+
+/**
+ * The name of a key, for prose.
+ *
+ * "in B", "V7 of D♭". Answer buttons that ask *which* key or pitch keep the
+ * dual form, because there the reader is choosing rather than reading and
+ * either spelling has to be recognisable.
+ */
+export function keyName(pc: PitchClass, tonality: 'major' | 'minor' = 'major'): string {
+  const i = mod(Math.round(pc), 12);
+  return (tonality === 'minor' ? MINOR_TONICS : MAJOR_TONICS)[i];
+}
+
 export const PITCH_CLASSES: PitchClass[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
 export function pcName(pc: PitchClass, pref: Accidental = 'both'): string {
@@ -64,6 +91,10 @@ export function spellOnLetter(pc: PitchClass, letterIndex: number): string | nul
     : `${LETTERS[index]}${delta > 0 ? '\u266f' : '\u266d'}`;
   return UNSPELLABLE.has(name) ? null : name;
 }
+
+/** Which letter a written name starts on, or -1 if it is not one of the seven. */
+export const letterIndexOf = (name: string): number =>
+  LETTERS.indexOf(name[0] as typeof LETTERS[number]);
 
 export const pcOf = (midi: Midi): PitchClass => mod(Math.round(midi), 12);
 

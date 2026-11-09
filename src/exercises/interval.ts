@@ -1,10 +1,10 @@
 import type { ExerciseType, GenContext, Question } from './types';
 import { buildOptions, chooseTarget, optionCount, pickDistractors, questionId } from './support';
 import {
-  INTERVALS, directionLabel, intervalConceptId, nearestIntervals,
+  INTERVALS, directionLabel, intervalConceptId, intervalNoteNames, nearestIntervals,
   type IntervalDef, type IntervalDirection,
 } from '../music/intervals';
-import { REGISTER, midiName } from '../music/pitch';
+import { REGISTER } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import type { Rng } from '../lib/rng';
 import { clamp } from '../lib/util';
@@ -51,6 +51,7 @@ export const intervalExercise: ExerciseType = {
     const hi = REGISTER.melody.hi - span;
     const lower = ctx.rng.range(lo, Math.max(lo, hi));
     const upper = lower + span;
+    const named = intervalNoteNames(interval, lower, upper, ctx.settings.accidental);
     const first = direction === 'descending' ? upper : lower;
     const second = direction === 'descending' ? lower : upper;
 
@@ -112,7 +113,13 @@ export const intervalExercise: ExerciseType = {
       reveal: {
         heading: interval.name,
         detail: `${directionLabel(direction)} · ${interval.semitones} semitone${interval.semitones === 1 ? '' : 's'}`,
-        notes: `${midiName(first, ctx.settings.accidental)} → ${midiName(second, ctx.settings.accidental)}`,
+        // Spelled by the interval's own number, so a major 3rd above B shows
+        // a D♯ rather than the E♭ a pitch-class table would reach for. Printed
+        // in the order they were played, which for a descending interval is
+        // the upper note first.
+        notes: direction === 'descending'
+          ? `${named.upper} → ${named.lower}`
+          : `${named.lower} → ${named.upper}`,
       },
       estimatedSeconds: 9 + ctx.difficulty,
     };

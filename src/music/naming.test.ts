@@ -25,22 +25,29 @@ describe('a voicing is called one thing', () => {
     expect(new Set(names).size, 'no two styles share a name').toBe(names.length);
   });
 
-  it('calls the inverted close voicing what it is', () => {
-    // It was "Spread", and the engine has never spread it: `stack` packs these
-    // exactly as it packs `close`, and the inversion is the whole difference.
-    expect(VOICING_NAMES.spread).toBe('Close, inversion');
-    expect(VOICING_NAMES.close).toBe('Close, root position');
+  it('calls the two close voicings by what the hands have underneath', () => {
+    // Neither is "Spread": the engine has never spread them — `stack` packs
+    // both exactly the same way — and the only difference is the bottom note.
+    expect(VOICING_NAMES.close).toBe('Close, root on the bottom');
+    expect(VOICING_NAMES.spread).toBe('Close, voice-led');
     const spread = voiceChord(makeChord(0, 'maj7'), { style: 'spread' });
     const close = voiceChord(makeChord(0, 'maj7'), { style: 'close', rootPosition: true });
     const span = (n: readonly number[]) => n[n.length - 1] - n[0];
-    expect(span(spread.notes), 'no wider than the close voicing it inverts')
+    expect(span(spread.notes), 'no wider than the close voicing beside it')
       .toBeLessThanOrEqual(span(close.notes) + 2);
   });
 
-  it('says nothing about voice leading or the bass', () => {
+  it('never calls the hands a root position or an inversion', () => {
+    // Both terms are decided by the bass and by nothing else. With the root
+    // underneath, a chord is in root position however the hands are stacked
+    // above it — so "Close, inversion" beside a root-position numeral was a
+    // reveal contradicting itself. This test used to assert the opposite
+    // rule, that a name may not mention voice leading; through a set of
+    // changes that is exactly what `spread` does, and saying so is the
+    // accurate half of what the old name was reaching for.
     for (const style of VOICING_STYLES) {
       const name = `${VOICING_NAMES[style]} ${VOICING_SHORT[style]}`.toLowerCase();
-      for (const word of ['voice led', 'voice-led', 'voiceled', 'bass']) {
+      for (const word of ['inversion', 'inverted', 'root position', 'root pos']) {
         expect(name, `${style} mentions ${word}`).not.toContain(word);
       }
     }

@@ -14,7 +14,7 @@ import { mod } from '../lib/util';
 import {
   arpeggiate, couldSound, isRootFree, voiceChord, type RootlessForm, type VoicingStyle,
 } from '../music/voicing';
-import { chooseVoicing, voicingBass, voicingLabelFor } from './voicing-plan';
+import { chooseVoicing, handsLabel, voicingBass } from './voicing-plan';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
 import { PITCH_CLASSES, pcName, pcNameDual, type Midi, type PitchClass } from '../music/pitch';
@@ -272,11 +272,14 @@ function buildMaterial(
 function revealFor(
   chord: Chord,
   voicing: ReturnType<typeof voiceChord>,
-  style: VoicingStyle,
   accidental: PracticeSettings['accidental'],
 ) {
+  // `namedInversion` reports the bass: it names one only where the lowest
+  // sounding note, bass included, is a chord tone other than the root. The
+  // hands are described separately, because what they have on the bottom is
+  // not what "inversion" means.
   const named = namedInversion(chord, voicing);
-  const parts = [chordFullName(chord, accidental), voicingLabelFor(style, voicing.form)];
+  const parts = [chordFullName(chord, accidental), handsLabel(chord, voicing)];
   if (named) parts.splice(1, 0, named.name);
   const slashPc = voicing.bass !== undefined && mod(voicing.bass, 12) !== mod(chord.rootPc, 12)
     ? mod(voicing.bass, 12)
@@ -350,7 +353,7 @@ export const chordQualityExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: revealFor(chord, material.voicing, material.style, ctx.settings.accidental),
+      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
       estimatedSeconds: 11 + ctx.difficulty,
     };
   },
@@ -406,7 +409,7 @@ export const chordFullExercise: ExerciseType = {
           return 1.6;
         },
       },
-      reveal: revealFor(chord, material.voicing, material.style, ctx.settings.accidental),
+      reveal: revealFor(chord, material.voicing, ctx.settings.accidental),
       estimatedSeconds: 15 + ctx.difficulty,
     };
   },

@@ -12,17 +12,24 @@ import { VOICING_STYLES, type VoicingStyle } from './voicing';
  * depend on the UI and so a style cannot be called two things in two screens.
  *
  * A name says which notes are in the voicing, how they are spaced and — only
- * where that is the difference — what is at the bottom. It never says anything
- * about voice leading or about the bass, because every style voice-leads
- * through a progression and every style can be played over a bass; those are
- * not what tells one shape from another. Tensions modify a voicing rather than
- * define one, so they are not in the name either.
+ * where that is the difference — what the hands have at the bottom.
+ *
+ * What it never says is "root position" or "inversion". Those two are decided
+ * by the bass and by nothing else: with the root underneath, a chord is in
+ * root position however the hands are stacked above it, so a reveal that read
+ * "Close, inversion" beside a root-position numeral was contradicting itself.
+ * An inversion shows up where it belongs — as a slash chord, and as I/3 in a
+ * numeral. Tensions modify a voicing rather than define one, so they are not
+ * in the name either.
  */
 export const VOICING_NAMES: Record<VoicingStyle, string> = {
-  close: 'Close, root position',
-  // Not "Spread": the engine stacks these close (see `stack` in voicing.ts),
-  // and what distinguishes them from `close` is the inversion, not the spacing.
-  spread: 'Close, inversion',
+  close: 'Close, root on the bottom',
+  // Not "Spread": the engine stacks these close (see `stack` in voicing.ts).
+  // Through a set of changes what distinguishes them is that each chord takes
+  // whichever position sits nearest the one before, which is voice leading.
+  // A single chord has no chord before it, so the voicing quiz offers them
+  // under a different description — see `voicingAnswerLabel`.
+  spread: 'Close, voice-led',
   drop2: 'Drop 2',
   rootless: 'Rootless',
   shell: 'Shell',
@@ -32,8 +39,8 @@ export const VOICING_NAMES: Record<VoicingStyle, string> = {
 
 /** The same names where a chip or a tab has no room for the full one. */
 export const VOICING_SHORT: Record<VoicingStyle, string> = {
-  close: 'Root pos.',
-  spread: 'Inversion',
+  close: 'Root on bottom',
+  spread: 'Voice-led',
   drop2: 'Drop 2',
   rootless: 'Rootless',
   shell: 'Shell',

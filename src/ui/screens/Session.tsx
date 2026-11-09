@@ -4,7 +4,9 @@ import { SessionEngine, type SessionSummary } from '../../session/engine';
 import { buildDailyQuestions, dailyNumber, dailySettings } from '../../session/daily';
 import { AnswerGrid } from '../components/AnswerGrid';
 import { Button, TopBar, clsx } from '../components/ui';
-import { CheckIcon, CrossIcon, HintIcon, NextIcon, ReplayIcon } from '../components/Icons';
+import {
+  CheckIcon, ChevronIcon, CrossIcon, HintIcon, NextIcon, ReplayIcon,
+} from '../components/Icons';
 import { formatClock } from '../../lib/util';
 import type { RevealRow, SoundedChord } from '../../exercises/types';
 
@@ -70,6 +72,16 @@ export function SessionScreen({
   const answersShown =
     state.phase === 'feedback' || delay === 0 || (questionId !== null && shownFor === questionId);
 
+  // Folding the answer away: the panel is tall enough — a progression reveal
+  // runs to 699 px at 380 px wide — to push the answer buttons out of the
+  // scroll window entirely, so you cannot see which one you picked. Keyed by
+  // question id like the hold above, so the next question arrives open
+  // without a reset effect: a panel that stayed shut would hide the answer
+  // from someone who never asked it to.
+  const [foldedFor, setFoldedFor] = useState<string | null>(null);
+  const folded = questionId !== null && foldedFor === questionId;
+  const answerPanelId = 'feedback-answer';
+
   // Whether this question has been heard at all yet, for the 'audio' setting.
   const playback = useRef<{ id: string | null; heard: boolean }>({ id: null, heard: false });
   if (playback.current.id !== questionId) playback.current = { id: questionId, heard: false };
@@ -119,7 +131,11 @@ export function SessionScreen({
         return;
       }
       if (key === 'enter' || key === ' ') {
-        if (state.phase === 'feedback') {
+        // Unless something focused wants them: enter and space are how a
+        // keyboard presses a button, so swallowing them here would leave the
+        // fold control, and the transport beside it, reachable by tab and
+        // impossible to operate.
+        if (state.phase === 'feedback' && !isControl(e.target)) {
           e.preventDefault();
           engine.next();
         }
@@ -279,15 +295,39 @@ export function SessionScreen({
             </div>
 
             {revealed && state.outcome && (
-              <div className={`feedback feedback--${state.outcome.correct ? 'right' : 'wrong'}`}>
-                <div className="row row--between">
+              <div
+                className={clsx(
+                  'feedback',
+                  `feedback--${state.outcome.correct ? 'right' : 'wrong'}`,
+                  folded && 'feedback--folded',
+                )}
+              >
+                <div className="row row--between feedback__bar">
                   <span className="feedback__verdict row" style={{ gap: '0.35rem' }}>
                     {state.outcome.correct ? <CheckIcon size={16} /> : <CrossIcon size={16} />}
                     {state.outcome.correct ? 'Correct' : 'Not quite'}
                   </span>
+                  {/* Folded, the one line left has to say which chord it was,
+                      so the name moves up here rather than going away. */}
+                  {folded ? (
+                    <span className="feedback__name">{question.reveal.heading}</span>
+                  ) : (
+                    <span className="grow" />
+                  )}
                   {state.outcome.hintUsed && <span className="badge">Hint used</span>}
+                  <button
+                    type="button"
+                    className="feedback__fold"
+                    aria-expanded={!folded}
+                    aria-controls={answerPanelId}
+                    aria-label={folded ? 'Show answer' : 'Hide answer'}
+                    title={folded ? 'Show answer' : 'Hide answer'}
+                    onClick={() => questionId && setFoldedFor(folded ? null : questionId)}
+                  >
+                    <ChevronIcon size={18} />
+                  </button>
                 </div>
-                <div>
+                <div id={answerPanelId} hidden={folded}>
                   <div className="feedback__heading">
                     {question.reveal.heading}
                     {question.reveal.tag && (
@@ -325,6 +365,12 @@ export function SessionScreen({
       </div>
     </div>
   );
+}
+
+/** Whether a key press has already been claimed by something focused. */
+function isControl(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement
+    && !!target.closest('button, a, input, select, textarea, [tabindex]');
 }
 
 /**
@@ -376,6 +422,7 @@ function RevealRows({ rows }: { rows: RevealRow[] }) {
           >
             <span className="revrow__roman">{row.roman}</span>
             <span className="revrow__symbol">{row.symbol}</span>
+            {row.bottom && <span className="revrow__bottom">{row.bottom} on the bottom</span>}
             <span className="revrow__more">{open === i ? '−' : '+'}</span>
           </button>
           {open === i && <Sounded played={row.played} />}

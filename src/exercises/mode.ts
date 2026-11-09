@@ -8,7 +8,17 @@ import {
 import { generatePhrase, phraseDurationBeats, scaleRun, type PhraseNote } from '../music/phrase';
 import { makeChord } from '../music/chords';
 import { voiceChord, voiceProgression } from '../music/voicing';
-import { pcNameDual } from '../music/pitch';
+import { keyName } from '../music/pitch';
+
+/**
+ * Which convention names this mode's tonic.
+ *
+ * A mode is not a key signature, but it has a third, and that is what the
+ * two conventions actually differ about: the tonic a semitone above C is
+ * written D♭ with a major 3rd over it and C♯ with a minor one.
+ */
+const modeTonality = (scale: { degrees: readonly number[] }) =>
+  (scale.degrees.includes(3) ? 'minor' : 'major');
 import type { Performer } from '../audio/performer';
 import type { PracticeSettings } from '../session/settings';
 import { clamp, mod } from '../lib/util';
@@ -126,7 +136,7 @@ export const modeExercise: ExerciseType = {
       },
       hint: {
         label: 'Tonic',
-        description: `Sounds the tonic (${pcNameDual(tonic)}) so you can hear the line against it.`,
+        description: `Sounds the tonic (${keyName(tonic, modeTonality(scale))}) so you can hear the line against it.`,
         play: (perf) => {
           const origin = perf.origin();
           perf.note(tonicMidi - 12, origin, 2, 0.55);
@@ -135,7 +145,7 @@ export const modeExercise: ExerciseType = {
         },
       },
       reveal: {
-        heading: `${pcNameDual(tonic)} ${scale.name}`,
+        heading: `${keyName(tonic, modeTonality(scale))} ${scale.name}`,
         // Each mode's blurb describes it against the scale you already know —
         // "minor with a natural 6th", "major with a flat 7th" — which is more
         // use when you are orienting than the degree string on its own.

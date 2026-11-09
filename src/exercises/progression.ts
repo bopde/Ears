@@ -7,16 +7,19 @@ import {
   type ProgressionDef, type RealisedChord,
 } from '../music/progressions';
 import {
-  CHORD_QUALITIES, chordConceptId, chordSymbol, makeChord, nearestQualities, type Chord,
+  CHORD_QUALITIES, addedTensions, chordConceptId, chordSymbol, makeChord, nearestQualities,
+  type Chord,
 } from '../music/chords';
 import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
 import {
-  approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel,
+  COLOUR_NOTE, approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel,
 } from './voicing-plan';
 import { Performer, progressionBass, type BassNote } from '../audio/performer';
 import { rootMotionLine } from '../audio/reference';
-import { revealRows } from './rows';
+import { bassLandings, revealRows } from './rows';
+import { distinctChords, soundingPitchClasses, unambiguousChords } from './ambiguity';
 import { keyName } from '../music/pitch';
+import { formatList } from './chord';
 
 /** A modal progression is named like a major key; only minor has its own. */
 const keyTonality = (def: ProgressionDef) => (def.tonality === 'minor' ? 'minor' : 'major');
@@ -94,6 +97,8 @@ function enabledProgressions(settings: PracticeSettings): ProgressionDef[] {
 interface Changes {
   realised: RealisedChord[];
   voicingStyle: VoicingStyle;
+  /** Whether the voicings were allowed notes the symbols do not name. */
+  tensions: boolean;
   /** The voicings that were scheduled, so a reveal can list what sounded. */
   voicings: Voicing[];
   /** The bass under them, in the order it is struck. */
@@ -120,6 +125,7 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
   const voicingStyle = chooseVoicing(
     ctx.rng, ctx.settings.voicingMode, level, ctx.voicingFocus, def.voicing,
   );
+  const tensions = voicingStyle !== 'close';
   const voicings = voiceProgression(chords, {
     style: voicingStyle,
     maxNotes: 5,
@@ -131,7 +137,7 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
     // Everywhere else the voicing may add what a pianist would: without this,
     // the ii–V–I's G7 sounded no 9th in a question while the cheat sheet
     // taught it with one.
-    tensions: voicingStyle !== 'close',
+    tensions,
   });
   const changes = Performer.changes(realised, voicings);
   // Root position over a root bass: the changes with nothing on top of them.
@@ -145,6 +151,7 @@ function buildChanges(ctx: GenContext, def: ProgressionDef, tonic: number): Chan
   return {
     realised,
     voicingStyle,
+    tensions,
     voicings,
     bass: line,
     // The same call the performer makes, so the description and the audio are
@@ -267,6 +274,24 @@ function chordDistractors(ctx: GenContext, realised: RealisedChord[], index: num
   });
 }
 
+/**
+ * Everything a listener heard under one change: the hands and the bass.
+ *
+ * The bass belongs in the set because it is part of what sounded — a rival
+ * that cannot play the note underneath did not produce this — and it is not
+ * in the voicing, which is the right hand alone.
+ */
+function soundedPcs(
+  changes: Changes,
+  landings: ReturnType<typeof bassLandings>,
+  index: number,
+): Set<number> {
+  const pcs = soundingPitchClasses(changes.voicings[index]);
+  const landing = landings[index];
+  if (landing) pcs.add(mod(landing.midi, 12));
+  return pcs;
+}
+
 export const progressionChordExercise: ExerciseType = {
   id: 'progression-chord',
   name: 'Chords in context',
@@ -284,20 +309,47 @@ export const progressionChordExercise: ExerciseType = {
 
     // Easy levels ask about the chord that lands; harder levels ask about one
     // buried in the middle, which means holding the whole sequence in your ear.
-    const index = ctx.rng.weighted(
+    const first = ctx.rng.weighted(
       realised.map((_, i) => i),
       (i) => (ctx.difficulty <= 2 ? (i === realised.length - 1 ? 3 : 1) : 1 + i * 0.3),
     );
+    const n = optionCount(ctx.difficulty, 8);
+    const hardness = clamp((ctx.difficulty - 1) / 4, 0, 1);
+    const landings = bassLandings(realised, changes.bass);
+
+    // The chord the curve wants, then the others if it leaves nothing to ask.
+    // A chord every rival could account for is not a question, and which
+    // chord that is depends on how the progression was voiced: a Gm7 comped
+    // with its 13 sounds a Gm13, so Gm13 stops being a wrong answer.
+    const order = [first, ...ctx.rng.shuffle(realised.map((_, i) => i)).filter((i) => i !== first)];
+    let chosen: { index: number; distractors: Chord[] } | null = null;
+    for (const i of order) {
+      const sounding = soundedPcs(changes, landings, i);
+      const live = unambiguousChords(
+        chordDistractors(ctx, realised, i), realised[i].chord, sounding,
+      );
+      if (!live.length) continue;
+      // At low difficulty, prefer alternatives that differ obviously. The
+      // shuffle goes first so it decides which of two chords that are the
+      // same notes survives, rather than the order they were built in.
+      const ordered = distinctChords(hardness >= 0.5 ? live : ctx.rng.shuffle(live));
+      // Fewer than the curve wants is better than a wrong answer that is
+      // right: the option count is a preference, the filter is not.
+      chosen = {
+        index: i,
+        distractors: ctx.rng.sample(ordered.slice(0, Math.max(n - 1, 6)), n - 1),
+      };
+      break;
+    }
+    // Nothing in the whole progression can be asked about without offering a
+    // defensible wrong answer. Rare enough to be worth measuring; the caller
+    // asks for another question rather than this one being unanswerable.
+    if (!chosen) return null;
+    const { index, distractors } = chosen;
     const target = realised[index].chord;
 
-    const n = optionCount(ctx.difficulty, 8);
-    const candidates = chordDistractors(ctx, realised, index);
-    const hardness = clamp((ctx.difficulty - 1) / 4, 0, 1);
-    // At low difficulty, prefer alternatives that differ obviously.
-    const ordered = hardness >= 0.5 ? candidates : ctx.rng.shuffle(candidates);
-    const distractors = ctx.rng.sample(ordered.slice(0, Math.max(n - 1, 6)), n - 1);
-
     const ordinal = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'][index] ?? `${index + 1}th`;
+    const added = addedTensions(target, changes.voicings[index].all);
 
     return {
       id: questionId('progression-chord'),
@@ -307,9 +359,16 @@ export const progressionChordExercise: ExerciseType = {
       keyPc: tonic,
       prompt: {
         title: `Name the ${ordinal} chord`,
-        sub: ctx.difficulty <= 2
-          ? `${realised.length} chords, in ${keyName(tonic, keyTonality(def))}`
-          : `${realised.length} chords`,
+        // The tensions note is said only where it is true, so it is never
+        // noise. Outside close position the comping adds what a pianist
+        // would, and the answer is still the chord underneath: a Gm7 played
+        // with a 13 is a Gm7.
+        sub: [
+          ctx.difficulty <= 2
+            ? `${realised.length} chords, in ${keyName(tonic, keyTonality(def))}`
+            : `${realised.length} chords`,
+          changes.tensions ? COLOUR_NOTE : null,
+        ].filter(Boolean).join('  ·  '),
       },
       fields: [
         {
@@ -339,6 +398,10 @@ export const progressionChordExercise: ExerciseType = {
       reveal: {
         heading: chordLabel(target, ctx.settings),
         detail: `${realised[index].roman} of ${keyName(tonic, keyTonality(def))}  ·  ${def.name}`,
+        // What this chord sounded over what its symbol names. The question
+        // asked for the basic quality, so this says where the extra notes
+        // came from rather than leaving them to look like a wrong answer.
+        tag: added.length ? `played with ${formatList(added)}` : undefined,
         notes: voicingLabel(changes.voicingStyle),
         // The same rows the whole-progression question shows, with the one
         // that was asked about marked: where it sat in the sequence is most

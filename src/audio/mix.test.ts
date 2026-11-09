@@ -165,6 +165,33 @@ async function cheatSheet(voices: Voices, volume = 1): Promise<Measured> {
   }
 }
 
+/**
+ * Renders, and renders again if what comes back is not audio.
+ *
+ * `node-web-audio-api` has been seen to hand back nonsense under load —
+ * values in the 1e36 range, out of a chain whose last node is a limiter that
+ * cannot exceed 1 — and it does it often enough that a suite with enough
+ * other work in it fails about half the time. The retry is for that and
+ * nothing else: a real gain-staging fault produces audio, and audio still
+ * has to pass every assertion below. Two bad renders in a row are reported
+ * as the renderer's fault rather than the chain's, which is what they are.
+ */
+async function rendered(
+  what: string,
+  render: () => Promise<Float32Array>,
+): Promise<Float32Array> {
+  let last = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const data = await render();
+    let peak = 0;
+    // A spread over 48,000 samples overflows the call stack.
+    for (const v of data) peak = Math.max(peak, Math.abs(v));
+    if (Number.isFinite(peak) && peak <= 1) return data;
+    last = peak;
+  }
+  throw new Error(`${what}: the renderer returned something that is not audio (peak ${last})`);
+}
+
 /** The rendered samples themselves, for comparing two volume settings. */
 async function compingSamples(style: BassStyle, volume: number): Promise<Float32Array> {
   const real = Math.random;
@@ -299,23 +326,20 @@ describe('the output has headroom', () => {
     // in level — which is the old behaviour: turning the app up made it
     // dirtier rather than only louder.
     const compare = (full: Float32Array, half: Float32Array, what: string) => {
-      // The offline renderer has been seen to hand back nonsense once under
-      // load — values in the billions, from a chain that cannot exceed 1. Say
-      // so plainly if it happens again rather than reporting it as a gain
-      // staging fault, which is what the comparison below would call it.
-      for (const [name, data] of [['full', full], ['half', half]] as const) {
-        // A spread over 48,000 samples overflows the call stack.
-        let peak = 0;
-        for (const v of data) peak = Math.max(peak, Math.abs(v));
-        expect(Number.isFinite(peak) && peak <= 1, `${what}: the ${name} render is not audio (peak ${peak})`)
-          .toBe(true);
-      }
       let worst = 0;
       for (let i = 0; i < full.length; i++) worst = Math.max(worst, Math.abs(half[i] - full[i] / 2));
       expect(worst, `${what}: half volume is exactly half the signal`).toBeLessThan(1e-6);
     };
-    compare(await compingSamples('walking', 1), await compingSamples('walking', 0.5), 'a ii–V–I');
-    compare(await driven('sawtooth', 4, 1), await driven('sawtooth', 4, 0.5), 'a clipped sawtooth');
+    compare(
+      await rendered('a ii\u2013V\u2013I at full volume', () => compingSamples('walking', 1)),
+      await rendered('a ii\u2013V\u2013I at half volume', () => compingSamples('walking', 0.5)),
+      'a ii\u2013V\u2013I',
+    );
+    compare(
+      await rendered('a clipped sawtooth at full volume', () => driven('sawtooth', 4, 1)),
+      await rendered('a clipped sawtooth at half volume', () => driven('sawtooth', 4, 0.5)),
+      'a clipped sawtooth',
+    );
   }, 60000);
 
   it('holds its ceiling when something is driven into it', async () => {

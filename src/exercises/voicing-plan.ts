@@ -244,3 +244,14 @@ export function approachFromAbove(settings: PracticeSettings, difficulty: number
   }
   return clamp(Math.round(difficulty), 1, 5) > highest;
 }
+
+/**
+ * What to tell a listener who hears a note the chord symbol does not name.
+ *
+ * Marking is by the written chord throughout: the extra notes belong to the
+ * voicing, and a learner who answers "m7" to a rootless Dm7 with a 9th on it
+ * has heard the chord correctly. Shared, because every question that comps a
+ * chord with tensions owes its listener the same warning — the one that asks
+ * about a chord inside a progression as much as the one that plays it alone.
+ */
+export const COLOUR_NOTE = 'Tensions may be added \u2014 name the basic quality.';

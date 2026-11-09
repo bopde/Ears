@@ -9,6 +9,25 @@ import type { PracticeSettings } from '../session/settings';
 import { mod } from '../lib/util';
 
 /**
+ * The note the bass lands on under each change, matched by beat.
+ *
+ * Not by index: a walking line plays four notes to a chord and only the
+ * first of them is under the change — the one that states the root, and the
+ * one a listener hears the chord over.
+ */
+export function bassLandings<T extends { midi: number; beat: number }>(
+  realised: readonly RealisedChord[],
+  bass: readonly T[],
+): Array<T | undefined> {
+  let beat = 0;
+  return realised.map((r) => {
+    const start = beat;
+    beat += r.beats;
+    return bass.find((b) => b.beat >= start && b.beat < beat);
+  });
+}
+
+/**
  * One row per chord of a set of changes, read off the voicings that played.
  *
  * A reveal used to be a single line of symbols, which answered "what were the
@@ -33,14 +52,9 @@ export function revealRows(
   settings: PracticeSettings,
   targetIndex?: number,
 ): RevealRow[] {
-  let beat = 0;
+  const landings = bassLandings(realised, bass);
   return realised.map((r, i) => {
-    const start = beat;
-    beat += r.beats;
-    // The note the bass lands on at the top of the bar, whatever it is doing:
-    // a walking line plays four to a chord and only the first of them is
-    // under the change.
-    const landing = bass.find((b) => b.beat >= start && b.beat < beat);
+    const landing = landings[i];
     const bassPc = landing === undefined ? r.chord.rootPc : mod(landing.midi, 12);
     const onRoot = bassPc === mod(r.chord.rootPc, 12);
     // Which inversion the chord is in is the bass's business. While it lands

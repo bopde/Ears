@@ -12,26 +12,18 @@ import { approachInto, chooseLever, playVoicing, type Lever } from './levers';
 import { namedInversion } from '../music/inversions';
 import { mod } from '../lib/util';
 import {
-  arpeggiate, couldSound, isRootFree, voiceChord, type RootlessForm, type VoicingStyle,
+  arpeggiate, isRootFree, voiceChord, type RootlessForm, type VoicingStyle,
 } from '../music/voicing';
-import { chooseVoicing, handsLabel, voicingBass } from './voicing-plan';
+import { COLOUR_NOTE, chooseVoicing, handsLabel, voicingBass } from './voicing-plan';
+import { soundingPitchClasses, unambiguousQualities } from './ambiguity';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
-import { PITCH_CLASSES, pcName, pcNameDual, type Midi, type PitchClass } from '../music/pitch';
+import { pcName, pcNameDual, type Midi } from '../music/pitch';
 import type { PracticeSettings } from '../session/settings';
 import { clamp } from '../lib/util';
 
 /** A reference pitch the user can measure everything else against. */
 const REFERENCE_PC = 0;
-
-/**
- * What to tell a listener who hears a note the chord symbol does not name.
- *
- * Marking is by the written chord throughout: the extra notes belong to the
- * voicing, and a learner who answers "m7" to a rootless Dm7 with a 9th on it
- * has heard the chord correctly.
- */
-const COLOUR_NOTE = 'Tensions may be added \u2014 name the basic quality.';
 
 function enabledQualities(settings: PracticeSettings): ChordQuality[] {
   const allowed = new Set(settings.chordQualities);
@@ -108,37 +100,6 @@ function voiceWithBass(
   return wanted ? voiceChord(chord, { ...opts, bass: true }) : dry;
 }
 
-function soundingPitchClasses(voicing: ReturnType<typeof voiceChord>): Set<PitchClass> {
-  return new Set(voicing.all.map((m) => mod(m, 12)));
-}
-
-/**
- * Drops the wrong answers that would in fact be right.
- *
- * A voicing that leaves the root out can land exactly on another chord: a
- * rootless Em7♭5 is a G minor triad note for note, and D sus2 and A sus4 are
- * the same three notes read from different roots. Offering both gives the
- * listener nothing to decide on, so any quality that reproduces what sounded —
- * from any root — is kept out of the running.
- */
-function unambiguous(
-  pool: ChordQuality[],
-  target: ChordQuality,
-  sounding: Set<PitchClass>,
-): ChordQuality[] {
-  // Not "sounds exactly this quality's notes", which was the old test and is
-  // too narrow once voicings may add tensions: a rootless Dm7 sounds F A C E,
-  // which no quality names exactly and which an F major triad plus a 9th
-  // names perfectly well. `couldSound` is the voicing engine's own account of
-  // what a chord may play, so the filter and the engine cannot disagree.
-  // Rivals are always allowed their own tensions, whatever this question was
-  // voiced with. A listener cannot know which setting produced what they
-  // heard, so a quality that could account for it is a defensible answer
-  // whether or not this particular question would have voiced it that way.
-  const matchesEar = (q: ChordQuality) =>
-    PITCH_CLASSES.some((root) => couldSound(makeChord(root, q.id), sounding, true));
-  return pool.filter((q) => q === target || !matchesEar(q));
-}
 
 /**
  * The chord as it will sound, and the qualities still worth offering.
@@ -165,7 +126,7 @@ function materialFor(
   let last: { material: ChordMaterial; offered: ChordQuality[] } | null = null;
   for (const tensions of [true, false]) {
     const material = buildMaterial(ctx, quality, rootPc, plan, tensions);
-    const offered = unambiguous(pool, quality, soundingPitchClasses(material.voicing));
+    const offered = unambiguousQualities(pool, quality, soundingPitchClasses(material.voicing));
     last = { material, offered };
     // Two options is the least a question can offer.
     if (offered.length >= 2) return last;

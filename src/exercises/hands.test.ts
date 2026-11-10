@@ -46,14 +46,26 @@ describe('what the hands have on the bottom', () => {
     expect(bottomTone(c7, rootless)).toBeUndefined();
   });
 
-  it('drops the alteration, because that is a question about the chord', () => {
+  it('keeps the alteration where it is news, and drops it where it is not', () => {
+    // Not on the third or the seventh: every minor chord has a ♭3 and every
+    // dominant a ♭7, the symbol has said so already, and "♭3 on the bottom"
+    // spends three characters telling a reader what minor means.
     const dm7 = makeChord(2, 'm7');
     expect(bottomTone(dm7, voiceChord(dm7, { style: 'spread', bottomPc: 5 })), '♭3')
       .toBe('3rd');
-    // Not a 9th: the engine keeps upper tones above the stack, so one cannot
-    // be the bottom note in the first place.
+    expect(bottomTone(dm7, voiceChord(dm7, { style: 'spread', bottomPc: 0 })), '♭7')
+      .toBe('7th');
+    // On a fifth it is news: a ♭5 under the hands is a semitone below where
+    // "5th on the bottom" would send the reader.
     const half = makeChord(0, 'm7b5');
     expect(bottomTone(half, voiceChord(half, { style: 'spread', bottomPc: 6 })), '♭5')
+      .toBe('♭5');
+    const sharp5 = makeChord(0, '7#5');
+    expect(bottomTone(sharp5, voiceChord(sharp5, { style: 'spread', bottomPc: 8 })), '♯5')
+      .toBe('♯5');
+    // And a natural fifth reads as one.
+    const c7 = makeChord(0, '7');
+    expect(bottomTone(c7, voiceChord(c7, { style: 'spread', bottomPc: 7 })), '5')
       .toBe('5th');
   });
 
@@ -80,6 +92,9 @@ describe('what the hands have on the bottom', () => {
     }
   });
 });
+
+/** A bottom-tone note: an ordinal, or an altered degree that keeps its sign. */
+const BOTTOM_NOTE = /(?:\d(?:st|nd|rd|th)|[♭♯𝄫]\d+) on the bottom/;
 
 describe('“inversion” and “root position” belong to the bass', () => {
   it('never pairs an inversion with a root bass', () => {
@@ -115,10 +130,10 @@ describe('“inversion” and “root position” belong to the bass', () => {
       }
       if (mod(lowest, 12) === q.keyPc!) {
         plain += 1;
-        expect(detail, `${id}@${d}#${seed}`).not.toMatch(/\d(?:st|nd|rd|th) on the bottom/);
+        expect(detail, `${id}@${d}#${seed}`).not.toMatch(BOTTOM_NOTE);
       } else {
         named += 1;
-        expect(detail, `${id}@${d}#${seed}`).toMatch(/\d(?:st|nd|rd|th) on the bottom/);
+        expect(detail, `${id}@${d}#${seed}`).toMatch(BOTTOM_NOTE);
       }
     }
     expect(named, 'some questions really put another tone underneath').toBeGreaterThan(20);

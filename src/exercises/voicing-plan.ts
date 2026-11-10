@@ -163,10 +163,24 @@ const CLOSE_FAMILY: ReadonlySet<VoicingStyle> = new Set<VoicingStyle>(['close', 
  * question about the chord rather than about the arrangement — the degrees
  * printed beside the notes answer it already.
  */
-function ordinalOf(degree: string): string | null {
+/**
+ * How a degree reads in "… on the bottom".
+ *
+ * An alteration is kept wherever it is news. A ♭13 under the hands is not
+ * a 13th — it is a semitone lower, and a note saying "13th on the bottom"
+ * sends the reader to the wrong key. Nor is a ♯5 a 5th.
+ *
+ * It is dropped on the third and the seventh, where it is not news: every
+ * minor chord has a ♭3 and every dominant a ♭7, the symbol has already
+ * said so, and "♭3 on the bottom" is three characters spent telling a
+ * reader what minor means.
+ */
+function bottomName(degree: string): string | null {
   const number = Number(degree.replace(/[^0-9]/g, ''));
   if (!Number.isInteger(number) || number <= 0) return null;
   if (number === 1) return 'root';
+  const altered = /[♭♯𝄫]/.test(degree);
+  if (altered && number !== 3 && number !== 7) return degree;
   const teen = number % 100;
   if (teen >= 11 && teen <= 13) return `${number}th`;
   return `${number}${['th', 'st', 'nd', 'rd'][number % 10] ?? 'th'}`;
@@ -184,7 +198,7 @@ function ordinalOf(degree: string): string | null {
 export function bottomTone(chord: Chord, voicing: Voicing): string | undefined {
   const rootPc = mod(chord.rootPc, 12);
   if (!voicing.notes.some((midi) => mod(midi, 12) === rootPc)) return undefined;
-  const tone = ordinalOf(chordDegrees(chord, [voicing.notes[0]])[0]);
+  const tone = bottomName(chordDegrees(chord, [voicing.notes[0]])[0]);
   return tone === null || tone === 'root' ? undefined : tone;
 }
 

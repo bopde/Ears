@@ -262,56 +262,73 @@ export function makeChord(rootPc: PitchClass, qualityId: string, root?: string):
  * turns a settled symbol over for nothing: an E♭7♭9's ♭9 is an F♭ and its
  * core is spotless, and nobody writes that chord D♯7♭9.
  */
-function spellingFaults(rootName: string, rootPc: PitchClass, quality: ChordQuality): number {
+function spellingCost(
+  rootName: string,
+  rootPc: PitchClass,
+  quality: ChordQuality,
+): { fallbacks: number; accidentals: number } {
   const letter = letterIndexOf(rootName);
-  if (letter < 0) return Number.MAX_SAFE_INTEGER;
+  if (letter < 0) return { fallbacks: Number.MAX_SAFE_INTEGER, accidentals: 0 };
   let fallbacks = 0;
+  let accidentals = 0;
   for (const interval of quality.intervals) {
-    if (interval >= 12) continue;
-    const number = degreeNumber(memberName(quality, interval));
-    const wanted = Number.isFinite(number) && number > 0
+    const name = memberName(quality, interval);
+    const number = degreeNumber(name);
+    // Judged on the tones that define the chord, not on the alterations its
+    // own name already warns you about. A ♭9 or a ♭13 needs an awkward
+    // letter whichever root it is written from, so letting it vote turns
+    // settled symbols over for nothing: E♭7♭9 became D♯7♭9, which nobody
+    // writes. A plain 9, 11 or 13 is a member like any other and counts —
+    // which is what keeps E♭m(add9) from becoming D♯m(add9), whose 9th
+    // would be an E♯ printed as a second F.
+    if (number > 7 && /[♭♯]/.test(name)) continue;
+    const wanted = number > 0
       ? spellOnLetter(mod(rootPc + interval, 12), letter + number - 1)
       : null;
     if (wanted === null) fallbacks += 1;
+    else accidentals += wanted.length - 1;
   }
-  return fallbacks;
+  return { fallbacks, accidentals };
 }
 
 /**
  * The root as this chord is written.
  *
- * An explicit sharps-only or flats-only setting beats the key: someone who
- * has asked to see flats has asked for all of them. On the default setting
- * the key decides, and where no key does, the conventional name stands —
- * unless the other one writes the chord better.
+ * An explicit sharps-only or flats-only setting beats everything: someone
+ * who has asked to see flats has asked for all of them. Next the key, where
+ * there is one. Where there is not — a chord-quality question is in no key,
+ * and neither is a colour question — the root is chosen so that the chord
+ * can be written from it.
  *
- * That last clause is what keeps a symbol and its notes from arguing. The
+ * That last part is what keeps a symbol and its notes from arguing. The
  * conventional name for the black key above C is D♭, and D♭m7 is a chord
  * whose third is F♭ and whose seventh is C♭ — two names this app refuses to
- * print. The speller falls back, the chord comes out D♭ E A♭ B, and an
- * inversion of it reads D♭m7/E: a slash onto a note the symbol says is not
- * in the chord. Spelled from C♯ the same four notes are C♯ E G♯ B, each on
- * its own letter, and C♯m7/E says exactly what sounded.
+ * print. The speller falls back, the chord comes out D♭ E A♭ B, a minor
+ * seventh with no F and no C in it, and an inversion of it reads D♭m7/E: a
+ * slash onto a note the symbol says is not there. From C♯ the same four
+ * notes are C♯ E G♯ B, each on its own letter.
  *
- * "Better" means fewer degrees the app cannot print, and the conventional
- * name wins every tie — which is 400 of the 432 chords this app can build.
- * The 32 that move are the minor and diminished chords on D♭, E♭, A♭ and
- * B♭, which want a C♭ or an F♭ and are written from the sharp side
- * anyway, and the F♯ major sevenths, which want an E♯.
+ * Fewest degrees it cannot print, then fewest accidentals, then the family:
+ * flats for the major side, sharps for the minor and diminished. The middle
+ * term never decides anything — the two spellings of a chord always need
+ * the same number of accidentals when neither falls back — so in practice
+ * it is the fallbacks, and then the family, which settles 37 chords.
  */
 export function chordRootName(chord: Chord, pref: Accidental = 'both'): string {
   if (pref !== 'both') return pcName(chord.rootPc, pref);
   if (chord.root) return chord.root;
-  const neutral = pcName(chord.rootPc, 'both');
-  const other = neutral === SHARP_NAMES[chord.rootPc]
-    ? FLAT_NAMES[chord.rootPc]
-    : SHARP_NAMES[chord.rootPc];
-  if (other === neutral) return neutral;
-  return spellingFaults(other, chord.rootPc, chord.quality)
-    < spellingFaults(neutral, chord.rootPc, chord.quality)
-    ? other
-    : neutral;
+  const sharp = SHARP_NAMES[chord.rootPc];
+  const flat = FLAT_NAMES[chord.rootPc];
+  if (sharp === flat) return sharp;
+  const a = spellingCost(sharp, chord.rootPc, chord.quality);
+  const b = spellingCost(flat, chord.rootPc, chord.quality);
+  if (a.fallbacks !== b.fallbacks) return a.fallbacks < b.fallbacks ? sharp : flat;
+  if (a.accidentals !== b.accidentals) return a.accidentals < b.accidentals ? sharp : flat;
+  return MINOR_SIDE.has(chord.quality.family) ? sharp : flat;
 }
+
+/** The families written from the sharp side when nothing else decides. */
+const MINOR_SIDE: ReadonlySet<ChordFamily> = new Set<ChordFamily>(['minor', 'diminished']);
 
 export function chordSymbol(chord: Chord, pref: Accidental = 'both'): string {
   return `${chordRootName(chord, pref)}${chord.quality.symbol}`;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CHORD_QUALITIES, chordDegrees, chordToneNames, makeChord, requireChordQuality, spellInChord,
+  CHORD_QUALITIES, chordDegrees, chordSymbol, chordToneNames, makeChord,
+  requireChordQuality, spellInChord,
 } from './chords';
 import { colourName, degreeIn, degreeNumber, hasSeventh, memberNames } from './degrees';
 import { LETTERS, PITCH_CLASSES, letterIndexOf } from './pitch';
@@ -58,13 +59,20 @@ describe('a chord names its own members by member number', () => {
         }
       }
     }
-    // A handful cannot be written on seven letters from either root: the
-    // altered dominants, which name two ninths, and the six-note chords,
-    // which want more letters than there are. Among the chords small enough
-    // to have a letter each, exactly one: a minor–major 7th on F♯, whose
-    // seventh is an E♯ and whose other spelling wants a B𝄫.
+    // A handful cannot be written on seven letters: the altered dominants,
+    // which name two ninths, and the six-note chords, which want more
+    // letters than there are. Among the chords small enough to have a
+    // letter each, three — all of them minor–major 7ths, whose seventh is a
+    // semitone under the root and so lands on the root's own letter unless
+    // the root is written from the flat side. One of them cannot be written
+    // either way; the other two are the tie-break choosing sharps for the
+    // minor family, which is the rule the app follows.
     const small = repeats.filter((r) => requireChordQuality(r.split('/')[0]).intervals.length <= 4);
-    expect(small).toEqual(['mMaj7/6: F♯ A C♯ F']);
+    expect(small).toEqual([
+      'mMaj7/1: C♯ E G♯ C',
+      'mMaj7/6: F♯ A C♯ F',
+      'mMaj7/8: G♯ B D♯ G',
+    ]);
     expect(repeats.length, repeats.slice(0, 6).join(' | ')).toBeLessThan(40);
   });
 
@@ -168,6 +176,24 @@ describe('the naming bugs this model was built to end', () => {
     expect(chordToneNames(makeChord(8, 'min'))).toEqual(['G♯', 'B', 'D♯']);
     expect(chordToneNames(makeChord(3, 'm7b5'))).toEqual(['D♯', 'F♯', 'A', 'C♯']);
     expect(chordToneNames(makeChord(6, 'maj7'))).toEqual(['G♭', 'B♭', 'D♭', 'F']);
+  });
+
+  it('settles a tie by family: flats above, sharps below', () => {
+    // Where both spellings write the chord, the family decides. The minor
+    // and diminished side takes sharps, everything else flats.
+    expect(chordSymbol(makeChord(3, 'm7'))).toBe('D♯m7');
+    expect(chordSymbol(makeChord(3, 'm7b5'))).toBe('D♯ø7');
+    expect(chordSymbol(makeChord(6, 'maj'))).toBe('G♭');
+    expect(chordSymbol(makeChord(6, '6'))).toBe('G♭6');
+    // And an alteration the chord's own name warns you about gets no vote,
+    // or every altered dominant would be dragged across: a ♭9 needs an
+    // awkward letter whichever root it is written from.
+    expect(chordSymbol(makeChord(3, '7b9'))).toBe('E♭7♭9');
+    expect(chordSymbol(makeChord(8, '7alt'))).toBe('A♭7alt');
+    expect(chordSymbol(makeChord(1, '7b9'))).toBe('D♭7♭9');
+    // A plain 9 is a member like any other and does count, which keeps the
+    // add-9 chords off a root whose 9th would be a second F.
+    expect(chordToneNames(makeChord(3, 'madd9'))).toEqual(['E♭', 'G♭', 'B♭', 'F']);
   });
 
   it('4. calls an added F♯ over a major triad a ♯11, not a ♭5', () => {

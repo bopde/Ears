@@ -134,7 +134,9 @@ describe('an inversion names the tone that is really underneath', () => {
     expect(bassToneOf(makeChord(0, 'm6'), requireInversion('3rd'))).toBe('the 6th');
     expect(bassToneOf(makeChord(0, 'sus4'), requireInversion('1st'))).toBe('the 4th');
     expect(bassToneOf(makeChord(0, '7sus4'), requireInversion('1st'))).toBe('the 4th');
-    expect(bassToneOf(makeChord(0, 'sus2'), requireInversion('1st'))).toBe('the 9th');
+    // A sus2's second tone is its 2nd, not a 9th: there is no seventh under
+    // it for the stack to have reached past.
+    expect(bassToneOf(makeChord(0, 'sus2'), requireInversion('1st'))).toBe('the 2nd');
     // And unchanged where the generic was right, which is everywhere else.
     expect(bassToneOf(makeChord(0, 'maj7'), requireInversion('1st'))).toBe('the 3rd');
     expect(bassToneOf(makeChord(0, 'm7'), requireInversion('3rd'))).toBe('the 7th');

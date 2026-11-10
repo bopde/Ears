@@ -168,13 +168,21 @@ async function cheatSheet(voices: Voices, volume = 1): Promise<Measured> {
 /**
  * Renders, and renders again if what comes back is not audio.
  *
- * `node-web-audio-api` has been seen to hand back nonsense under load —
- * values in the 1e36 range, out of a chain whose last node is a limiter that
- * cannot exceed 1 — and it does it often enough that a suite with enough
- * other work in it fails about half the time. The retry is for that and
- * nothing else: a real gain-staging fault produces audio, and audio still
- * has to pass every assertion below. Two bad renders in a row are reported
- * as the renderer's fault rather than the chain's, which is what they are.
+ * `node-web-audio-api` hands back nonsense under load — values in the 1e36
+ * range, out of a chain whose last node is a limiter that cannot exceed 1.
+ *
+ * Most of that was one bug: `getChannelData` returns a view onto memory the
+ * library reuses, so rendering a second time overwrites the samples of the
+ * first. A test that renders at full volume, renders at half, and then
+ * compares the two was comparing live audio against whatever had since been
+ * written over it. Every caller now copies its samples out before the next
+ * render, which is what `rendered` does here.
+ *
+ * The retry is what is left: a render that comes back as something other
+ * than audio is tried again, and a real gain-staging fault still fails,
+ * because a fault produces audio and audio has to pass the assertions below.
+ * Two bad renders in a row are reported as the renderer's fault rather than
+ * the chain's, which is what they are.
  */
 async function rendered(
   what: string,
@@ -182,7 +190,8 @@ async function rendered(
 ): Promise<Float32Array> {
   let last = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const data = await render();
+    // Copied, not borrowed: the next render reuses this memory.
+    const data = Float32Array.from(await render());
     let peak = 0;
     // A spread over 48,000 samples overflows the call stack.
     for (const v of data) peak = Math.max(peak, Math.abs(v));

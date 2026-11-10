@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CHORD_QUALITIES, chordDegrees, degreeName, makeChord, spellInChord, chordRootName,
+  CHORD_QUALITIES, chordDegrees, chordRootName, chordToneNames, degreeName, makeChord,
+  spellInChord,
 } from './chords';
 import { LETTERS, PITCH_CLASSES, midiName, pcName, pcOf, spellOnLetter } from './pitch';
 import { availablePcs, voiceChord, VOICING_STYLES } from './voicing';
@@ -25,16 +26,23 @@ describe('a note is named for what it is doing in the chord', () => {
     expect(chordDegrees(f7b9, [above(5, 10)])).toEqual(['♭7']);
   });
 
-  it('leaves a chord with no seventh alone', () => {
-    // There is no seventh to extend past, so these are what they have always
-    // been. A 6 chord's 6th above all: calling it a 13th would be nonsense.
+  it('calls nine semitones a 6th where there is no seventh under it', () => {
+    // A triad with an A on top is a C6, not a C13 with most of the chord
+    // missing — so that one keeps its plain name. The rest of what sits
+    // above a triad takes the compound name it is written with: a C with a
+    // D added is Cadd9, not Cadd2, and the F and F♯ follow it.
     const c6 = makeChord(0, '6');
     expect(chordDegrees(c6, [above(0, 9)])).toEqual(['6']);
     expect(chordDegrees(c6, [above(0, 2)])).toEqual(['9']);
-    expect(chordDegrees(c6, [above(0, 5)])).toEqual(['4']);
+    expect(chordDegrees(c6, [above(0, 5)])).toEqual(['11']);
     const cmaj = makeChord(0, 'maj');
     expect(chordDegrees(cmaj, [above(0, 9)])).toEqual(['6']);
-    expect(chordDegrees(cmaj, [above(0, 5)])).toEqual(['4']);
+    expect(chordDegrees(cmaj, [above(0, 5)])).toEqual(['11']);
+    // And no name may reuse a member number the chord is sounding: the F♯
+    // is a ♯11 beside a natural 5, the E♭ a ♯9 beside a major 3rd.
+    expect(chordDegrees(cmaj, [above(0, 6)])).toEqual(['♯11']);
+    expect(chordDegrees(cmaj, [above(0, 3)])).toEqual(['♯9']);
+    expect(chordDegrees(cmaj, [above(0, 8)])).toEqual(['♭13']);
   });
 
   it('treats a diminished seventh as having one, because it does', () => {
@@ -79,10 +87,17 @@ describe('a note is spelled the way its degree is written', () => {
     expect(spellInChord(eb7b9, above(3, 1))).toBe('E4');
   });
 
-  it('writes a diminished seventh with an A rather than a B double flat', () => {
+  it('calls a diminished seventh\u2019s top note a seventh, and writes it an A', () => {
+    // The chord is a stack of minor thirds and its fourth tone is the
+    // fourth of them, so the name is 𝄫7 — read as a 6th it spells on the
+    // wrong letter, which is why B°7 used to print B D F G♯ when its
+    // seventh is an A♭. The spelling still falls back where the name asks
+    // for something nobody prints: C°7's 𝄫7 is a B𝄫, so it is written A.
     const cdim7 = makeChord(0, 'dim7');
-    expect(chordDegrees(cdim7, [above(0, 9)])).toEqual(['6']);
+    expect(chordDegrees(cdim7, [above(0, 9)])).toEqual(['\ud834\udd2b7']);
     expect(spellInChord(cdim7, above(0, 9))).toBe('A4');
+    expect(chordToneNames(makeChord(11, 'dim7'))).toEqual(['B', 'D', 'F', 'A\u266d']);
+    expect(chordToneNames(makeChord(6, 'dim7'))).toEqual(['F\u266f', 'A', 'C', 'E\u266d']);
     expect(spellInChord(cdim7, above(0, 3))).toBe('E♭4');
     expect(spellInChord(cdim7, above(0, 6))).toBe('G♭4');
   });

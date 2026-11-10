@@ -243,7 +243,7 @@ describe('what is shown is what is played', () => {
   const DEGREE_SEMITONES: Record<string, number> = {
     '1': 0, '\u266d9': 1, '9': 2, '\u266f9': 3, '\u266d3': 3, '3': 4,
     '4': 5, '11': 5, '\u266d5': 6, '\u266f11': 6, '5': 7, '\u266f5': 8,
-    '\u266d13': 8, '6': 9, '13': 9, '\u266d7': 10, '7': 11,
+    '\u266d13': 8, '6': 9, '13': 9, '\ud834\udd2b7': 9, '\u266d7': 10, '7': 11,
   };
 
   it('puts a degree beside every note, and the degree names the note', () => {

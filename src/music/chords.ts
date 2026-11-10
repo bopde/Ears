@@ -4,6 +4,7 @@ import {
   FLAT_NAMES, SHARP_NAMES, letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
   type Accidental, type Midi, type PitchClass,
 } from './pitch';
+import { degreeIn, degreeNumber, memberName, memberNameOf } from './degrees';
 import { mod } from '../lib/util';
 
 /**
@@ -267,7 +268,7 @@ function spellingFaults(rootName: string, rootPc: PitchClass, quality: ChordQual
   let fallbacks = 0;
   for (const interval of quality.intervals) {
     if (interval >= 12) continue;
-    const number = Number(degreeName(interval).replace(/[^0-9]/g, ''));
+    const number = degreeNumber(memberName(quality, interval));
     const wanted = Number.isFinite(number) && number > 0
       ? spellOnLetter(mod(rootPc + interval, 12), letter + number - 1)
       : null;
@@ -341,47 +342,13 @@ export function chordFullName(chord: Chord, pref: Accidental = 'both'): string {
 }
 
 /**
- * What each interval is called, read off the chord's own spelling.
+ * What an interval is called, with no chord to read it against.
  *
- * The same pitch gets a different name depending on the chord it is in — six
- * semitones above the root is a ♭5 in a half-diminished chord and a ♯11 in a
- * Lydian dominant — so the name comes from the interval the quality lists, not
- * from the pitch class.
+ * Kept for the places that have an interval and nothing else. Where there is
+ * a chord, ask `degrees.ts` instead: the same pitch is a ♭5 in one chord and
+ * a ♯11 in another, and only the chord can say which.
  */
-const DEGREE_NAMES: Record<number, string> = {
-  0: '1', 1: '♭9', 2: '9', 3: '♭3', 4: '3', 5: '4', 6: '♭5', 7: '5',
-  8: '♯5', 9: '6', 10: '♭7', 11: '7',
-  13: '♭9', 14: '9', 15: '♯9', 17: '11', 18: '♯11', 20: '♭13', 21: '13',
-};
-
-/**
- * What a note *outside* the chord is called, over a chord that has a seventh.
- *
- * Above a seventh the stack keeps going, so a note the chord does not name is
- * heard as an extension of it rather than as a displaced chord tone: over a
- * dominant 7th the 9 semitones are a 13th, not a 6th, and the 3 are a ♯9
- * rather than a ♭3 that would contradict the major 3rd below it. Under a
- * triad there is no seventh to extend past, and 9, 4 and 6 are what they are.
- */
-const TENSION_NAMES: Record<number, string> = {
-  1: '♭9', 2: '9', 3: '♯9', 5: '11', 6: '♯11', 8: '♭13', 9: '13',
-};
-
-export const degreeName = (interval: number): string =>
-  DEGREE_NAMES[interval] ?? DEGREE_NAMES[mod(interval, 12)] ?? '?';
-
-/**
- * Whether the quality stacks as far as a seventh.
- *
- * A sixth chord does not, however close 9 semitones looks to one: its 6th is
- * a 6th. A fully diminished seventh does, and spells those same 9 semitones
- * as a seventh, so it is the one chord where the interval alone cannot say.
- */
-function hasSeventh(quality: ChordQuality): boolean {
-  const pcs = new Set(quality.intervals.map((i) => mod(i, 12)));
-  if (pcs.has(10) || pcs.has(11)) return true;
-  return pcs.has(3) && pcs.has(6) && pcs.has(9);
-}
+export const degreeName = (interval: number): string => memberNameOf(interval);
 
 /**
  * The degrees a voicing sounds, in the order it sounds them.
@@ -391,13 +358,7 @@ function hasSeventh(quality: ChordQuality): boolean {
  * the degrees are read straight off the notes that were scheduled.
  */
 export function chordDegrees(chord: Chord, notes: readonly Midi[]): string[] {
-  const extended = hasSeventh(chord.quality);
-  return notes.map((midi) => {
-    const pc = mod(midi - chord.rootPc, 12);
-    const spelled = chord.quality.intervals.find((i) => mod(i, 12) === pc);
-    if (spelled !== undefined) return degreeName(spelled);
-    return (extended ? TENSION_NAMES[pc] : undefined) ?? degreeName(pc);
-  });
+  return notes.map((midi) => degreeIn(chord.quality, mod(midi - chord.rootPc, 12)));
 }
 
 /**
@@ -411,10 +372,9 @@ export function chordDegrees(chord: Chord, notes: readonly Midi[]): string[] {
  * an A rather than a B𝄫.
  */
 export function spellInChord(chord: Chord, midi: Midi, pref: Accidental = 'both'): string {
-  const degree = chordDegrees(chord, [midi])[0];
-  const number = Number(degree.replace(/[^0-9]/g, ''));
+  const number = degreeNumber(chordDegrees(chord, [midi])[0]);
   const letter = letterIndexOf(chordRootName(chord, pref));
-  const spelled = Number.isFinite(number) && number > 0 && letter >= 0
+  const spelled = number > 0 && letter >= 0
     ? spellOnLetter(pcOf(midi), letter + number - 1)
     : null;
   return `${spelled ?? pcName(pcOf(midi), pref)}${octaveOf(midi)}`;

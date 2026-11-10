@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isBasicQuality } from '../music/degrees';
 import { EXERCISE_TYPES } from './registry';
 import type { Question } from './types';
 import { defaultSettings } from '../session/settings';
@@ -6,7 +7,7 @@ import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
 import { CONCEPTS } from '../music/catalog';
 import {
-  isSymmetrical, makeChord, requireChordQuality, samePitchClasses,
+  isSymmetrical, makeChord, requireChordQuality, samePitchClasses, basicChord,
 } from '../music/chords';
 import { availablePcs, couldSound } from '../music/voicing';
 import { requireInterval } from '../music/intervals';
@@ -316,8 +317,16 @@ function checkProgressionChord(q: Question, where: string) {
   if (!id || q.keyPc === null) return;
   const realised = realiseProgression(requireProgression(id.slice('progression:'.length)), q.keyPc);
   const [rootPc, qualityId] = q.correct.chord.split(':');
-  if (!realised.some((r) => r.chord.rootPc === Number(rootPc) && r.chord.quality.id === qualityId)) {
+  // The answer is the basic chord of one that played: a chart's G7♭9 is
+  // answered "G7", with the ♭9 named in the reveal as colour.
+  if (!realised.some((r) => {
+    const basic = basicChord(r.chord);
+    return basic.rootPc === Number(rootPc) && basic.quality.id === qualityId;
+  })) {
     flag('answer: the correct chord is not in the progression that played', `${where} ${q.correct.chord}`);
+  }
+  if (!isBasicQuality(qualityId)) {
+    flag('answer: the correct chord is not a basic chord', `${where} ${q.correct.chord}`);
   }
   const sets = q.fields[0].options.map((o) => {
     const [r, qid] = o.id.split(':');

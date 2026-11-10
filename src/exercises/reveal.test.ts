@@ -5,7 +5,8 @@ import { defaultSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
 import {
-  CHORD_QUALITIES, addedTensions, chordDegrees, chordSymbol, makeChord, spellInChord,
+  CHORD_QUALITIES, addedTensions, basicChord, chordDegrees, chordSymbol, makeChord,
+  spellInChord,
 } from '../music/chords';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { BASS_INSTRUMENT } from '../audio/instruments';
@@ -154,7 +155,15 @@ describe('a reveal describes what was played', () => {
           const marked = rows!.filter((r) => r.target);
           expect(marked.length, `${id}@${d}#${seed}`).toBe(id === 'progression-chord' ? 1 : 0);
           if (id === 'progression-chord') {
-            expect(marked[0].symbol).toBe(q.reveal.heading);
+            // The row shows the chord as the chart writes it; the heading
+            // shows the chord the question asked you to name. They differ
+            // wherever the chart's chord carries colour — a ii11 is a m7
+            // played with a 9 and an 11 — and the tag says which.
+            const asked = basicChord(realised[rows!.indexOf(marked[0])].chord);
+            expect(q.reveal.heading).toBe(chordSymbol(asked, settings.accidental));
+            if (marked[0].symbol !== q.reveal.heading) {
+              expect(q.reveal.tag, `${id}@${d}#${seed} explains the gap`).toBeTruthy();
+            }
           }
         }
       }

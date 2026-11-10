@@ -7,8 +7,8 @@ import {
   type ProgressionDef, type RealisedChord,
 } from '../music/progressions';
 import {
-  CHORD_QUALITIES, addedTensions, chordConceptId, chordSymbol, makeChord, nearestQualities,
-  type Chord,
+  CHORD_QUALITIES, basicChord, chordConceptId, chordSymbol, colourSounded, makeChord,
+  nearestQualities, type Chord,
 } from '../music/chords';
 import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
 import {
@@ -18,6 +18,7 @@ import { Performer, progressionBass, type BassNote } from '../audio/performer';
 import { rootMotionLine } from '../audio/reference';
 import { bassLandings, revealRows } from './rows';
 import { distinctChords, soundingPitchClasses, unambiguousChords } from './ambiguity';
+import { BASIC_OF, isBasicQuality } from '../music/degrees';
 import { keyName } from '../music/pitch';
 import { formatList } from './chord';
 
@@ -247,25 +248,31 @@ export const progressionExercise: ExerciseType = {
   },
 };
 
-/** Candidate wrong answers that a listener could genuinely land on. */
+/**
+ * Candidate wrong answers that a listener could genuinely land on.
+ *
+ * All of them basic chords, because that is what the question asks for: a
+ * chart's G7♭9 is answered "G7", and its ♭9 is colour the reveal names.
+ */
 function chordDistractors(ctx: GenContext, realised: RealisedChord[], index: number): Chord[] {
-  const target = realised[index].chord;
+  const target = basicChord(realised[index].chord);
   const candidates: Chord[] = [];
   // The other chords in the progression — did you actually track the position?
   for (let i = 0; i < realised.length; i++) {
-    if (i !== index) candidates.push(realised[i].chord);
+    if (i !== index) candidates.push(basicChord(realised[i].chord));
   }
   // Same root, neighbouring quality.
-  const allowed = new Set(ctx.settings.chordQualities);
-  const qualityPool = CHORD_QUALITIES.filter((q) => allowed.has(q.id));
-  for (const q of nearestQualities(target.quality, qualityPool.length ? qualityPool : CHORD_QUALITIES, 4)) {
+  const allowed = new Set(ctx.settings.chordQualities.map((id) => BASIC_OF[id] ?? id));
+  const basic = CHORD_QUALITIES.filter((q) => isBasicQuality(q.id));
+  const qualityPool = basic.filter((q) => allowed.has(q.id));
+  for (const q of nearestQualities(target.quality, qualityPool.length ? qualityPool : basic, 4)) {
     candidates.push(makeChord(target.rootPc, q.id));
   }
   // Same quality, a root a step or a fifth away.
   for (const step of [2, -2, 7, 5]) {
     candidates.push(makeChord(mod(target.rootPc + step, 12), target.quality.id));
   }
-  const seen = new Set([`${target.rootPc}:${target.quality.id}`]);
+  const seen = new Set([`${mod(target.rootPc, 12)}:${target.quality.id}`]);
   return candidates.filter((c) => {
     const key = `${c.rootPc}:${c.quality.id}`;
     if (seen.has(key)) return false;
@@ -346,10 +353,14 @@ export const progressionChordExercise: ExerciseType = {
     // asks for another question rather than this one being unanswerable.
     if (!chosen) return null;
     const { index, distractors } = chosen;
-    const target = realised[index].chord;
+    // What was written, and what the listener is asked to name. They differ
+    // wherever the chart's chord carries colour: the 7♭9 of a minor ii–V is
+    // a dominant 7th played with a ♭9, and "7" is the answer.
+    const written = realised[index].chord;
+    const target = basicChord(written);
 
     const ordinal = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'][index] ?? `${index + 1}th`;
-    const added = addedTensions(target, changes.voicings[index].all);
+    const added = colourSounded(written, changes.voicings[index].all);
 
     return {
       id: questionId('progression-chord'),

@@ -4,7 +4,7 @@ import {
   FLAT_NAMES, SHARP_NAMES, letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
   type Accidental, type Midi, type PitchClass,
 } from './pitch';
-import { degreeIn, degreeNumber, memberName, memberNameOf } from './degrees';
+import { BASIC_OF, degreeIn, degreeNumber, memberName, memberNameOf } from './degrees';
 import { mod } from '../lib/util';
 
 /**
@@ -243,6 +243,28 @@ export interface Chord {
 export function makeChord(rootPc: PitchClass, qualityId: string, root?: string): Chord {
   return { rootPc: mod(rootPc, 12), quality: requireChordQuality(qualityId), root };
 }
+
+/**
+ * The chord a listener is asked to name: this one, stripped to its stack.
+ *
+ * A ∆9 is a ∆7 that was played with its 9th. The two are one sound and one
+ * answer, and the 9 is named in the reveal rather than folded into the
+ * question — so a chart's G7♭9 is answered "G7, played with a ♭9".
+ */
+export const basicChord = (chord: Chord): Chord =>
+  chord.quality.id === BASIC_OF[chord.quality.id]
+    ? chord
+    : makeChord(chord.rootPc, BASIC_OF[chord.quality.id], chord.root);
+
+/**
+ * What sounded that the basic chord does not name.
+ *
+ * Measured against the basic chord rather than the written one, so a chord
+ * the chart writes as G7♭9 reports its own ♭9 as colour: under this model
+ * the answer was G7, and the ♭9 is what it was played with.
+ */
+export const colourSounded = (chord: Chord, notes: readonly Midi[]): string[] =>
+  addedTensions(basicChord(chord), notes);
 
 /**
  * How badly a chord reads when it is written from this root.

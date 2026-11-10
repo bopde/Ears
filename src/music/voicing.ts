@@ -184,10 +184,20 @@ export function tensionIntervals(chord: Chord, altered = false): number[] {
   return colourIntervals(chord.quality, { altered });
 }
 
-export function availablePcs(chord: Chord, tensions: boolean): Set<number> {
+/**
+ * The pitch classes a voicing of this chord may draw on: its own tones and
+ * the colours its table offers.
+ *
+ * `altered` widens it to what a dominant may be comped with when the
+ * dominant is treated as altered. The engine builds without it — a chord
+ * sounds its plain colours unless something asks otherwise — and the
+ * filter that drops ambiguous answers asks with it, because a listener
+ * cannot know which setting produced what they heard.
+ */
+export function availablePcs(chord: Chord, tensions: boolean, altered = false): Set<number> {
   const set = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
   if (!tensions) return set;
-  for (const i of tensionIntervals(chord)) set.add(mod(chord.rootPc + i, 12));
+  for (const i of tensionIntervals(chord, altered)) set.add(mod(chord.rootPc + i, 12));
   return set;
 }
 
@@ -211,9 +221,19 @@ export function couldSound(
   sounding: ReadonlySet<number>,
   tensions: boolean,
 ): boolean {
-  const available = availablePcs(chord, tensions);
+  const available = availablePcs(chord, tensions, true);
   for (const pc of sounding) {
     if (!available.has(mod(pc, 12))) return false;
+  }
+  // A ♯11 or a ♭13 is colour *above* a fifth, so the fifth has to be there.
+  // With the chord's own fifth missing from what sounded, the same pitch is
+  // an altered fifth and the chord that owns it is a different chord: C E
+  // G♯ B♭ is a 7♯5, and C E G A♭ B♭ is a 7 played with a ♭13.
+  if (chord.quality.intervals.some((i) => mod(i, 12) === 7)
+    && !sounding.has(mod(chord.rootPc + 7, 12))) {
+    for (const semitones of [6, 8]) {
+      if (sounding.has(mod(chord.rootPc + semitones, 12))) return false;
+    }
   }
   const q = chord.quality;
   const essential = q.essential ?? q.intervals.filter((i) => i !== 0 && i !== 7);

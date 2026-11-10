@@ -16,6 +16,7 @@ import {
 } from '../music/voicing';
 import { COLOUR_NOTE, chooseVoicing, handsLabel, voicingBass } from './voicing-plan';
 import { soundingPitchClasses, unambiguousQualities } from './ambiguity';
+import { BASIC_OF, isBasicQuality } from '../music/degrees';
 import { polyphonyGain } from '../audio/performer';
 import { keyConceptId } from '../music/catalog';
 import { pcName, pcNameDual, type Midi } from '../music/pitch';
@@ -25,10 +26,22 @@ import { clamp } from '../lib/util';
 /** A reference pitch the user can measure everything else against. */
 const REFERENCE_PC = 0;
 
+/**
+ * The chords this question may ask for: basic chords, and only those.
+ *
+ * A chord's identity is its stack up to the 7th, and everything above is
+ * colour a voicing adds. Offering ∆9 beside ∆7 asked the listener to guess
+ * which of two names for one sound the app had in mind — and with the
+ * voicing free to add a 9th to either, there was often no way to tell.
+ *
+ * A saved setting naming a retired quality still counts: it enables the
+ * chord that quality is. Someone who ticked ∆9 wanted major sevenths.
+ */
 function enabledQualities(settings: PracticeSettings): ChordQuality[] {
-  const allowed = new Set(settings.chordQualities);
-  const pool = CHORD_QUALITIES.filter((q) => allowed.has(q.id));
-  return pool.length ? pool : CHORD_QUALITIES;
+  const basic = CHORD_QUALITIES.filter((q) => isBasicQuality(q.id));
+  const allowed = new Set(settings.chordQualities.map((id) => BASIC_OF[id] ?? id));
+  const pool = basic.filter((q) => allowed.has(q.id));
+  return pool.length ? pool : basic;
 }
 
 /**

@@ -131,6 +131,18 @@ function checkHint(q: Question, where: string) {
     if (!sounded.has(mod(lowest, 12))) {
       flag('hint: "Bottom of the chord" is not the bottom of the chord', where);
     }
+  } else if (label === 'Chord alone') {
+    // The point of it is that the colour is *not* in it: a hint that played
+    // the added note would be handing over the answer.
+    const whole = render((p) => q.play(p.asPerformer()));
+    const all = soundedPcs(whole.perf);
+    if (sounded.size >= all.size) {
+      flag('hint: "Chord alone" plays everything the question did',
+        `${where} hint ${[...sounded]}, question ${[...all]}`);
+    }
+    for (const pc of sounded) {
+      if (!all.has(pc)) flag('hint: "Chord alone" plays a note the chord did not', where);
+    }
   } else if (label === 'First guide tone') {
     // It has to be the 3rd or the 7th of the chord the progression opens on,
     // or the hint is pointing at a note the answer never passes through.

@@ -12,6 +12,7 @@ import { VOICING_MODE_IDS, type VoicingMode } from '../exercises/voicing-plan';
 export const EXERCISE_TYPE_IDS = [
   'chord-quality',
   'chord-full',
+  'colour',
   'chord-inversion',
   'interval',
   'key',

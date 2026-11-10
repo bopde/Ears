@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyAttempt, bumpStreak, credit, dayKey, emptyProfile, mastery, newSkill,
-  type Profile, type SkillRecord,
+  type Profile, type SkillRecord, PROFILE_VERSION,
 } from './model';
 import { difficultyFor, eligibleConcepts, overallLevel, prioritiseConcepts } from './selector';
 import { overview, weakest } from './stats';
@@ -268,7 +268,7 @@ describe('profile migration', () => {
     const migrated = importProfile(v1())!;
     expect(migrated.settings.durationMinutes, 'unrelated settings survive').toBe(20);
     expect(migrated.streak.count).toBe(2);
-    expect(migrated.version).toBe(2);
+    expect(migrated.version).toBe(PROFILE_VERSION);
   });
 
   it('leaves a current profile alone, including a deliberate opt-in', () => {

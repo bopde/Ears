@@ -282,3 +282,38 @@ export const colourIntervals = (
 
 /** The interval a colour name sits at, for the exercises that name one. */
 export const colourInterval = (name: string): number | undefined => COLOUR_INTERVALS[name];
+
+/**
+ * The colours a listener is asked to name, as ids.
+ *
+ * Written the way the chord qualities are — `b9`, `#9` — so a concept id, a
+ * saved setting and a quality id all read the same way. `alt` is not a
+ * single tone but the altered set a dominant is comped with, which is heard
+ * as one colour rather than as three.
+ */
+export const COLOUR_IDS: readonly string[] = ['9', 'b9', '#9', '11', '#11', '13', 'b13', 'alt'];
+
+/** How each reads on a button and in a reveal. */
+export const COLOUR_NAMES: Record<string, string> = {
+  9: '9', b9: '♭9', '#9': '♯9', 11: '11', '#11': '♯11', 13: '13', b13: '♭13',
+  alt: 'alt',
+};
+
+/** And back, for reading a degree off a voicing. */
+export const COLOUR_ID_OF: Record<string, string> = Object.fromEntries(
+  Object.entries(COLOUR_NAMES).map(([id, name]) => [name, id]),
+);
+
+/**
+ * How hard each is to hear, which is the order they are introduced in.
+ *
+ * The two a chord is most often comped with come first; the 11th and the
+ * ♯11 next, because telling them apart needs the third; the altered ones
+ * last, where they belong to one scale rather than to a chord.
+ */
+export const COLOUR_TIER: Record<string, number> = {
+  9: 1, 13: 2, 11: 3, '#11': 3, b9: 4, '#9': 4, b13: 5, alt: 5,
+};
+
+/** The tones an "alt" answer stands for. */
+export const ALT_SET: readonly string[] = ['♭9', '♯9', '♭13'];

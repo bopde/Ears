@@ -8,6 +8,7 @@ import { INTERVALS } from '../../music/intervals';
 import { SCALES } from '../../music/scales';
 import { PROGRESSIONS } from '../../music/progressions';
 import { PITCH_CLASSES, pcNameDual } from '../../music/pitch';
+import { COLOUR_IDS, COLOUR_NAMES, isBasicQuality } from '../../music/degrees';
 import { groupBy } from '../../lib/util';
 
 /** Toggling one item out of a list, never leaving the list empty. */
@@ -71,7 +72,13 @@ export function Setup({ onBack, onStart }: { onBack: () => void; onStart: () => 
   const { settings, updateSettings } = useApp();
   const set = (patch: Partial<PracticeSettings>) => updateSettings(patch);
 
-  const chordGroups = useMemo(() => groupBy(CHORD_QUALITIES, (q) => q.group), []);
+  // Basic chords only: the extended ones are no longer answers, so ticking
+  // ∆9 would promise a question that cannot be asked. What a chord is
+  // played with is chosen under Colour instead.
+  const chordGroups = useMemo(
+    () => groupBy(CHORD_QUALITIES.filter((q) => isBasicQuality(q.id)), (q) => q.group),
+    [],
+  );
   const keysAll = settings.keys === 'all';
   const selectedKeys: number[] = settings.keys === 'all' ? [] : settings.keys;
 
@@ -244,6 +251,17 @@ export function Setup({ onBack, onStart }: { onBack: () => void; onStart: () => 
             </Disclosure>
           );
         })}
+        <Disclosure
+          title="Colour"
+          summary={`${settings.colours.length}/${COLOUR_IDS.length}`}
+        >
+          <ChipGroup
+            items={COLOUR_IDS.map((id) => ({ id, name: COLOUR_NAMES[id] }))}
+            selected={settings.colours}
+            onChange={(next) => set({ colours: next })}
+            label={(c) => c.name}
+          />
+        </Disclosure>
         <Disclosure
           title="Intervals"
           summary={`${settings.intervals.length}/${INTERVALS.length}`}

@@ -6,6 +6,7 @@ import { PROGRESSIONS, progressionConcept } from './progressions';
 import { INVERSIONS, inversionConcept } from './inversions';
 import { PITCH_CLASSES, pcNameDual, type PitchClass } from './pitch';
 import { VOICING_STYLES, type VoicingStyle } from './voicing';
+import { COLOUR_IDS, COLOUR_NAMES, COLOUR_TIER } from './degrees';
 
 /**
  * The one place a voicing is named, kept here so the music layer does not
@@ -90,6 +91,24 @@ export function voicingConcept(style: VoicingStyle): Concept {
 export const voicingConceptId = (style: VoicingStyle) => conceptId('voicing', style);
 
 /**
+ * A colour is trainable in its own right, because it is asked about in its
+ * own right: the chord and what was added to it are two questions, and a
+ * learner can be solid on one and lost in the other.
+ */
+export function colourConcept(id: string): Concept {
+  return {
+    id: conceptId('colour', id),
+    kind: 'colour',
+    name: id === 'alt' ? 'Altered tensions' : `The ${COLOUR_NAMES[id]}`,
+    short: COLOUR_NAMES[id] ?? id,
+    tier: COLOUR_TIER[id] ?? 3,
+    tags: ['colour', 'tension'],
+  };
+}
+
+export const colourConceptId = (id: string) => conceptId('colour', id);
+
+/**
  * Every trainable idea in one place. Built from the music definitions rather
  * than written out by hand, so registering a new chord quality, mode or
  * progression automatically makes it trackable and practisable.
@@ -103,6 +122,7 @@ export function buildCatalog(): ConceptRegistry {
     ...INVERSIONS.map(inversionConcept),
     ...PITCH_CLASSES.map(keyConcept),
     ...VOICING_STYLES.map(voicingConcept),
+    ...COLOUR_IDS.map(colourConcept),
   ]);
 }
 

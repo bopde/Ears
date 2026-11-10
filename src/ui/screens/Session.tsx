@@ -394,7 +394,10 @@ function Sounded({ played }: { played: SoundedChord }) {
       )}
       <span className="sounded__stack">
         {played.notes.map((name, i) => (
-          <span key={`${name}-${i}`} className="sounded__note">
+          <span
+            key={`${name}-${i}`}
+            className={clsx('sounded__note', played.added?.includes(i) && 'sounded__note--added')}
+          >
             <span className="sounded__name">{name}</span>
             <span className="sounded__degree">{played.degrees[i]}</span>
           </span>

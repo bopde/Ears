@@ -306,13 +306,17 @@ export function referenceNoteNames(
  */
 export function soundedChord(
   chord: Chord,
-  voicing: { notes: readonly Midi[]; bass?: Midi },
+  voicing: { notes: readonly Midi[]; bass?: Midi; added?: readonly Midi[] },
   accidental: Accidental = 'both',
 ): SoundedChord {
+  const added = new Set(voicing.added ?? []);
   return {
     bass: voicing.bass === undefined ? undefined : spellInChord(chord, voicing.bass, accidental),
     notes: voicing.notes.map((m) => spellInChord(chord, m, accidental)),
     degrees: chordDegrees(chord, voicing.notes),
+    ...(added.size
+      ? { added: voicing.notes.map((m, i) => (added.has(m) ? i : -1)).filter((i) => i >= 0) }
+      : {}),
   };
 }
 

@@ -634,6 +634,16 @@ p { margin: 0; }
   white-space: nowrap;
 }
 
+/*
+ * The note that was added, marked out from the chord it sits on.
+ *
+ * A "Which colour?" reveal is a chord and a colour side by side, and the
+ * degree alone cannot say which is which: a 13 is colour over a dominant
+ * and a chord tone in a chord written 13.
+ */
+.sounded__note--added .sounded__name,
+.sounded__note--added .sounded__degree { color: var(--accent); }
+
 /* ── What sounded ────────────────────────────────────────────────────────── */
 
 /*

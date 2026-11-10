@@ -230,7 +230,7 @@ export const colourExercise: ExerciseType = {
           tones.length === 1 ? article(tones[0]) : tones.join(' and ')
         }`,
         // The degrees, with the added ones at the end where they sounded.
-        played: soundedChord(chord, { notes: all, bass: bassMidi }, ctx.settings.accidental),
+        played: soundedChord(chord, { notes: all, bass: bassMidi, added }, ctx.settings.accidental),
         notes: added
           .map((midi) => `${chordDegrees(chord, [midi])[0]} = ${
             spellInChord(chord, midi, ctx.settings.accidental)

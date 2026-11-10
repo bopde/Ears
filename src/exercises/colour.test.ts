@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getExerciseType } from './registry';
 import { colourOptionsFor } from './colour';
+import { colourInterval } from '../music/degrees';
 import type { GenContext } from './types';
 import { defaultSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
@@ -72,6 +73,29 @@ describe('the colour question asks about what was added', () => {
     }
     expect(singles, 'questions with one colour').toBeGreaterThan(100);
     expect(pairs, 'and questions with two').toBeGreaterThan(5);
+  });
+
+  it('marks the added note out from the chord in the reveal', () => {
+    for (const difficulty of [1, 3, 5]) {
+      for (const { q, chord, where } of asked(difficulty, 30)) {
+        const played = q.reveal.played!;
+        expect(played.added, `${where} marks something`).toBeDefined();
+        const marked = played.added!.map((i) => played.degrees[i]);
+        const named = q.correct.colour === 'alt'
+          ? [...ALT_SET]
+          : q.correct.colour.split('+').map((id) => COLOUR_NAMES[id]);
+        // Exactly the colours the answer names, and nothing of the chord.
+        expect([...marked].sort(), where).toEqual([...named].sort());
+        // And every marked index points at a note the chord does not hold.
+        const held = new Set(chord.quality.intervals.map((i) => mod(i, 12)));
+        for (const i of played.added!) {
+          const degree = played.degrees[i];
+          expect(named, `${where} marked ${degree}, which is not the answer`).toContain(degree);
+          expect(held.has(mod(colourInterval(degree) ?? -1, 12)), `${where} marked a chord tone`)
+            .toBe(false);
+        }
+      }
+    }
   });
 
   it('shows the chord, so the question is only about the colour', () => {

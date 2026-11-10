@@ -46,6 +46,14 @@ export interface SoundedChord {
   notes: string[];
   /** One degree per right-hand note, in the same order. */
   degrees: string[];
+  /**
+   * Which of those were added above the chord, by index.
+   *
+   * So a reveal can mark the colour out from the chord it sits on. The
+   * degrees alone cannot say: a 13 is colour over a dominant and a member
+   * of the chord written 13, and only the question knows which it meant.
+   */
+  added?: number[];
 }
 
 /** One chord of a progression, as the reveal lists it. */

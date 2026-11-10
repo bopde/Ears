@@ -3,8 +3,12 @@ import {
   CHORD_QUALITIES, chordDegrees, chordSymbol, chordToneNames, makeChord,
   requireChordQuality, spellInChord,
 } from './chords';
-import { colourName, degreeIn, degreeNumber, hasSeventh, memberNames } from './degrees';
+import {
+  BASIC_OF, BASIC_QUALITIES, colourInterval, colourName, coloursFor, degreeIn, degreeNumber,
+  hasSeventh, memberNames,
+} from './degrees';
 import { LETTERS, PITCH_CLASSES, letterIndexOf } from './pitch';
+import { tensionIntervals } from './voicing';
 import { mod } from '../lib/util';
 
 /** The note `semitones` above a root in the 4th octave. */
@@ -97,49 +101,67 @@ describe('a chord names its own members by member number', () => {
 
 describe('what a chord does not hold is named by the colour rules', () => {
   it('never reuses a member number the chord is already sounding', () => {
+    let checked = 0;
     for (const quality of CHORD_QUALITIES) {
-      const members = new Set(quality.intervals.map((i) => mod(i, 12)));
       const sounding = new Set(memberNames(quality).map((n) => degreeNumber(n) % 7));
-      // The positions colour can occupy. The others — 0, 4, 7, 10, 11 — are
-      // where a chord's own root, third, fifth and seventh live, and a chord
-      // missing one of those is missing a chord tone rather than taking
-      // colour, so there is no tension name for them to collide with.
-      for (const semitones of [1, 2, 3, 5, 6, 8, 9]) {
-        if (members.has(semitones)) continue;
-        const name = colourName(quality, semitones);
-        expect(CLAIMS[name], `${quality.id}: ${name} for ${semitones}`).toBe(semitones);
-        // The rule: a name whose letter step the chord already uses would
-        // put two different notes on one line of the staff, so it is never
-        // chosen while a free name for that pitch exists. A couple of
-        // positions have no free name — a sus4 chord's F♯ is a second F
-        // whether it is called ♭5 or ♯11 — and those are nowhere in any
-        // chord's colour, so nothing ever asks.
-        const free = Object.entries(CLAIMS)
-          .filter(([other, pitch]) => pitch === semitones && !sounding.has(degreeNumber(other) % 7))
-          .map(([other]) => other);
-        if (free.length) expect(free, `${quality.id} at ${semitones}`).toContain(name);
+      // Every colour this chord can actually be played with, which is the
+      // only set the rule has to hold over: a position no voicing reaches
+      // is a position nothing ever has to name.
+      const colours = [
+        ...coloursFor(quality),
+        ...(BASIC_OF[quality.id] === '7' ? coloursFor(quality, { altered: true }) : []),
+      ];
+      for (const name of colours) {
+        const semitones = colourInterval(name)!;
+        // The name the chord would give that pitch is the name the table
+        // uses: the two cannot drift apart.
+        expect(degreeIn(quality, semitones), `${quality.id}: ${name}`).toBe(name);
+        expect(CLAIMS[name], `${quality.id}: ${name}`).toBe(mod(semitones, 12));
+        // And it does not land on a letter the chord is already using —
+        // with one exception the music itself makes. A diminished seventh
+        // is four notes a minor third apart and its scale has eight notes
+        // for seven letters, so the natural 7th it is comped with sits on
+        // the same letter as its own 𝄫7: C°7 is C E♭ G♭ B𝄫, and the
+        // seventh the scale adds is a B.
+        const clash = sounding.has(degreeNumber(name) % 7);
+        if (clash) expect(`${quality.id}:${name}`, 'the one exception').toBe('dim7:7');
+        else expect(clash, `${quality.id}: ${name}`).toBe(false);
+        checked += 1;
       }
     }
+    expect(checked, 'colours checked').toBeGreaterThan(60);
   });
 
-  it('decides the two enharmonic pairs by whether a fifth is already there', () => {
+  it('calls a note over a triad by the name a chart would give it', () => {
+    const cmaj = requireChordQuality('maj');
+    expect(colourName(cmaj, 2)).toBe('9');
+    expect(colourName(cmaj, 6)).toBe('♯11');
+    expect(colourName(cmaj, 3)).toBe('♯9');
+    expect(colourName(cmaj, 9)).toBe('6');
+    const cmin = requireChordQuality('min');
+    expect(colourName(cmin, 5)).toBe('11');
+    expect(colourName(cmin, 9)).toBe('6');
+  });
+
+  it('makes an altered fifth a member and never a colour', () => {
+    // A 7♭5 and a 7 played with a ♯11 are the same five notes. What tells
+    // them apart is the chord: the one that declares a ♭5 has a ♭5 in it,
+    // and over the one that does not, the same pitch is colour.
     const seven = requireChordQuality('7');
     expect(colourName(seven, 6)).toBe('♯11');
     expect(colourName(seven, 8)).toBe('♭13');
-    // A chord whose fifth is altered has still accounted for its fifth, so
-    // what sits beside it is colour: a 7♯5 takes a ♯11, not a second fifth.
     const sharp5 = requireChordQuality('7#5');
-    expect(colourName(sharp5, 6)).toBe('♯11');
     const flat5 = requireChordQuality('7b5');
-    expect(colourName(flat5, 8)).toBe('♭13');
-    expect(colourName(requireChordQuality('dim'), 8)).toBe('♭13');
-    // And where the altered fifth is the chord's own, it is a member.
     expect(degreeIn(sharp5, 8)).toBe('♯5');
     expect(degreeIn(flat5, 6)).toBe('♭5');
-    // With no fifth of any kind, six and eight semitones are the chord's.
-    const sixNine = requireChordQuality('69');
-    expect(colourName(sixNine, 6)).toBe('♭5');
-    expect(colourName(sixNine, 8)).toBe('♯5');
+    expect(colourName(sharp5, 6)).toBe('♯11');
+    expect(colourName(flat5, 8)).toBe('♭13');
+    // A diminished triad has no natural 5, and naming its A♭ a ♯5 would
+    // put a ♭5 and a ♯5 in one chord.
+    expect(colourName(requireChordQuality('dim'), 8)).toBe('♭13');
+    // A 6/9 has no fifth at all, and its F♯ is the ♯11 of the scale it
+    // comes from, not a fifth that went missing.
+    expect(colourName(requireChordQuality('69'), 6)).toBe('♯11');
   });
 
   it('keeps going past a seventh, and stops where there is none', () => {
@@ -203,5 +225,75 @@ describe('the naming bugs this model was built to end', () => {
     // And the spelling follows: a ♯11 of C is an F♯, not a G♭.
     expect(spellInChord(cmaj, above(0, 6))).toBe('F♯4');
     expect(spellInChord(cmaj, above(0, 3))).toBe('D♯4');
+  });
+});
+
+describe('one colour table per basic chord', () => {
+  it('gives each basic chord the colours its scale offers', () => {
+    const colour = (id: string) => coloursFor(requireChordQuality(id)).join(' ');
+    // Lydian and the major scale. The ♯11 and the 13 are a ∆7's two most
+    // ordinary colours and it used to get neither, which is why ∆9 stayed
+    // on offer against a ∆7♯11 that had been played with a 9th.
+    expect(colour('maj7')).toBe('9 ♯11 13');
+    // A 6 chord's 13 is the 6th it already has, so what is left to add is
+    // the other two.
+    expect(colour('6')).toBe('9 ♯11');
+    expect(colour('m6')).toBe('9 11');
+    // Dorian.
+    expect(colour('m7')).toBe('9 11 13');
+    expect(colour('mMaj7')).toBe('9 11 13');
+    // Mixolydian, with the altered set asked for separately.
+    expect(colour('7')).toBe('9 13');
+    expect(colour('7sus4')).toBe('9 13');
+    expect(colour('7b5')).toBe('9 13');
+    expect(coloursFor(requireChordQuality('7'), { altered: true }).join(' '))
+      .toBe('9 13 ♭9 ♯9 ♯11 ♭13');
+    // Locrian ♮2. A natural 13 would sit a semitone above the chord's own
+    // ♭5, which is what it was being handed.
+    expect(colour('m7b5')).toBe('9 11 ♭13');
+    // The diminished scale, whose eight notes include a natural 7th above
+    // the chord's 𝄫7.
+    expect(colour('dim7')).toBe('9 11 ♭13 7');
+    // Whole-tone and Lydian augmented: no natural 5 to clash with.
+    expect(colour('7#5')).toBe('9 ♯11');
+    expect(colour('maj7#5')).toBe('9 ♯11');
+    // And the triads take their seventh chord's, less what needs a seventh
+    // underneath it to be heard as an extension at all.
+    expect(colour('maj')).toBe('9 ♯11');
+    expect(colour('min')).toBe('9 11');
+    expect(colour('dim')).toBe('9 11 ♭13');
+    expect(colour('aug')).toBe('9 ♯11');
+    expect(colour('sus4')).toBe('9');
+    expect(colour('sus2')).toBe('');
+  });
+
+  it('is the table the voicing engine plays from', () => {
+    // The filter that drops ambiguous answers, the engine that builds the
+    // voicing and the exercise that asks about the colour all read this
+    // one table, or they would disagree about what a chord may sound.
+    for (const quality of CHORD_QUALITIES) {
+      const chord = makeChord(0, quality.id);
+      expect(tensionIntervals(chord).map((i) => degreeIn(quality, i)), quality.id)
+        .toEqual(coloursFor(quality));
+    }
+  });
+
+  it('knows which basic chord every quality is', () => {
+    expect(BASIC_QUALITIES).toHaveLength(18);
+    for (const quality of CHORD_QUALITIES) {
+      const basic = BASIC_OF[quality.id];
+      expect(basic, quality.id).toBeTruthy();
+      expect(BASIC_QUALITIES, quality.id).toContain(basic);
+      // A basic chord is its own, and every other chord sounds what makes
+      // the basic chord that chord — its third or sus, its fifth where the
+      // fifth is altered, its seventh or sixth. The plain fifth is not on
+      // the list: a 6/9 is a 6 chord with the fifth left out.
+      const held = new Set(quality.intervals.map((i) => mod(i, 12)));
+      const base = requireChordQuality(basic);
+      const essential = base.essential ?? base.intervals.filter((i) => i !== 0 && i !== 7);
+      for (const interval of essential) {
+        expect(held.has(mod(interval, 12)), `${quality.id} sounds ${basic}'s ${interval}`).toBe(true);
+      }
+    }
   });
 });

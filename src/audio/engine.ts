@@ -180,10 +180,22 @@ export function buildMasterChain(ctx: BaseAudioContext, destination: AudioNode):
   };
 }
 
+/**
+ * Safari 17 and later let a page say what its audio is for.
+ *
+ * Not in lib.dom yet, and absent everywhere else, so it is declared here
+ * and used only where it exists.
+ */
+interface NavigatorWithAudioSession extends Navigator {
+  audioSession?: { type: string };
+}
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private chain: MasterChain | null = null;
   private keepAlive: HTMLAudioElement | null = null;
+  private listening = false;
+  private armed = false;
   /** Sounding voices, mapped to the time they are expected to have died away. */
   private voices = new Map<Voice, number>();
   private opts: Required<EngineOptions>;
@@ -240,14 +252,94 @@ export class AudioEngine {
     src.connect(this.ctx.destination);
     src.start(0);
 
+    // Tell Safari outright what kind of audio this is, where it will
+    // listen. From Safari 17 this is the whole mechanism: the session is
+    // "playback", so the hardware mute switch does not apply and nothing
+    // has to be kept playing to say so. Older versions have no such
+    // property and fall back on the silent loop below.
+    const session = (navigator as NavigatorWithAudioSession).audioSession;
+    if (session) {
+      try {
+        session.type = 'playback';
+      } catch {
+        /* the loop below is the fallback */
+      }
+    }
+
     if (!this.keepAlive) {
       const el = new Audio(SILENT_WAV);
       el.loop = true;
       el.volume = 0.0001;
       el.setAttribute('playsinline', '');
-      void el.play().catch(() => undefined);
       this.keepAlive = el;
     }
+    // Replayed whenever it is paused, not only when it is first made. iOS
+    // pauses it when the app goes away, and until it is playing again the
+    // app's sound is ringer audio: silent under the mute switch, which is
+    // where the app came back silent from.
+    this.resumeKeepAlive();
+    this.listen();
+  }
+
+  /**
+   * Brings the audio back after the app has been away.
+   *
+   * On iOS, leaving the app pauses the keep-alive element and interrupts
+   * the context. Nothing restarted either, so the app came back with Web
+   * Audio routed as ringer audio and muted — and opening Notification
+   * Centre fixed it, because that makes iOS reset the audio session.
+   *
+   * Called on every way back in: the page becoming visible, a restore from
+   * the back/forward cache, and the context saying its own state changed.
+   * None of them is a user gesture, so `play()` may be refused; the next
+   * tap calls `unlock()`, which comes back through here, and that one is.
+   */
+  private recover(): void {
+    this.resumeKeepAlive();
+    const state = this.ctx?.state as AudioContextState | 'interrupted' | undefined;
+    if (this.ctx && (state === 'suspended' || state === 'interrupted')) {
+      void this.ctx.resume().catch(() => undefined);
+    }
+    // Neither of those is allowed to work outside a gesture, so if either
+    // is still wrong a moment later, the next tap anywhere does it again —
+    // and that one is a gesture. Armed rather than always on, because a
+    // return that fixed itself should cost the next tap nothing.
+    window.setTimeout(() => {
+      if (this.ready && !this.keepAlive?.paused) return;
+      this.armGesture();
+    }, 200);
+  }
+
+  private armGesture(): void {
+    if (this.armed) return;
+    this.armed = true;
+    const once = () => {
+      this.armed = false;
+      window.removeEventListener('pointerdown', once);
+      window.removeEventListener('touchend', once);
+      void this.unlock();
+    };
+    window.addEventListener('pointerdown', once, { once: true });
+    window.addEventListener('touchend', once, { once: true });
+  }
+
+  private resumeKeepAlive(): void {
+    const el = this.keepAlive;
+    if (el && el.paused) void el.play().catch(() => undefined);
+  }
+
+  /** Registered once, on the first unlock, and left for the page's life. */
+  private listen(): void {
+    if (this.listening) return;
+    this.listening = true;
+    const back = () => this.recover();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') back();
+    });
+    window.addEventListener('pageshow', back);
+    // Safari reports "interrupted" here and nowhere else, and it is the
+    // only notice some returns give.
+    this.ctx?.addEventListener('statechange', back);
   }
 
   setVolume(value: number): void {

@@ -1,4 +1,5 @@
 import type { Chord } from './chords';
+import { colourIntervals } from './degrees';
 import { REGISTER, VOICING_FLOOR, foldInto, pcAtOrAbove, type Midi } from './pitch';
 import { mod } from '../lib/util';
 
@@ -168,33 +169,35 @@ const seventhOf = (c: Chord) => toneAt(c, (i) => i >= 9 && i <= 11);
 const ninthOf = (c: Chord) => toneAt(c, (i) => i >= 13 && i <= 15);
 
 /**
- * The pitch classes a voicing of this chord may draw on.
+ * The tones a voicing of this chord may add, on top of the chord itself.
  *
- * The chord's own tones, plus the tensions a pianist would add without being
- * asked: a 9th on any seventh chord that has not already altered one, an 11th
- * only where there is no major 3rd for it to clash with, and a 13th only over
- * a dominant 7th that has not already flattened it.
+ * Read from the one colour table in `degrees.ts`, which the filter that
+ * drops ambiguous answers and the colour exercise read too — so what the
+ * engine may play and what the app says it may play cannot drift apart.
+ *
+ * It used to be worked out here, from rules about thirds and sevenths, and
+ * the rules were wrong in both directions: a ∆7 never got the ♯11 or the
+ * 13 that are its two most ordinary colours, and a half-diminished chord
+ * was handed a natural 13 a semitone above its own ♭5.
  */
-export function tensionIntervals(chord: Chord): number[] {
-  const iv = chord.quality.intervals;
-  if (iv.length < 4) return [];
-  // Never a note the chord already holds. As pitch classes that was harmless
-  // — a set absorbs the repeat — but as intervals to stack it doubled a note:
-  // a 7sus4 has a 4th in it already, and a 13 chord a 13th, and both were
-  // being handed one again an octave up.
-  const has = (semitones: number) => iv.some((i) => mod(i, 12) === mod(semitones, 12));
-  const out: number[] = [];
-  if (ninthOf(chord) === undefined && !has(2)) out.push(14);
-  // A natural 11th over a major 3rd is the one note everyone agrees to avoid.
-  if ((thirdOf(chord) === undefined || mod(thirdOf(chord)!, 12) === 3) && !has(5)) out.push(17);
-  if (has(10) && !has(8) && !has(9)) out.push(21);
-  return out;
+export function tensionIntervals(chord: Chord, altered = false): number[] {
+  return colourIntervals(chord.quality, { altered });
 }
 
-export function availablePcs(chord: Chord, tensions: boolean): Set<number> {
+/**
+ * The pitch classes a voicing of this chord may draw on: its own tones and
+ * the colours its table offers.
+ *
+ * `altered` widens it to what a dominant may be comped with when the
+ * dominant is treated as altered. The engine builds without it — a chord
+ * sounds its plain colours unless something asks otherwise — and the
+ * filter that drops ambiguous answers asks with it, because a listener
+ * cannot know which setting produced what they heard.
+ */
+export function availablePcs(chord: Chord, tensions: boolean, altered = false): Set<number> {
   const set = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
   if (!tensions) return set;
-  for (const i of tensionIntervals(chord)) set.add(mod(chord.rootPc + i, 12));
+  for (const i of tensionIntervals(chord, altered)) set.add(mod(chord.rootPc + i, 12));
   return set;
 }
 
@@ -218,9 +221,19 @@ export function couldSound(
   sounding: ReadonlySet<number>,
   tensions: boolean,
 ): boolean {
-  const available = availablePcs(chord, tensions);
+  const available = availablePcs(chord, tensions, true);
   for (const pc of sounding) {
     if (!available.has(mod(pc, 12))) return false;
+  }
+  // A ♯11 or a ♭13 is colour *above* a fifth, so the fifth has to be there.
+  // With the chord's own fifth missing from what sounded, the same pitch is
+  // an altered fifth and the chord that owns it is a different chord: C E
+  // G♯ B♭ is a 7♯5, and C E G A♭ B♭ is a 7 played with a ♭13.
+  if (chord.quality.intervals.some((i) => mod(i, 12) === 7)
+    && !sounding.has(mod(chord.rootPc + 7, 12))) {
+    for (const semitones of [6, 8]) {
+      if (sounding.has(mod(chord.rootPc + semitones, 12))) return false;
+    }
   }
   const q = chord.quality;
   const essential = q.essential ?? q.intervals.filter((i) => i !== 0 && i !== 7);

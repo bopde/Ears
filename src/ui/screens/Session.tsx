@@ -349,9 +349,12 @@ export function SessionScreen({
                     Hear again
                   </Button>
                   {/* The chord underneath the voicing: what you were listening
-                      past. Only offered where the question voiced something. */}
+                      past. Not "root position" — the chord you just heard was
+                      usually in root position already; what this takes away is
+                      the voicing and what it added. Only offered where the
+                      question voiced something. */}
                   {question.playPlain && (
-                    <Button onClick={() => engine.playPlain()}>Hear in root position</Button>
+                    <Button onClick={() => engine.playPlain()}>Hear the basic chord</Button>
                   )}
                   <Button variant="primary" onClick={() => engine.next()}>
                     Next
@@ -391,7 +394,10 @@ function Sounded({ played }: { played: SoundedChord }) {
       )}
       <span className="sounded__stack">
         {played.notes.map((name, i) => (
-          <span key={`${name}-${i}`} className="sounded__note">
+          <span
+            key={`${name}-${i}`}
+            className={clsx('sounded__note', played.added?.includes(i) && 'sounded__note--added')}
+          >
             <span className="sounded__name">{name}</span>
             <span className="sounded__degree">{played.degrees[i]}</span>
           </span>

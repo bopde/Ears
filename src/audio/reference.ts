@@ -306,13 +306,17 @@ export function referenceNoteNames(
  */
 export function soundedChord(
   chord: Chord,
-  voicing: { notes: readonly Midi[]; bass?: Midi },
+  voicing: { notes: readonly Midi[]; bass?: Midi; added?: readonly Midi[] },
   accidental: Accidental = 'both',
 ): SoundedChord {
+  const added = new Set(voicing.added ?? []);
   return {
     bass: voicing.bass === undefined ? undefined : spellInChord(chord, voicing.bass, accidental),
     notes: voicing.notes.map((m) => spellInChord(chord, m, accidental)),
     degrees: chordDegrees(chord, voicing.notes),
+    ...(added.size
+      ? { added: voicing.notes.map((m, i) => (added.has(m) ? i : -1)).filter((i) => i >= 0) }
+      : {}),
   };
 }
 
@@ -321,7 +325,7 @@ export function soundedChord(
  *
  * The music layer names a `VoicingStyle`, which is what a voicing *is*; the
  * cheat sheet's modes are how it offers them, and plain close voicings are
- * offered as root position.
+ * offered as the basic chords. The id stays `root`.
  */
 export function modeForStyle(style: VoicingStyle): ReferenceVoicing {
   switch (style) {
@@ -415,7 +419,7 @@ export function playReferenceChord(
 }
 
 /**
- * The same changes twice: root position first, then the voicing.
+ * The same changes twice: the basic chords first, then the voicing.
  *
  * Hearing them back to back is the only way to tell what a voicing adds from
  * what the harmony was doing anyway, which is hard to do when they only ever

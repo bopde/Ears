@@ -430,7 +430,7 @@ p { margin: 0; }
 .prompt__sub { font-size: 0.85rem; color: var(--fg-dim); }
 
 /*
- * Three buttons, one of which says "Hear in root position". They do not fit
+ * Three buttons, one of which says "Hear the basic chord". They do not fit
  * across a 380px phone in one line, and a button that overflows takes the
  * page with it — so they wrap, and each keeps a width it can be read at.
  */
@@ -633,6 +633,16 @@ p { margin: 0; }
   color: var(--fg-faint);
   white-space: nowrap;
 }
+
+/*
+ * The note that was added, marked out from the chord it sits on.
+ *
+ * A "Which colour?" reveal is a chord and a colour side by side, and the
+ * degree alone cannot say which is which: a 13 is colour over a dominant
+ * and a chord tone in a chord written 13.
+ */
+.sounded__note--added .sounded__name,
+.sounded__note--added .sounded__degree { color: var(--accent); }
 
 /* ── What sounded ────────────────────────────────────────────────────────── */
 

@@ -17,7 +17,9 @@ export type ConceptKind =
   | 'progression'
   | 'key'
   | 'inversion'
-  | 'voicing';
+  | 'voicing'
+  /** What a chord was played with, above its own tones. */
+  | 'colour';
 
 export interface Concept {
   /** Namespaced and stable — it is the key for stored practice history. */

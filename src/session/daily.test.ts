@@ -113,9 +113,11 @@ describe('the shape of a daily', () => {
   it('covers every kind of exercise before repeating any', () => {
     for (const day of ['2026-01-01', '2026-06-15', '2026-10-08', '2027-03-21']) {
       const types = buildDailyQuestions(day).map((q) => q.type);
-      expect(uniq(types.slice(0, EXERCISE_TYPES.length)).length, `${day} covers everything`).toBe(
-        EXERCISE_TYPES.length,
-      );
+      // Ten questions and eleven kinds, so a day cannot hold them all. What
+      // it can do is never ask the same kind twice while one is unused,
+      // which is what "covers everything" was always for.
+      const reach = Math.min(types.length, EXERCISE_TYPES.length);
+      expect(uniq(types.slice(0, reach)).length, `${day} repeats nothing early`).toBe(reach);
     }
   });
 

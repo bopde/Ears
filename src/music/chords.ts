@@ -1,9 +1,10 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
 import {
-  letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
+  FLAT_NAMES, SHARP_NAMES, letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
   type Accidental, type Midi, type PitchClass,
 } from './pitch';
+import { BASIC_OF, degreeIn, degreeNumber, memberName, memberNameOf } from './degrees';
 import { mod } from '../lib/util';
 
 /**
@@ -244,16 +245,112 @@ export function makeChord(rootPc: PitchClass, qualityId: string, root?: string):
 }
 
 /**
+ * The chord a listener is asked to name: this one, stripped to its stack.
+ *
+ * A ∆9 is a ∆7 that was played with its 9th. The two are one sound and one
+ * answer, and the 9 is named in the reveal rather than folded into the
+ * question — so a chart's G7♭9 is answered "G7, played with a ♭9".
+ */
+export const basicChord = (chord: Chord): Chord =>
+  chord.quality.id === BASIC_OF[chord.quality.id]
+    ? chord
+    : makeChord(chord.rootPc, BASIC_OF[chord.quality.id], chord.root);
+
+/**
+ * What sounded that the basic chord does not name.
+ *
+ * Measured against the basic chord rather than the written one, so a chord
+ * the chart writes as G7♭9 reports its own ♭9 as colour: under this model
+ * the answer was G7, and the ♭9 is what it was played with.
+ */
+export const colourSounded = (chord: Chord, notes: readonly Midi[]): string[] =>
+  addedTensions(basicChord(chord), notes);
+
+/**
+ * How badly a chord reads when it is written from this root.
+ *
+ * A chord is written one letter per degree — root, third, fifth, seventh —
+ * and the letter is decided by the root's. Where a degree then wants a name
+ * nobody prints (F♭, C♭, E♯, B♯, or a double accidental) the speller falls
+ * back to the plain enharmonic, and the chord stops matching its own
+ * symbol: D♭m7 is D♭ F♭ A♭ C♭ and comes out D♭ E A♭ B, a minor seventh
+ * with no F and no C in it, whose first inversion reads D♭m7/E — a slash
+ * onto a note the symbol says is not there. This counts how often that
+ * happens.
+ *
+ * Only the chord's core is counted — the tones inside the octave, which are
+ * the ones that say which chord it is. A tension is colour and routinely
+ * needs a fallback whichever root it is written from, so letting it vote
+ * turns a settled symbol over for nothing: an E♭7♭9's ♭9 is an F♭ and its
+ * core is spotless, and nobody writes that chord D♯7♭9.
+ */
+function spellingCost(
+  rootName: string,
+  rootPc: PitchClass,
+  quality: ChordQuality,
+): { fallbacks: number; accidentals: number } {
+  const letter = letterIndexOf(rootName);
+  if (letter < 0) return { fallbacks: Number.MAX_SAFE_INTEGER, accidentals: 0 };
+  let fallbacks = 0;
+  let accidentals = 0;
+  for (const interval of quality.intervals) {
+    const name = memberName(quality, interval);
+    const number = degreeNumber(name);
+    // Judged on the tones that define the chord, not on the alterations its
+    // own name already warns you about. A ♭9 or a ♭13 needs an awkward
+    // letter whichever root it is written from, so letting it vote turns
+    // settled symbols over for nothing: E♭7♭9 became D♯7♭9, which nobody
+    // writes. A plain 9, 11 or 13 is a member like any other and counts —
+    // which is what keeps E♭m(add9) from becoming D♯m(add9), whose 9th
+    // would be an E♯ printed as a second F.
+    if (number > 7 && /[♭♯]/.test(name)) continue;
+    const wanted = number > 0
+      ? spellOnLetter(mod(rootPc + interval, 12), letter + number - 1)
+      : null;
+    if (wanted === null) fallbacks += 1;
+    else accidentals += wanted.length - 1;
+  }
+  return { fallbacks, accidentals };
+}
+
+/**
  * The root as this chord is written.
  *
- * An explicit sharps-only or flats-only setting beats the key: someone who
- * has asked to see flats has asked for all of them. On the default setting
- * the key decides, and where no key does, the conventional name stands.
+ * An explicit sharps-only or flats-only setting beats everything: someone
+ * who has asked to see flats has asked for all of them. Next the key, where
+ * there is one. Where there is not — a chord-quality question is in no key,
+ * and neither is a colour question — the root is chosen so that the chord
+ * can be written from it.
+ *
+ * That last part is what keeps a symbol and its notes from arguing. The
+ * conventional name for the black key above C is D♭, and D♭m7 is a chord
+ * whose third is F♭ and whose seventh is C♭ — two names this app refuses to
+ * print. The speller falls back, the chord comes out D♭ E A♭ B, a minor
+ * seventh with no F and no C in it, and an inversion of it reads D♭m7/E: a
+ * slash onto a note the symbol says is not there. From C♯ the same four
+ * notes are C♯ E G♯ B, each on its own letter.
+ *
+ * Fewest degrees it cannot print, then fewest accidentals, then the family:
+ * flats for the major side, sharps for the minor and diminished. The middle
+ * term never decides anything — the two spellings of a chord always need
+ * the same number of accidentals when neither falls back — so in practice
+ * it is the fallbacks, and then the family, which settles 37 chords.
  */
 export function chordRootName(chord: Chord, pref: Accidental = 'both'): string {
   if (pref !== 'both') return pcName(chord.rootPc, pref);
-  return chord.root ?? pcName(chord.rootPc, 'both');
+  if (chord.root) return chord.root;
+  const sharp = SHARP_NAMES[chord.rootPc];
+  const flat = FLAT_NAMES[chord.rootPc];
+  if (sharp === flat) return sharp;
+  const a = spellingCost(sharp, chord.rootPc, chord.quality);
+  const b = spellingCost(flat, chord.rootPc, chord.quality);
+  if (a.fallbacks !== b.fallbacks) return a.fallbacks < b.fallbacks ? sharp : flat;
+  if (a.accidentals !== b.accidentals) return a.accidentals < b.accidentals ? sharp : flat;
+  return MINOR_SIDE.has(chord.quality.family) ? sharp : flat;
 }
+
+/** The families written from the sharp side when nothing else decides. */
+const MINOR_SIDE: ReadonlySet<ChordFamily> = new Set<ChordFamily>(['minor', 'diminished']);
 
 export function chordSymbol(chord: Chord, pref: Accidental = 'both'): string {
   return `${chordRootName(chord, pref)}${chord.quality.symbol}`;
@@ -284,47 +381,13 @@ export function chordFullName(chord: Chord, pref: Accidental = 'both'): string {
 }
 
 /**
- * What each interval is called, read off the chord's own spelling.
+ * What an interval is called, with no chord to read it against.
  *
- * The same pitch gets a different name depending on the chord it is in — six
- * semitones above the root is a ♭5 in a half-diminished chord and a ♯11 in a
- * Lydian dominant — so the name comes from the interval the quality lists, not
- * from the pitch class.
+ * Kept for the places that have an interval and nothing else. Where there is
+ * a chord, ask `degrees.ts` instead: the same pitch is a ♭5 in one chord and
+ * a ♯11 in another, and only the chord can say which.
  */
-const DEGREE_NAMES: Record<number, string> = {
-  0: '1', 1: '♭9', 2: '9', 3: '♭3', 4: '3', 5: '4', 6: '♭5', 7: '5',
-  8: '♯5', 9: '6', 10: '♭7', 11: '7',
-  13: '♭9', 14: '9', 15: '♯9', 17: '11', 18: '♯11', 20: '♭13', 21: '13',
-};
-
-/**
- * What a note *outside* the chord is called, over a chord that has a seventh.
- *
- * Above a seventh the stack keeps going, so a note the chord does not name is
- * heard as an extension of it rather than as a displaced chord tone: over a
- * dominant 7th the 9 semitones are a 13th, not a 6th, and the 3 are a ♯9
- * rather than a ♭3 that would contradict the major 3rd below it. Under a
- * triad there is no seventh to extend past, and 9, 4 and 6 are what they are.
- */
-const TENSION_NAMES: Record<number, string> = {
-  1: '♭9', 2: '9', 3: '♯9', 5: '11', 6: '♯11', 8: '♭13', 9: '13',
-};
-
-export const degreeName = (interval: number): string =>
-  DEGREE_NAMES[interval] ?? DEGREE_NAMES[mod(interval, 12)] ?? '?';
-
-/**
- * Whether the quality stacks as far as a seventh.
- *
- * A sixth chord does not, however close 9 semitones looks to one: its 6th is
- * a 6th. A fully diminished seventh does, and spells those same 9 semitones
- * as a seventh, so it is the one chord where the interval alone cannot say.
- */
-function hasSeventh(quality: ChordQuality): boolean {
-  const pcs = new Set(quality.intervals.map((i) => mod(i, 12)));
-  if (pcs.has(10) || pcs.has(11)) return true;
-  return pcs.has(3) && pcs.has(6) && pcs.has(9);
-}
+export const degreeName = (interval: number): string => memberNameOf(interval);
 
 /**
  * The degrees a voicing sounds, in the order it sounds them.
@@ -334,13 +397,7 @@ function hasSeventh(quality: ChordQuality): boolean {
  * the degrees are read straight off the notes that were scheduled.
  */
 export function chordDegrees(chord: Chord, notes: readonly Midi[]): string[] {
-  const extended = hasSeventh(chord.quality);
-  return notes.map((midi) => {
-    const pc = mod(midi - chord.rootPc, 12);
-    const spelled = chord.quality.intervals.find((i) => mod(i, 12) === pc);
-    if (spelled !== undefined) return degreeName(spelled);
-    return (extended ? TENSION_NAMES[pc] : undefined) ?? degreeName(pc);
-  });
+  return notes.map((midi) => degreeIn(chord.quality, mod(midi - chord.rootPc, 12)));
 }
 
 /**
@@ -354,10 +411,9 @@ export function chordDegrees(chord: Chord, notes: readonly Midi[]): string[] {
  * an A rather than a B𝄫.
  */
 export function spellInChord(chord: Chord, midi: Midi, pref: Accidental = 'both'): string {
-  const degree = chordDegrees(chord, [midi])[0];
-  const number = Number(degree.replace(/[^0-9]/g, ''));
+  const number = degreeNumber(chordDegrees(chord, [midi])[0]);
   const letter = letterIndexOf(chordRootName(chord, pref));
-  const spelled = Number.isFinite(number) && number > 0 && letter >= 0
+  const spelled = number > 0 && letter >= 0
     ? spellOnLetter(pcOf(midi), letter + number - 1)
     : null;
   return `${spelled ?? pcName(pcOf(midi), pref)}${octaveOf(midi)}`;

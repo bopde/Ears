@@ -1,5 +1,6 @@
 import type { ExerciseType } from './types';
 import { chordFullExercise, chordQualityExercise } from './chord';
+import { colourExercise } from './colour';
 import { inversionExercise } from './inversion';
 import { intervalExercise } from './interval';
 import { keyExercise } from './key';
@@ -18,6 +19,7 @@ import { guideToneExercise, voicingExercise } from './voicing';
 export const EXERCISE_TYPES: ExerciseType[] = [
   chordQualityExercise,
   chordFullExercise,
+  colourExercise,
   inversionExercise,
   intervalExercise,
   keyExercise,

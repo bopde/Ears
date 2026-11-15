@@ -1,6 +1,7 @@
 import type { Accidental, PitchClass } from '../music/pitch';
 import type { IntervalDirection } from '../music/intervals';
 import { CHORD_QUALITIES } from '../music/chords';
+import { BASIC_OF, COLOUR_IDS, isBasicQuality } from '../music/degrees';
 import { SIMPLE_INTERVALS } from '../music/intervals';
 import { CORE_MODES } from '../music/scales';
 import { CORE_PROGRESSIONS } from '../music/progressions';
@@ -11,6 +12,7 @@ import { VOICING_MODE_IDS, type VoicingMode } from '../exercises/voicing-plan';
 export const EXERCISE_TYPE_IDS = [
   'chord-quality',
   'chord-full',
+  'colour',
   'chord-inversion',
   'interval',
   'key',
@@ -44,6 +46,8 @@ export interface PracticeSettings {
 
   // Vocabulary — the user's active musical material.
   chordQualities: string[];
+  /** Which colours the "Which colour?" question may ask about. */
+  colours: string[];
   intervals: string[];
   modes: string[];
   progressions: string[];
@@ -116,7 +120,8 @@ export function defaultSettings(): PracticeSettings {
     adaptive: true,
     // The full chord vocabulary is enabled from the start; difficulty, not the
     // settings screen, decides how often the advanced material comes up.
-    chordQualities: CHORD_QUALITIES.map((q) => q.id),
+    chordQualities: CHORD_QUALITIES.filter((q) => isBasicQuality(q.id)).map((q) => q.id),
+    colours: [...COLOUR_IDS],
     intervals: SIMPLE_INTERVALS.map((i) => i.id),
     modes: CORE_MODES.map((m) => m.id),
     progressions: CORE_PROGRESSIONS.map((p) => p.id),
@@ -131,8 +136,9 @@ export function defaultSettings(): PracticeSettings {
     theme: 'auto',
     answerDelay: 3,
     referenceKey: 0,
-    // Root position by default: a learner should meet the plain chord before
-    // any of the voicings that disguise it.
+    // The basic chord by default: a learner should meet it before any of the
+    // voicings that disguise it. The id stays `root`, as the reference sheet
+    // has always called this mode.
     referenceVoicing: 'root',
     // The curve: plain at the bottom, the way a pianist plays at the top.
     voicingMode: 'curve',
@@ -203,7 +209,14 @@ export function normaliseSettings(partial: Partial<PracticeSettings> | null | un
     // Filtering runs before the fallback: a stored list of ids this build no
     // longer knows must land on the defaults, not on an empty session.
     exerciseTypes: known(merged.exerciseTypes, EXERCISE_TYPE_IDS, base.exerciseTypes),
-    chordQualities: idList(merged.chordQualities, base.chordQualities),
+    // A saved setting naming a retired quality still counts: it enables
+    // the chord that quality is.
+    chordQualities: [...new Set(
+      idList(merged.chordQualities, base.chordQualities)
+        .map((id) => BASIC_OF[id] ?? id)
+        .filter((id) => isBasicQuality(id)),
+    )],
+    colours: idList(merged.colours, base.colours).filter((id) => COLOUR_IDS.includes(id)),
     intervals: idList(merged.intervals, base.intervals),
     modes: idList(merged.modes, base.modes),
     progressions: idList(merged.progressions, base.progressions),

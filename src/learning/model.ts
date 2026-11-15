@@ -104,7 +104,7 @@ export interface Profile {
   dailyResults: Record<string, DailyResult>;
 }
 
-export const PROFILE_VERSION = 2;
+export const PROFILE_VERSION = 3;
 export const MAX_ATTEMPTS = 4000;
 export const MAX_SESSIONS = 400;
 export const MAX_DAILY_RESULTS = 400;

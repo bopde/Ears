@@ -128,11 +128,11 @@ builds the app and deploys it on every push to `main`.
    and still hear it as a chord.
 
    ii. The **Voicing** selector above the list decides how all of them are
-   played: *Close, root position* (the default), *Close, inversion*, *Shell*,
-   *Rootless*, *Drop 2*, *Quartal* or *Upper-structure triad*. Root position
-   stacks every chord plainly from its root with the root doubled underneath
-   and nothing moving down there, so you can learn the reference sound of a
-   chord before meeting the ways a pianist disguises it. The choice is
+   played: *Close, root on the bottom* (the default), *Close, voice-led*,
+   *Shell*, *Rootless*, *Drop 2*, *Quartal* or *Upper-structure triad*. The
+   first stacks every chord plainly from its root with the root doubled
+   underneath and nothing moving down there, so you can learn the reference
+   sound of a chord before meeting the ways a pianist disguises it. The choice is
    remembered.
 
    A name here says which notes are in the voicing, how they are spaced and
@@ -159,8 +159,8 @@ builds the app and deploys it on every push to `main`.
    does not tell you — why there are two rootless forms, why a quartal voicing
    refuses to commit to major or minor, why an upper-structure triad is always
    rooted on a tension). Under them are the degrees it sounds over a set of
-   changes that shows it off, and a *Compare with root position* button that
-   plays those changes plainly and then in the voicing, back to back.
+   changes that shows it off, and a *Compare with the basic chords* button
+   that plays those changes plainly and then in the voicing, back to back.
 
    vi. The notes on screen and the notes that sound come from one function,
    `referenceVoicings` in `src/audio/reference.ts`. The display cannot drift
@@ -295,7 +295,7 @@ to do:
    with a bass note underneath. Level 5 is a rootless inversion — you hear the
    chord rather than the stack. Chord questions and changes questions draw on
    the same curve, in `src/exercises/voicing-plan.ts`, so the two move
-   together. Settings → Display → *Voicings* overrides it: *Root position
+   together. Settings → Display → *Voicings* overrides it: *Basic chords
    only* whatever the level, *Realistic* for rootless and drop 2 from the
    start, and *By level* for the curve.
 
@@ -422,8 +422,8 @@ chord questions without being told to.
    **Root only** is one held root per chord. **Root and fifth** adds the fifth
    halfway through a long chord. **Walking** is quarter notes — root, fifth,
    seventh, then a step into the next root. Which one plays is never asked:
-   the cheat sheet takes it from the voicing already chosen (root position
-   gets roots alone, everything else gets the root and its fifth, and it never
+   the cheat sheet takes it from the voicing already chosen (the basic chords
+   get roots alone, everything else gets the root and its fifth, and it never
    walks), and a session takes it from the level, as part of the same curve
    the voicings follow. Root motion is one of the main things a learner is
    trying to hear, and anything the bass plays between the roots is in the way
@@ -456,7 +456,7 @@ chord questions without being told to.
    close position. It was off in the exercises, which meant the cheat sheet
    taught a rootless Dm7 as F A C E and a question played F A C — an F major
    triad — and called it the same voicing. Close position stays plain, so the
-   *Root position only* setting and the first level sound exactly what they
+   *Basic chords only* setting and the first level sound exactly what they
    always did; everywhere else the voicing adds what a pianist would, and the
    answer is still the chord underneath. The questions say so under the
    prompt, and the reveal tags what was added: *played with 9*.

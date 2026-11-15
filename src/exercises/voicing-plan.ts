@@ -23,7 +23,15 @@ export const VOICING_MODES: Array<{ value: VoicingMode; label: string; blurb: st
   // "By level" rather than "Mixed": the note-name setting is already called
   // that, and a settings screen with two Mixeds on it explains neither.
   { value: 'curve', label: 'By level', blurb: 'Plain at first, the way a pianist plays by the top levels.' },
-  { value: 'plain', label: 'Root position only', blurb: 'Root position over a root bass, every time.' },
+  // "Basic chords", not "root position": root position is a fact about the
+  // bass, and this mode is about the hands as well — close, nothing added,
+  // the root underneath. The id stays `plain`, so a saved setting still
+  // means what it meant.
+  {
+    value: 'plain',
+    label: 'Basic chords only',
+    blurb: 'Close voicings, root on the bottom, no tensions, over a root bass.',
+  },
   { value: 'realistic', label: 'Realistic', blurb: 'Rootless and drop 2, the way you meet these chords on a stand.' },
 ];
 
@@ -55,7 +63,7 @@ export function voicingChoices(mode: VoicingMode, difficulty: number): VoicingSt
  * the point is to hear the changes at all, and a ii–V–I comped rootless is
  * one more thing in the way of that; from level 4 the point is to meet them
  * as they are played, and then "what would a pianist reach for here" is
- * exactly the right question. Root position only means root position only.
+ * exactly the right question. Basic chords only means basic chords only.
  */
 function recommendationApplies(mode: VoicingMode, difficulty: number): boolean {
   if (mode === 'plain') return false;
@@ -155,10 +163,24 @@ const CLOSE_FAMILY: ReadonlySet<VoicingStyle> = new Set<VoicingStyle>(['close', 
  * question about the chord rather than about the arrangement — the degrees
  * printed beside the notes answer it already.
  */
-function ordinalOf(degree: string): string | null {
+/**
+ * How a degree reads in "… on the bottom".
+ *
+ * An alteration is kept wherever it is news. A ♭13 under the hands is not
+ * a 13th — it is a semitone lower, and a note saying "13th on the bottom"
+ * sends the reader to the wrong key. Nor is a ♯5 a 5th.
+ *
+ * It is dropped on the third and the seventh, where it is not news: every
+ * minor chord has a ♭3 and every dominant a ♭7, the symbol has already
+ * said so, and "♭3 on the bottom" is three characters spent telling a
+ * reader what minor means.
+ */
+function bottomName(degree: string): string | null {
   const number = Number(degree.replace(/[^0-9]/g, ''));
   if (!Number.isInteger(number) || number <= 0) return null;
   if (number === 1) return 'root';
+  const altered = /[♭♯𝄫]/.test(degree);
+  if (altered && number !== 3 && number !== 7) return degree;
   const teen = number % 100;
   if (teen >= 11 && teen <= 13) return `${number}th`;
   return `${number}${['th', 'st', 'nd', 'rd'][number % 10] ?? 'th'}`;
@@ -176,7 +198,7 @@ function ordinalOf(degree: string): string | null {
 export function bottomTone(chord: Chord, voicing: Voicing): string | undefined {
   const rootPc = mod(chord.rootPc, 12);
   if (!voicing.notes.some((midi) => mod(midi, 12) === rootPc)) return undefined;
-  const tone = ordinalOf(chordDegrees(chord, [voicing.notes[0]])[0]);
+  const tone = bottomName(chordDegrees(chord, [voicing.notes[0]])[0]);
   return tone === null || tone === 'root' ? undefined : tone;
 }
 
@@ -244,3 +266,14 @@ export function approachFromAbove(settings: PracticeSettings, difficulty: number
   }
   return clamp(Math.round(difficulty), 1, 5) > highest;
 }
+
+/**
+ * What to tell a listener who hears a note the chord symbol does not name.
+ *
+ * Marking is by the written chord throughout: the extra notes belong to the
+ * voicing, and a learner who answers "m7" to a rootless Dm7 with a 9th on it
+ * has heard the chord correctly. Shared, because every question that comps a
+ * chord with tensions owes its listener the same warning — the one that asks
+ * about a chord inside a progression as much as the one that plays it alone.
+ */
+export const COLOUR_NOTE = 'Tensions may be added \u2014 name the basic quality.';

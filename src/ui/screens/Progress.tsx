@@ -20,6 +20,7 @@ const KIND_TITLE: Record<ConceptKind, string> = {
   key: 'Tonal centres',
   inversion: 'Inversions',
   voicing: 'Voicings',
+  colour: 'Colour',
 };
 
 export function Progress({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {

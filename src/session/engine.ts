@@ -360,7 +360,7 @@ export class SessionEngine {
     this.markPlaying(seconds);
   }
 
-  /** The same chords in root position — what was underneath the voicing. */
+  /** The same chords plain — what was underneath the voicing. */
   playPlain(): void {
     const question = this.state.question;
     if (!question?.playPlain) return;

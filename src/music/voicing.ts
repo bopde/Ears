@@ -1,4 +1,4 @@
-import type { Chord } from './chords';
+import { basicChord, type Chord } from './chords';
 import { colourIntervals, degreeNumber, memberName } from './degrees';
 import { REGISTER, VOICING_FLOOR, foldInto, pcAtOrAbove, type Midi } from './pitch';
 import { mod } from '../lib/util';
@@ -174,14 +174,25 @@ function selectTones(
   // keeps them above the core, and they go on *before* the thinning below, so
   // a chord that cannot hold them all sheds its 5th to make room — which is
   // what a pianist does, and why these are worth adding at all.
+  // A chord written with an extension keeps it, even in a shell. The
+  // symbol is a promise about what sounds, and root–3rd–♭7 under a
+  // heading reading G13 breaks it — which is also how a pianist voices a
+  // 13th shell: the guide tones and the 13 on top, no fifth and no 9th.
+  const named = q.intervals.filter((i) => i >= 12);
+  if (style === 'shell' && named.length) {
+    intervals = [...intervals, named[named.length - 1]];
+  }
+
   if (tensions) {
-    // A shell takes one colour at most. Its whole character is that it is
-    // three notes, and root–3rd–7th with a 9th and a 13th stacked on top
-    // is five notes and a different animal: the sparseness is the shape,
-    // so a "shell" nobody would call sparse is a wrong answer printed as
-    // a right one.
+    // A shell takes one colour at most, and none where the chord's own
+    // symbol already put something up there. Its whole character is that
+    // it is three notes, and root–3rd–7th with a 9th and a 13th stacked
+    // on top is five notes and a different animal: the sparseness is the
+    // shape, so a "shell" nobody would call sparse is a wrong answer
+    // printed as a right one.
     const colour = tensionIntervals(chord);
-    intervals = [...intervals, ...(style === 'shell' ? colour.slice(0, 1) : colour)];
+    const allowed = style === 'shell' ? colour.slice(0, named.length ? 0 : 1) : colour;
+    intervals = [...intervals, ...allowed];
   }
 
   // Thin from the droppable list first — the 5th is what a pianist leaves out.
@@ -189,6 +200,19 @@ function selectTones(
   while (intervals.length > maxNotes && droppable.length) {
     const drop = droppable.shift()!;
     intervals = intervals.filter((i) => i !== drop);
+  }
+  // Then the colour this voicing added, before anything the chord is named
+  // for. A symbol is a promise about what sounds, and shedding by one rule
+  // broke it: a chord written m13 came out ♭3 ♭7 1 11 13, with the 9 its
+  // own symbol names dropped to make room for an 11 the voicing had added.
+  // 288 of 710 rows in a progression reveal named a degree that was not
+  // there. Highest first, because the colour nearest the top is the one a
+  // pianist lets go of.
+  const own = new Set(q.intervals);
+  while (intervals.length > maxNotes) {
+    const idx = intervals.map((i, at) => (own.has(i) ? -1 : at)).filter((at) => at >= 0).pop();
+    if (idx === undefined) break;
+    intervals.splice(idx, 1);
   }
   // Still too many: shed non-essential tones from the bottom up, keeping colour.
   while (intervals.length > maxNotes) {
@@ -476,6 +500,21 @@ function spacingPenalty(notes: readonly Midi[]): number {
   return penalty;
 }
 
+/**
+ * Whether these notes still say which chord this is.
+ *
+ * The basic chord's own tones — its third or sus, its altered fifth, its
+ * seventh or sixth. Not the extensions: a 13th chord is a dominant 7th
+ * played with a 9 and a 13, and a voicing that leaves those to the soloist
+ * is still that chord.
+ */
+function statesItself(chord: Chord, notes: readonly number[]): boolean {
+  const basic = basicChord(chord).quality;
+  const essential = basic.essential ?? basic.intervals.filter((i) => i !== 0 && i !== 7);
+  const sounding = new Set(notes.map((m) => mod(m, 12)));
+  return essential.every((i) => sounding.has(mod(chord.rootPc + i, 12)));
+}
+
 export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing {
   const opts: VoicingOptions = options.rootPosition
     ? { ...options, bottomPc: chord.rootPc }
@@ -491,7 +530,18 @@ export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing 
   // order of the notes is what makes them that voicing, so they are built as
   // ordered pitch classes and only their octave is chosen.
   const form = opts.rootlessForm ?? 'A';
-  const shapes = shapesFor(chord, style, form, maxNotes, opts.tensions ?? false);
+  // A fixed shape can come out without a note the chord needs to be that
+  // chord: an upper structure over a ø7 that left out the ♭5 is a m7, and
+  // the symbol says otherwise. Those candidates are dropped before the
+  // fitting rather than after, so the shapes that do state the chord still
+  // get their turn.
+  //
+  // Not quartal, which is ambiguous on purpose — a stack of fourths
+  // refuses to commit to major or minor, which is what the cheat sheet
+  // teaches about it and the whole character of the "So What" voicing,
+  // five notes over a D with no third anywhere in them.
+  const shapes = shapesFor(chord, style, form, maxNotes, opts.tensions ?? false)
+    .filter((candidate) => style === 'quartal' || statesItself(chord, candidate.shape));
   if (shapes.length) {
     const fitted = fitShapes(shapes, lo, hi, opts.prev ?? []);
     if (fitted) return withBass(fitted, style, chord, opts, style === 'rootless' ? form : undefined);

@@ -168,18 +168,71 @@ describe('tensions are a cheat-sheet thing, not an exercise thing', () => {
       const shell = shellIntervals(chord);
       if (!shell) continue;
       built += 1;
-      const wanted = new Set(shell.map((i) => mod(i, 12)));
+      // The three guide tones, plus whatever the chord's own symbol put
+      // above the seventh: a G13 shell is root, 3rd, ♭7 and the 13, which
+      // is both how it is played and what the symbol promised.
+      const named = q.intervals.filter((i) => i >= 12);
+      const wanted = new Set(
+        [...shell, ...named.slice(-1)].map((i) => mod(i, 12)),
+      );
       const own = new Set(q.intervals.map((i) => mod(i, 12)));
       for (const tensions of [false, true]) {
         const v = voiceChord(chord, { style: 'shell', maxNotes: 5, tensions });
         const pcs = v.notes.map((m) => mod(m, 12));
         for (const pc of pcs) {
-          if (own.has(pc)) expect(wanted.has(pc), `${q.id}: ${chordDegrees(chord, v.notes).join(' ')}`).toBe(true);
+          if (own.has(pc)) {
+            expect(wanted.has(pc), `${q.id}: ${chordDegrees(chord, v.notes).join(' ')}`).toBe(true);
+          }
         }
         for (const pc of wanted) expect(pcs, q.id).toContain(pc);
       }
     }
     expect(built, 'chords that have a shell').toBeGreaterThan(10);
+  });
+
+  it('keeps a chord\u2019s own extension, even in a shell', () => {
+    // A symbol is a promise about what sounds. Root, 3rd and ♭7 under a
+    // row reading G13 breaks it — and 288 of 710 progression rows named a
+    // degree that was not there, because the thinning shed a chord's own
+    // 9th to make room for an 11th the voicing had added.
+    const g13 = makeChord(7, '13');
+    expect(chordDegrees(g13, voiceChord(g13, { style: 'shell', maxNotes: 5 }).notes).sort())
+      .toEqual(['1', '13', '3', '♭7']);
+    const m13 = makeChord(0, 'm13');
+    const spread = voiceChord(m13, { style: 'spread', maxNotes: 5, tensions: true });
+    for (const degree of ['9', '13']) {
+      expect(chordDegrees(m13, spread.notes), `m13 keeps its ${degree}`).toContain(degree);
+    }
+  });
+
+  it('never loses the note that says which chord it is', () => {
+    // A fixed shape — a stack of fourths, a triad over guide tones — can
+    // come out without one: an upper structure over a ø7 that left out the
+    // ♭5 is a m7, and the symbol says otherwise.
+    for (const q of CHORD_QUALITIES) {
+      // Every root, because which shape the fitter picks depends on where
+      // the chord sits in the register: one root proves nothing.
+      for (const root of PITCH_CLASSES) {
+        const chord = makeChord(root, q.id);
+        const basic = basicChord(chord).quality;
+        const essential = basic.essential ?? basic.intervals.filter((i) => i !== 0 && i !== 7);
+        for (const style of VOICING_STYLES) {
+          // Quartal excepted, and on purpose: a stack of fourths refuses to
+          // commit to major or minor, which is what the cheat sheet teaches
+          // about it and the whole character of the "So What" voicing —
+          // five notes over a D with no third anywhere in them.
+          if (style === 'quartal') continue;
+          for (const tensions of [false, true]) {
+            const v = voiceChord(chord, { style, maxNotes: 5, tensions });
+            const pcs = new Set(v.all.map((m) => mod(m, 12)));
+            for (const i of essential) {
+              expect(pcs.has(mod(chord.rootPc + i, 12)), `${style} ${q.id}/${root} lost +${i}`)
+                .toBe(true);
+            }
+          }
+        }
+      }
+    }
   });
 
   it('gives a shell one colour at most, because sparseness is the shape', () => {

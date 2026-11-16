@@ -7,9 +7,11 @@ import {
 import { defaultSettings, normaliseSettings } from '../session/settings';
 import { makeRng } from '../lib/rng';
 import { FakePerformer } from '../test-support';
-import { CHORD_QUALITIES, chordDegrees, chordSymbol, makeChord } from '../music/chords';
+import { CHORD_QUALITIES, basicChord, chordDegrees, chordSymbol, makeChord } from '../music/chords';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
-import { voiceChord, voiceProgression, VOICING_STYLES, type VoicingStyle } from '../music/voicing';
+import {
+  shellIntervals, voiceChord, voiceProgression, VOICING_STYLES, type VoicingStyle,
+} from '../music/voicing';
 import { PITCH_CLASSES, VOICING_FLOOR, REGISTER } from '../music/pitch';
 import { BASS_INSTRUMENT } from '../audio/instruments';
 import { applyAttempt, newSkill, weakVoicings } from '../learning/model';
@@ -121,11 +123,74 @@ describe('tensions are a cheat-sheet thing, not an exercise thing', () => {
         const sounded = new Set(
           voiceChord(chord, { style, maxNotes: 5, tensions: true }).notes.map((m) => mod(m, 12)),
         );
-        for (const i of q.essential ?? []) {
+        // What the chord is named for is the basic chord underneath it: a
+        // C13 is a C7 played with a 9 and a 13, so a shell of it keeps the
+        // 3rd and the ♭7 and leaves the colour to whoever is soloing. The
+        // extended qualities are not answers any more, and the tones that
+        // used to make them answers are not what a shape has to keep.
+        const basic = basicChord(chord).quality;
+        for (const i of basic.essential ?? []) {
           expect(sounded.has(mod(i, 12)), `${style} ${q.id} dropped +${i}`).toBe(true);
         }
       }
     }
+  });
+
+  it('plays no shell on a chord that has none', () => {
+    // A shell leaves out the fifth, which it can do because a natural fifth
+    // says nothing the rest of the chord does not. A ♭5 or a ♯5 is one of
+    // the notes the chord is named for — a ø7 without its ♭5 is a m7 — so
+    // those chords have no shell, and neither has one with no third or no
+    // seventh to make guide tones of.
+    for (const id of ['m7b5', 'dim7', '7#5', '7b5', 'maj7#5', 'dim', 'aug']) {
+      expect(shellIntervals(makeChord(0, id)), id).toBeNull();
+    }
+    for (const id of ['add9', 'madd9', 'sus2', 'sus4', 'maj', 'min']) {
+      expect(shellIntervals(makeChord(0, id)), id).toBeNull();
+    }
+    // And the ones that do have one get root, third and seventh.
+    for (const [id, want] of [
+      ['maj7', [0, 4, 11]], ['m7', [0, 3, 10]], ['7', [0, 4, 10]],
+      ['6', [0, 4, 9]], ['7sus4', [0, 5, 10]], ['13', [0, 4, 10]],
+    ] as const) {
+      expect(shellIntervals(makeChord(0, id)), id).toEqual(want);
+    }
+  });
+
+  it('voices a shell as a shell, on every chord that has one', () => {
+    // Not "the root and whatever this quality calls essential", which is a
+    // list about what survives thinning: on more than half the catalogue it
+    // runs to three tones, so a ø7 shell came out root, ♭3, ♭5 and ♭7 —
+    // the whole chord.
+    let built = 0;
+    for (const q of CHORD_QUALITIES) {
+      const chord = makeChord(0, q.id);
+      const shell = shellIntervals(chord);
+      if (!shell) continue;
+      built += 1;
+      const wanted = new Set(shell.map((i) => mod(i, 12)));
+      const own = new Set(q.intervals.map((i) => mod(i, 12)));
+      for (const tensions of [false, true]) {
+        const v = voiceChord(chord, { style: 'shell', maxNotes: 5, tensions });
+        const pcs = v.notes.map((m) => mod(m, 12));
+        for (const pc of pcs) {
+          if (own.has(pc)) expect(wanted.has(pc), `${q.id}: ${chordDegrees(chord, v.notes).join(' ')}`).toBe(true);
+        }
+        for (const pc of wanted) expect(pcs, q.id).toContain(pc);
+      }
+    }
+    expect(built, 'chords that have a shell').toBeGreaterThan(10);
+  });
+
+  it('gives a shell one colour at most, because sparseness is the shape', () => {
+    const chord = makeChord(0, 'maj7');
+    const shell = voiceChord(chord, { style: 'shell', maxNotes: 5, tensions: true });
+    expect(chordDegrees(chord, shell.notes)).toHaveLength(4);
+    expect(chordDegrees(chord, shell.notes).slice(0, 3).sort()).toEqual(['1', '3', '7']);
+    // Root, 3rd and 7th with a 9th and a 13th stacked on is five notes and
+    // a different animal.
+    const plain = voiceChord(chord, { style: 'shell', maxNotes: 5 });
+    expect(chordDegrees(chord, plain.notes).sort()).toEqual(['1', '3', '7']);
   });
 });
 
@@ -257,13 +322,20 @@ describe('naming the voicing', () => {
         // `struck` rather than every note: above level 3 the bass may walk
         // into the chord, and those approach notes are not part of it.
         const sounded = perf.struck.map((n) => n.midi).sort((a, b) => a - b).join(',');
-        const voiceAs = (style: VoicingStyle, tensions: boolean, form: 'A' | 'B') => {
+        // Which tone the voice-led candidate sits on is the third of those
+        // decisions, and it is not readable from outside either: every
+        // non-root tone of the chord is a candidate.
+        const bottoms = chord.quality.intervals
+          .filter((i) => i < 12 && i !== 0)
+          .map((i) => mod(chord.rootPc + i, 12));
+        const voiceAs = (style: VoicingStyle, tensions: boolean, form: 'A' | 'B', bottom: number) => {
           const opts = {
             style,
             maxNotes: 5,
             tensions,
             rootlessForm: form,
             ...(style === 'close' ? { bottomPc: chord.rootPc } : {}),
+            ...(style === 'spread' ? { bottomPc: bottom } : {}),
           };
           const dry = voiceChord(chord, opts);
           return voicingBass(chord, dry, d) ? voiceChord(chord, { ...opts, bass: true }) : dry;
@@ -271,19 +343,21 @@ describe('naming the voicing', () => {
         const target = q.correct.voicing as VoicingStyle;
         // Tensions are off below level 3, and above it either way is possible.
         const colours = (d >= 3 ? [true, false] : [false])
-          .flatMap((t) => (['A', 'B'] as const).map((f) => [t, f] as const))
-          .filter(([t, f]) => voiceAs(target, t, f).all.join(',') === sounded);
+          .flatMap((t) => (['A', 'B'] as const).flatMap(
+            (f) => bottoms.map((b) => [t, f, b] as const),
+          ))
+          .filter(([t, f, b]) => voiceAs(target, t, f, b).all.join(',') === sounded);
         expect(colours.length, `${d}#${seed}: nothing reproduces what sounded`).toBeGreaterThan(0);
         // More than one colour can account for the same audio — a rootless
         // ♯9 chord sounds the same whether or not tensions were allowed,
         // because it already has a 9th of its own. So the check is that the
         // options are distinct under *some* colour consistent with what was
         // heard, which is the most the audio can pin down from outside.
-        const distinctUnder = ([t, f]: readonly [boolean, 'A' | 'B']) => {
+        const distinctUnder = ([t, f, b]: readonly [boolean, 'A' | 'B', number]) => {
           const heard = new Map<string, string[]>();
           for (const option of q.fields[0].options) {
             const style = option.id as VoicingStyle;
-            const key = voiceAs(style, t, f).all.join(',');
+            const key = voiceAs(style, t, f, b).all.join(',');
             heard.set(key, [...(heard.get(key) ?? []), style]);
           }
           return [...heard.values()].every((styles) => styles.length === 1);
@@ -293,6 +367,68 @@ describe('naming the voicing', () => {
           .toBe(true);
       }
     }
+  });
+
+  it('never offers an answer that is not true of what sounded', () => {
+    // Both of these were reported from use. The answers name what is at
+    // the bottom — "Close, root on the bottom" against "Close, another
+    // tone on the bottom" — and the voice-led candidate, left to pick its
+    // own position with no chord before it to lead from, often picked
+    // root position. The answer then described a chord that had not
+    // sounded, and a listener who heard the root underneath and said so
+    // was marked wrong. It happened in 353 of 2,000 questions.
+    let close = 0;
+    let spread = 0;
+    let shells = 0;
+    for (let d = 1; d <= 5; d++) {
+      for (let seed = 0; seed < 80; seed++) {
+        const q = type.generate(context(d, seed * 19 + d));
+        if (!q) continue;
+        const perf = new FakePerformer();
+        q.play(perf.asPerformer());
+        const stack = perf.struck
+          .filter((n) => n.instrument !== BASS_INSTRUMENT)
+          .map((n) => n.midi)
+          .sort((a, b) => a - b);
+        const where = `${d}#${seed} ${q.correct.voicing}`;
+        const onRoot = mod(stack[0], 12) === mod(q.keyPc!, 12);
+        if (q.correct.voicing === 'close') {
+          expect(onRoot, `${where}: answer says the root is underneath`).toBe(true);
+          close += 1;
+        }
+        if (q.correct.voicing === 'spread') {
+          expect(onRoot, `${where}: answer says another tone is underneath`).toBe(false);
+          spread += 1;
+        }
+        if (q.correct.voicing === 'shell') {
+          // The other report: "it answered shell, but had all the notes
+          // present". A shell is the root, the third and the seventh — it
+          // was being built from each quality's "essential" list, which
+          // runs to three tones on more than half the catalogue, so a ø7
+          // shell was the whole chord.
+          const chord = chordOf(q);
+          const shell = shellIntervals(chord);
+          expect(shell, `${where}: a chord with no shell was offered one`).not.toBeNull();
+          const wanted = new Set(shell!.map((i) => mod(chord.rootPc + i, 12)));
+          const own = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+          for (const midi of stack) {
+            const pc = mod(midi, 12);
+            if (own.has(pc)) {
+              expect(wanted.has(pc), `${where}: ${chordDegrees(chord, [midi])[0]} is not a guide tone`)
+                .toBe(true);
+            }
+          }
+          // And one colour at most on top of them, because the sparseness
+          // is the shape.
+          expect(stack.length, `${where}: ${chordDegrees(chord, stack).join(' ')}`)
+            .toBeLessThanOrEqual(4);
+          shells += 1;
+        }
+      }
+    }
+    expect(close, 'close answers checked').toBeGreaterThan(20);
+    expect(spread, 'voice-led answers checked').toBeGreaterThan(20);
+    expect(shells, 'shell answers checked').toBeGreaterThan(20);
   });
 
   it('states the root under every shape that does not state its own', () => {
@@ -455,3 +591,12 @@ describe('the new exercise types fit the existing seams', () => {
     }
   });
 });
+
+/** The chord a voicing question printed in its prompt. */
+function chordOf(q: { prompt: { sub?: string }; keyPc: number | null }) {
+  const symbol = q.prompt.sub!.split(' — ')[0];
+  const quality = CHORD_QUALITIES.find(
+    (c) => chordSymbol(makeChord(q.keyPc!, c.id), settings.accidental) === symbol,
+  )!;
+  return makeChord(q.keyPc!, quality.id);
+}

@@ -7,7 +7,8 @@ import {
 import { soundedChord } from '../audio/reference';
 import { formatList } from './chord';
 import {
-  voiceChord, voiceProgression, type RootlessForm, type Voicing, type VoicingStyle,
+  shellIntervals, voiceChord, voiceProgression,
+  type RootlessForm, type Voicing, type VoicingStyle,
 } from '../music/voicing';
 import {
   NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, handsLabel, voicingAnswerLabel, voicingBass,
@@ -65,6 +66,11 @@ interface Colour {
   /** On or off for the whole question, never per shape: see `colourFor`. */
   tensions: boolean;
   form: RootlessForm;
+  /**
+   * Which tone the voice-led candidate puts underneath, as an index into
+   * the chord's own tones. Never 0 — see `voiceIn`.
+   */
+  bottom: number;
 }
 
 /**
@@ -84,21 +90,73 @@ function colourFor(ctx: GenContext, difficulty: number): Colour {
     difficulty,
     tensions: difficulty >= 3 && ctx.rng.chance(0.5),
     form: ctx.rng.chance(0.5) ? 'A' : 'B',
+    bottom: ctx.rng.range(1, 3),
   };
 }
 
+/**
+ * One candidate shape, voiced so that its answer describes it truthfully.
+ *
+ * The two close shapes are offered as "root on the bottom" and "another
+ * tone on the bottom", because a single chord has no chord before it for
+ * voice leading to mean anything against. So the bottom note is what the
+ * two answers are about, and both have to be made true: the first is
+ * pinned to the root, and the second to something else.
+ *
+ * Left to itself the voice-led candidate picked whichever position scored
+ * best, and with nothing to lead from that was often root position — so
+ * the answer read "another tone on the bottom" over a chord with its root
+ * underneath, and a listener who heard that correctly was marked wrong.
+ * It happened in 353 of 2,000 questions.
+ */
 function voiceIn(chord: Chord, style: VoicingStyle, colour: Colour): Voicing {
+  const tones = chord.quality.intervals.filter((i) => i < 12 && i !== 0);
+  const other = tones.length
+    ? mod(chord.rootPc + tones[colour.bottom % tones.length], 12)
+    : chord.rootPc;
   const opts = {
     style,
     maxNotes: 5,
     rootlessForm: colour.form,
     tensions: colour.tensions,
     ...(style === 'close' ? { bottomPc: chord.rootPc } : {}),
+    ...(style === 'spread' ? { bottomPc: other } : {}),
   };
   const dry = voiceChord(chord, opts);
   return voicingBass(chord, dry, colour.difficulty)
     ? voiceChord(chord, { ...opts, bass: true })
     : dry;
+}
+
+/**
+ * Whether a candidate really is the shape its answer names.
+ *
+ * The shapes are built by a search that scores spacing and voice leading,
+ * and `bottomPc` is one term in that score rather than a promise. Most of
+ * the time it wins; sometimes the search finds something it likes better,
+ * and then the answer on the button describes a chord that did not sound.
+ *
+ * Both of the ways that has gone wrong were reported from use: a B♭∆13
+ * offered as "root on the bottom" with its 3rd underneath, and a shell
+ * answer on an add9 chord, which has no seventh and so has no shell to
+ * play. Nothing here can make the search infallible, so this checks the
+ * result instead and the question moves to another chord.
+ */
+function honoursLabel(chord: Chord, style: VoicingStyle, v: Voicing): boolean {
+  const onRoot = mod(v.notes[0], 12) === mod(chord.rootPc, 12);
+  if (style === 'close') return onRoot;
+  if (style === 'spread') return !onRoot;
+  if (style !== 'shell') return true;
+  const shell = shellIntervals(chord);
+  if (!shell) return false;
+  const wanted = new Set(shell.map((i) => mod(chord.rootPc + i, 12)));
+  const own = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+  // Every chord tone in it is one of the three, and all three are there.
+  // A tension on top is allowed: the question turns those on for every
+  // shape at once, so they are never the tell.
+  const pcs = v.notes.map((m) => mod(m, 12));
+  return pcs.every((pc) => !own.has(pc) || wanted.has(pc))
+    && [...wanted].every((pc) => pcs.includes(pc));
 }
 
 export const voicingExercise: ExerciseType = {
@@ -131,6 +189,9 @@ export const voicingExercise: ExerciseType = {
       const candidate = makeChord(rootPc, quality.id);
       const byShape = new Map<VoicingStyle, Voicing>();
       for (const style of shapes) byShape.set(style, voiceIn(candidate, style, colour));
+      // Every answer this chord could be offered has to be true of what it
+      // would sound, or the question has a button that lies.
+      if (shapes.some((style) => !honoursLabel(candidate, style, byShape.get(style)!))) continue;
       // Pairwise distinct, not merely distinct from the answer: two options
       // that sound the same as each other are two options that cannot both be
       // wrong, and the question would be unanswerable either way.
@@ -199,7 +260,7 @@ export const voicingExercise: ExerciseType = {
       playPlain: (perf) => {
         // Plain means plain: no tensions and no lever, whatever the question
         // used. This is the chord underneath, not the question again.
-        const plain = voiceIn(chord!, 'close', { difficulty: 1, tensions: false, form: 'A' });
+        const plain = voiceIn(chord!, 'close', { difficulty: 1, tensions: false, form: 'A', bottom: 1 });
         return playVoicing(perf, chord!, plain, { roll: 0, seconds: 3, velocity: 0.66 });
       },
       hint: {

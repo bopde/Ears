@@ -1,5 +1,5 @@
 import type { Chord } from './chords';
-import { colourIntervals } from './degrees';
+import { colourIntervals, degreeNumber, memberName } from './degrees';
 import { REGISTER, VOICING_FLOOR, foldInto, pcAtOrAbove, type Midi } from './pitch';
 import { mod } from '../lib/util';
 
@@ -115,6 +115,38 @@ interface Tone {
   essential: boolean;
 }
 
+/**
+ * The three notes a shell voicing is: root, third, seventh.
+ *
+ * The third is whatever stands where a third would — a sus chord's 4th or
+ * 2nd — and the seventh is a sixth where the chord has one instead.
+ *
+ * Null where the chord has no shell to play, which is two cases. One is a
+ * chord with no third or no seventh: a shell is the guide tones, and a
+ * chord with no guide tones has none. The other is a chord whose fifth is
+ * altered. What a shell leaves out is the fifth, and it can leave it out
+ * because a natural fifth says nothing the rest of the chord does not —
+ * but a ♭5 or a ♯5 is one of the notes the chord is named for, and a
+ * half-diminished chord without its ♭5 is a minor 7th. Keeping it would
+ * mean playing the whole chord and calling the result sparse, which is
+ * what a shell is not.
+ */
+export function shellIntervals(chord: Chord): number[] | null {
+  const q = chord.quality;
+  const numberOf = (i: number) => degreeNumber(memberName(q, i));
+  const find = (numbers: readonly number[]) =>
+    q.intervals.find((i) => i < 12 && numbers.includes(numberOf(i)));
+  const third = find([3, 2, 4]);
+  const seventh = find([7, 6]);
+  if (third === undefined || seventh === undefined) return null;
+  const fifth = q.intervals.find((i) => i < 12 && numberOf(i) === 5);
+  if (fifth !== undefined && mod(fifth, 12) !== 7) return null;
+  return [0, third, seventh];
+}
+
+/** Whether this chord has a shell to play at all. */
+export const hasShell = (chord: Chord): boolean => shellIntervals(chord) !== null;
+
 function selectTones(
   chord: Chord,
   style: VoicingStyle,
@@ -126,7 +158,13 @@ function selectTones(
   let intervals = [...q.intervals];
 
   if (style === 'shell') {
-    intervals = intervals.filter((i) => i === 0 || essential.has(i));
+    // Root, third and seventh — the three notes a shell is. Not "the root
+    // and whatever this quality calls essential", which is a list about
+    // what survives thinning and runs to three tones on half the
+    // catalogue: a ø7 came out root, ♭3, ♭5 and ♭7, which is the whole
+    // chord, and a 6/9 came out root, 3, 6 and 9.
+    const shell = shellIntervals(chord);
+    if (shell) intervals = shell;
   } else if (style === 'rootless' && intervals.length >= 4) {
     intervals = intervals.filter((i) => i !== 0);
   }
@@ -136,7 +174,15 @@ function selectTones(
   // keeps them above the core, and they go on *before* the thinning below, so
   // a chord that cannot hold them all sheds its 5th to make room — which is
   // what a pianist does, and why these are worth adding at all.
-  if (tensions) intervals = [...intervals, ...tensionIntervals(chord)];
+  if (tensions) {
+    // A shell takes one colour at most. Its whole character is that it is
+    // three notes, and root–3rd–7th with a 9th and a 13th stacked on top
+    // is five notes and a different animal: the sparseness is the shape,
+    // so a "shell" nobody would call sparse is a wrong answer printed as
+    // a right one.
+    const colour = tensionIntervals(chord);
+    intervals = [...intervals, ...(style === 'shell' ? colour.slice(0, 1) : colour)];
+  }
 
   // Thin from the droppable list first — the 5th is what a pianist leaves out.
   const droppable = [...(q.droppable ?? [7])];

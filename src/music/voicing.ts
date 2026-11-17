@@ -152,6 +152,7 @@ function selectTones(
   style: VoicingStyle,
   maxNotes: number,
   tensions: boolean,
+  bottomPc?: number,
 ): Tone[] {
   const q = chord.quality;
   const essential = new Set(q.essential ?? q.intervals.filter((i) => i !== 0 && i !== 7));
@@ -195,30 +196,50 @@ function selectTones(
     intervals = [...intervals, ...allowed];
   }
 
-  // Thin from the droppable list first — the 5th is what a pianist leaves out.
-  const droppable = [...(q.droppable ?? [7])];
-  while (intervals.length > maxNotes && droppable.length) {
-    const drop = droppable.shift()!;
-    intervals = intervals.filter((i) => i !== drop);
+  // What has to survive the thinning, whatever else goes.
+  //
+  // The tone the caller pinned to the bottom, because shedding it and then
+  // stacking from it anyway puts back a note the voicing does not hold and
+  // pushes another off the top: a dominant pinned on its 5th came out
+  // 5 3 ♭7 9 13, with no root in it at all.
+  //
+  // Which is also what keeps a close voicing's root: the only tone that
+  // was ever shed under it is the fifth, and a close voicing pinned on its
+  // fifth is where that went wrong. The root itself is safe without a rule
+  // of its own — nothing below sheds it, and a close voicing without one
+  // is a rootless voicing, which was a second true answer to a question
+  // whose label read "root on the bottom".
+  const closeFamily = style === 'close' || style === 'spread';
+  const keep = new Set<number>();
+  if (bottomPc !== undefined) {
+    const at = intervals.find((i) => mod(chord.rootPc + i, 12) === mod(bottomPc, 12));
+    if (at !== undefined) keep.add(at);
   }
-  // Then the colour this voicing added, before anything the chord is named
-  // for. A symbol is a promise about what sounds, and shedding by one rule
-  // broke it: a chord written m13 came out ♭3 ♭7 1 11 13, with the 9 its
-  // own symbol names dropped to make room for an 11 the voicing had added.
-  // 288 of 710 rows in a progression reveal named a degree that was not
-  // there. Highest first, because the colour nearest the top is the one a
-  // pianist lets go of.
+
+  // What gives way, in order. Colour goes first for a close voicing, since
+  // a close voicing is meant to be the chord itself and the fifth is part
+  // of that; everywhere else the fifth goes first, which is what a pianist
+  // leaves out. Then colour, highest first — the one nearest the top is
+  // the one a hand lets go of. Then whatever is not essential.
+  //
+  // Colour before anything the chord is named for, either way. Shedding by
+  // one rule broke the symbol's promise: a chord written m13 came out
+  // ♭3 ♭7 1 11 13, its own 9th dropped to make room for an 11th the
+  // voicing had added, in 288 of 710 progression rows.
   const own = new Set(q.intervals);
+  const droppable = (q.droppable ?? [7]).filter((i) => !keep.has(i));
+  const nextToShed = (): number | undefined => {
+    const colour = intervals.filter((i) => !own.has(i) && !keep.has(i));
+    const fifth = droppable.find((i) => intervals.includes(i));
+    if (closeFamily && colour.length) return colour[colour.length - 1];
+    if (fifth !== undefined) return fifth;
+    if (colour.length) return colour[colour.length - 1];
+    return intervals.find((i) => i !== 0 && !essential.has(i) && !keep.has(i));
+  };
   while (intervals.length > maxNotes) {
-    const idx = intervals.map((i, at) => (own.has(i) ? -1 : at)).filter((at) => at >= 0).pop();
-    if (idx === undefined) break;
-    intervals.splice(idx, 1);
-  }
-  // Still too many: shed non-essential tones from the bottom up, keeping colour.
-  while (intervals.length > maxNotes) {
-    const idx = intervals.findIndex((i) => i !== 0 && !essential.has(i));
-    if (idx === -1) break;
-    intervals.splice(idx, 1);
+    const drop = nextToShed();
+    if (drop === undefined) break;
+    intervals = intervals.filter((i) => i !== drop);
   }
 
   return intervals.map((i) => ({
@@ -523,7 +544,7 @@ export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing 
   const lo = opts.lo ?? REGISTER.voicing.lo;
   const hi = opts.hi ?? REGISTER.voicing.hi;
   const maxNotes = opts.maxNotes ?? 5;
-  const tones = selectTones(chord, style, maxNotes, opts.tensions ?? false);
+  const tones = selectTones(chord, style, maxNotes, opts.tensions ?? false, opts.bottomPc);
   const core = tones.filter((t) => !t.upper);
 
   // Three styles are fixed shapes rather than a stack to be searched: the
@@ -550,11 +571,19 @@ export function voiceChord(chord: Chord, options: VoicingOptions = {}): Voicing 
   // Candidate bottom notes: each core tone as the lowest voice (i.e. each
   // inversion), in each octave that fits the register.
   const rotations = style === 'close' || opts.bottomPc !== undefined ? 1 : core.length;
+  // Which core tone was pinned, so the stack can be rotated to start there.
+  // Lifting it to the front and leaving the rest where they were is not an
+  // inversion — it is the same stack with one note dropped an octave, and
+  // an F6 pinned on its 3rd came out A F C D, seventeen semitones wide
+  // under a label reading "Close".
+  const pinned = opts.bottomPc === undefined ? undefined : mod(opts.bottomPc, 12);
+  const pinnedAt = pinned === undefined ? -1 : core.findIndex((t) => t.pc === pinned);
   const build = (ceiling: Midi): Midi[][] => {
     const out: Midi[][] = [];
     for (let r = 0; r < Math.max(1, rotations); r++) {
-      const rotated = [...core.slice(r), ...core.slice(0, r)];
-      const bottomPc = opts.bottomPc !== undefined ? mod(opts.bottomPc, 12) : rotated[0]?.pc;
+      const from = pinnedAt >= 0 ? pinnedAt : r;
+      const rotated = [...core.slice(from), ...core.slice(0, from)];
+      const bottomPc = pinned ?? rotated[0]?.pc;
       if (bottomPc === undefined) continue;
       const ordered = [
         ...rotated.filter((t) => t.pc === bottomPc).slice(0, 1),

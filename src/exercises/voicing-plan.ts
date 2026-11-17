@@ -210,14 +210,22 @@ export function bottomTone(chord: Chord, voicing: Voicing): string | undefined {
  * does not know about and which `namedInversion` reports separately.
  */
 export function handsLabel(chord: Chord, voicing: Voicing): string {
-  const family = CLOSE_FAMILY.has(voicing.style)
-    ? 'Close'
-    : voicingLabelFor(voicing.style, voicing.form);
+  const close = CLOSE_FAMILY.has(voicing.style);
+  const family = close ? 'Close' : voicingLabelFor(voicing.style, voicing.form);
+  if (close) {
+    // A close voicing's name is about its lowest note, so it names the note
+    // that is really there. It used to say "root on the bottom" whenever it
+    // could not find one — including when the hands had shed the root and
+    // started on the 5th, where the label was not merely vague but false,
+    // and "Rootless" was a second true answer to the same question.
+    const lowest = bottomName(chordDegrees(chord, [voicing.notes[0]])[0]);
+    if (lowest === 'root') return `${family}, root on the bottom`;
+    return lowest === null ? family : `${family}  ·  ${lowest} on the bottom`;
+  }
+  // The other families name themselves, and add the tone only where the
+  // root is in the voicing for it to be measured against.
   const tone = bottomTone(chord, voicing);
-  if (tone) return `${family}  ·  ${tone} on the bottom`;
-  // A close voicing says so, because "Close" alone would leave a reader
-  // wondering what was underneath. The others do not need it.
-  return CLOSE_FAMILY.has(voicing.style) ? `${family}, root on the bottom` : family;
+  return tone ? `${family}  ·  ${tone} on the bottom` : family;
 }
 
 /** The styles a question can be asked about — the ones the curve can produce. */

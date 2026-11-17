@@ -25,6 +25,12 @@ export interface RecordedNote {
 export class FakePerformer {
   notes: RecordedNote[] = [];
   chords: Voicing[] = [];
+  /**
+   * Where each recorded chord sits in the bar count, so a test can ask
+   * what the bass was doing under it rather than guess from the order
+   * the notes were scheduled in.
+   */
+  bars: Array<{ beat: number; beats: number }> = [];
   melodies: PhraseNote[][] = [];
   progressions: number[] = [];
   /** The bass line underneath a progression, in schedule order. */
@@ -87,6 +93,7 @@ export class FakePerformer {
   ): number {
     this.chords.push(voicing);
     const beats = opts.beats ?? 4;
+    this.bars.push({ beat: 0, beats });
     const soften = new Set((opts.soften?.pcs ?? []).map((pc) => ((pc % 12) + 12) % 12));
     for (const midi of voicing.notes) {
       // The velocities matter to a test now that a question can bury a voice,
@@ -167,6 +174,7 @@ export class FakePerformer {
     for (let i = 0; i < chords.length; i++) {
       const c = chords[i];
       this.chords.push(c.voicing);
+      this.bars.push({ beat, beats: c.beats });
       for (const midi of c.voicing.notes) {
         this.note(midi, origin + beat * this.beatSeconds, c.beats * this.beatSeconds);
       }

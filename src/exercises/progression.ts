@@ -10,7 +10,9 @@ import {
   CHORD_QUALITIES, basicChord, chordConceptId, chordSymbol, colourSounded, makeChord,
   nearestQualities, type Chord,
 } from '../music/chords';
-import { voiceChord, voiceProgression, type Voicing, type VoicingStyle } from '../music/voicing';
+import {
+  couldSound, voiceChord, voiceProgression, type Voicing, type VoicingStyle,
+} from '../music/voicing';
 import {
   COLOUR_NOTE, approachFromAbove, bassStyleFor, chooseVoicing, voicingLabel,
 } from './voicing-plan';
@@ -332,6 +334,11 @@ export const progressionChordExercise: ExerciseType = {
     let chosen: { index: number; distractors: Chord[] } | null = null;
     for (const i of order) {
       const sounding = soundedPcs(changes, landings, i);
+      // A chord that did not sound what makes it itself cannot be named.
+      // A quartal voicing takes the fourths that fit, and a D♭m11 voiced
+      // 1 5 ♭7 9 11 has nothing in it that says minor — every answer
+      // offered was a minor chord, and none of them was true of it.
+      if (!couldSound(basicChord(realised[i].chord), sounding, true)) continue;
       const live = unambiguousChords(
         chordDistractors(ctx, realised, i), realised[i].chord, sounding,
       );

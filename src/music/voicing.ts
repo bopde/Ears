@@ -343,11 +343,20 @@ export function couldSound(
   for (const pc of sounding) {
     if (!available.has(mod(pc, 12))) return false;
   }
-  // A ♯11 or a ♭13 is colour *above* a fifth, so the fifth has to be there.
-  // With the chord's own fifth missing from what sounded, the same pitch is
-  // an altered fifth and the chord that owns it is a different chord: C E
-  // G♯ B♭ is a 7♯5, and C E G A♭ B♭ is a 7 played with a ♭13.
-  if (chord.quality.intervals.some((i) => mod(i, 12) === 7)
+  // A ♯11 or a ♭13 is colour *above* a fifth, so with the chord's own fifth
+  // missing from what sounded, the same pitch can be an altered fifth and
+  // the chord that owns it a different chord: C E G♯ B♭ is a 7♯5, and C E
+  // G A♭ B♭ is a 7 played with a ♭13.
+  //
+  // Only where it is the one note outside the chord, though. A chord
+  // sounding a 9 as well is a tension stack, and C E G♭ B♭ D is a C9♯11
+  // just as truly as it is a C7♭5 with a 9 on it — the same five notes
+  // under two names. Reading it only the second way had the quiz offer
+  // both as answers, in 124 of 2,750 questions, with no way to choose.
+  const own = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+  const outside = [...sounding].filter((pc) => !own.has(mod(pc, 12)));
+  if (outside.length === 1
+    && chord.quality.intervals.some((i) => mod(i, 12) === 7)
     && !sounding.has(mod(chord.rootPc + 7, 12))) {
     for (const semitones of [6, 8]) {
       if (sounding.has(mod(chord.rootPc + semitones, 12))) return false;

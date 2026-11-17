@@ -11,7 +11,7 @@ import {
   type RootlessForm, type Voicing, type VoicingStyle,
 } from '../music/voicing';
 import {
-  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, handsLabel, voicingAnswerLabel, voicingBass,
+  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, handsLabel, labelsTrueOf, voicingAnswerLabel, voicingBass,
 } from './voicing-plan';
 import { Performer } from '../audio/performer';
 import { approachInto, chooseLever, playVoicing } from './levers';
@@ -192,6 +192,12 @@ export const voicingExercise: ExerciseType = {
       // Every answer this chord could be offered has to be true of what it
       // would sound, or the question has a button that lies.
       if (shapes.some((style) => !honoursLabel(candidate, style, byShape.get(style)!))) continue;
+      // And only one of the five labels is true of the voicing that will
+      // actually sound. Close and shell are the pair that overlap: a
+      // seventh chord voiced close, with the 5th shed to fit the budget,
+      // is root–3rd–7th in a row and answers to both names.
+      const fits = labelsTrueOf(candidate, byShape.get(target)!.notes);
+      if (fits.length !== 1 || fits[0] !== target) continue;
       // Pairwise distinct, not merely distinct from the answer: two options
       // that sound the same as each other are two options that cannot both be
       // wrong, and the question would be unanswerable either way.
@@ -336,8 +342,16 @@ export const guideToneExercise: ExerciseType = {
     const level = clamp(Math.round(ctx.difficulty), 1, 5);
 
     const answer = line.join('-');
-    // Wrong answers are the same line with one or two notes moved, so the only
-    // way to reject one is to have followed the voice the whole way.
+    // What each chord actually sounds, which is what a wrong line has to
+    // depart from. Swapping a 3rd for the 7th of the same chord does not:
+    // both notes are right there in the shell, so a learner who heard
+    // every note of the line correctly could still not reject it. The
+    // note that makes a line wrong has to be one the chord did not play.
+    const sounded = voicings.map((v) => new Set(v.all.map((m) => mod(m, 12))));
+    const neighbours = (at: number, pc: number) =>
+      [1, -1, 2, -2]
+        .map((d) => mod(pc + d, 12) as PitchClass)
+        .filter((n) => !sounded[at].has(n));
     const alternatives = new Set<string>([answer]);
     const wrong: string[] = [];
     for (let attempt = 0; attempt < 60 && wrong.length < 7; attempt++) {
@@ -345,9 +359,8 @@ export const guideToneExercise: ExerciseType = {
       const swaps = ctx.rng.chance(0.6) ? 1 : 2;
       for (let k = 0; k < swaps; k++) {
         const at = ctx.rng.int(copy.length);
-        const t = tones[at];
-        // Swap to the other guide tone of that chord, or to a neighbour of it.
-        copy[at] = (copy[at] === t.third ? t.seventh : t.third) as PitchClass;
+        const near = neighbours(at, copy[at]);
+        if (near.length) copy[at] = ctx.rng.pick(near);
       }
       const key = copy.join('-');
       if (!alternatives.has(key)) {

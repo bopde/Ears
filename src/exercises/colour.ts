@@ -131,9 +131,7 @@ export const colourExercise: ExerciseType = {
     // against a question whose prompt says one note were free eliminations,
     // and they crowded the grid besides. A pair with no rival pair is not a
     // question, so that one is asked as a single instead.
-    const shaped = (pair: boolean) => pairOptions(options, level)
-      .filter((id) => id.includes('+') === pair);
-    const second = wantPair && shaped(true).length >= 2 ? ctx.rng.pick(partners) : null;
+    const second = wantPair && setsOf(options, 2).length >= 2 ? ctx.rng.pick(partners) : null;
     const answer = second ? [colour, second].sort().join('+') : colour;
 
     const tones = tonesOf(answer);
@@ -154,11 +152,18 @@ export const colourExercise: ExerciseType = {
     const all = [...voicing.notes, ...added];
     const bassMidi = chord.rootPc + 36;
 
-    // Two at least, both ways: the chord was chosen for having two colours,
-    // and a pair is only asked for where a second pair exists to offer
-    // against it. The shared check that no field is ever shorter than that
-    // is in exercises.test.ts, over every type at every level.
-    const answers = shaped(answer.includes('+'));
+    // Wrong answers of the same size as the right one. Offering a single
+    // against a question whose prompt says three notes is a free
+    // elimination, and it crowds the grid besides — and for the altered
+    // sound it was worse than free, because the singles it was offered
+    // against were its own members, each of which had just sounded.
+    //
+    // Two at least, both ways: the chord was chosen for having two
+    // colours, and a larger set is only asked for where a second of that
+    // size exists to offer against it. The shared check that no field is
+    // ever shorter than that is in exercises.test.ts, over every type at
+    // every level.
+    const answers = setsOf(options, sizeOf(answer));
     const n = optionCount(ctx.difficulty, answers.length);
     const distractors = ctx.rng.sample(answers.filter((id) => id !== answer), n - 1);
 
@@ -181,7 +186,11 @@ export const colourExercise: ExerciseType = {
       prompt: {
         // The chord is given, so the question is only about what is on it.
         title: `What was added to this ${chordSymbol(chord, ctx.settings.accidental)}?`,
-        sub: second ? 'Two notes above the chord' : 'One note above the chord',
+        // How many notes were added, counted rather than assumed: the
+        // altered sound is three, and the prompt used to say one.
+        sub: `${['', 'One', 'Two', 'Three'][tones.length] ?? tones.length} note${
+          tones.length === 1 ? '' : 's'
+        } above the chord`,
       },
       fields: [
         {
@@ -243,35 +252,47 @@ export const colourExercise: ExerciseType = {
 };
 
 /**
- * Every answer the question may offer, singles and pairs together.
+ * Every answer of a given size this chord could be asked about.
  *
- * A pair is one answer rather than two, the way the altered set is: what a
- * listener hears is a chord with two notes on it, and naming them is one
- * act. Only the pairs that could actually sound are offered, so the option
- * list stays a list of things the chord can do.
+ * A set is one answer rather than several, the way the altered sound is:
+ * what a listener hears is a chord with notes on it, and naming them is
+ * one act. Only the sets this chord could actually sound are built, so the
+ * option list stays a list of things it can do.
+ *
+ * Never two readings of one degree — a chord sounding a 9 and a ♭9 is
+ * sounding a semitone, not two colours — with one exception, which is why
+ * the exception has a name. The altered sound is ♭9, ♯9 and ♭13 together,
+ * two of them ninths, and it is heard as one thing.
  */
-function pairOptions(options: readonly string[], level: number): string[] {
+function setsOf(options: readonly string[], size: number): string[] {
   const singles = options.filter((id) => id !== 'alt');
-  const out = [...options];
-  if (level < PAIRS_FROM) return out;
-  for (let i = 0; i < singles.length; i++) {
-    for (let j = i + 1; j < singles.length; j++) {
-      // Never two readings of one degree. A chord sounding both a 9 and a
-      // ♭9 is sounding a semitone, not two colours, and no chord scale has
-      // both: the symbol says which ninth it is.
-      if (degreeOf(singles[i]) === degreeOf(singles[j])) continue;
-      out.push([singles[i], singles[j]].sort().join('+'));
+  const out: string[] = [];
+  const walk = (from: number, taken: string[]) => {
+    if (taken.length === size) {
+      out.push(taken.length === 1 ? taken[0] : [...taken].sort().join('+'));
+      return;
     }
-  }
+    for (let i = from; i < singles.length; i += 1) {
+      if (taken.some((id) => degreeOf(id) === degreeOf(singles[i]))) continue;
+      walk(i + 1, [...taken, singles[i]]);
+    }
+  };
+  walk(0, []);
+  if (size === ALT_SET.length && options.includes('alt')) out.push('alt');
   return out;
 }
+
+/** How many notes an answer stands for. */
+const sizeOf = (id: string): number => (id === 'alt' ? ALT_SET.length : id.split('+').length);
 
 /** Which degree a colour is an alteration of: ♭9, 9 and ♯9 are all ninths. */
 const degreeOf = (id: string): number => Number(COLOUR_NAMES[id]?.replace(/\D/g, '') ?? 0);
 
 /** Exported for the tests that check a question never offers a stray note. */
-export const colourOptionsFor = (chord: Chord, level: number): string[] =>
-  pairOptions(colourOptions(chord, level), level);
+export const colourOptionsFor = (chord: Chord, level: number): string[] => {
+  const options = colourOptions(chord, level);
+  return [1, 2, ALT_SET.length].flatMap((size) => setsOf(options, size));
+};
 
 /** "a 9", but "an 11" and "an ♯11". */
 const article = (tone: string): string =>

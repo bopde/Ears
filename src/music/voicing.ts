@@ -141,7 +141,36 @@ export function shellIntervals(chord: Chord): number[] | null {
   if (third === undefined || seventh === undefined) return null;
   const fifth = q.intervals.find((i) => i < 12 && numberOf(i) === 5);
   if (fifth !== undefined && mod(fifth, 12) !== 7) return null;
+  // Four notes at the very most. A shell is the guide tones and at most
+  // one thing above them, and a chord that needs more than one has none:
+  // an altered dominant is only altered if an altered 9th and an altered
+  // 5th or 13th both sound, which is five notes and as big as the close
+  // voicing it would have to be told apart from.
+  if (shellExtensions(chord).length > 1) return null;
   return [0, third, seventh];
+}
+
+/**
+ * The chord's own extensions a shell has to keep.
+ *
+ * The altered ones, one per degree, because the alterations are what make
+ * an altered chord that chord — a 7alt sounding 3 ♭7 1 ♭13 is a 7♯5 and
+ * nothing else. Where none is altered, the highest: a G13 shell is the
+ * guide tones and the 13 on top, which is both how it is played and what
+ * the symbol promised.
+ */
+function shellExtensions(chord: Chord): number[] {
+  const q = chord.quality;
+  const named = q.intervals.filter((i) => i >= 12);
+  if (!named.length) return [];
+  const altered = named.filter((i) => /[♭♯]/.test(memberName(q, i)));
+  if (!altered.length) return named.slice(-1);
+  const byDegree = new Map<number, number>();
+  for (const interval of altered) {
+    const degree = degreeNumber(memberName(q, interval));
+    if (!byDegree.has(degree)) byDegree.set(degree, interval);
+  }
+  return [...byDegree.values()].sort((a, b) => a - b);
 }
 
 /** Whether this chord has a shell to play at all. */
@@ -179,10 +208,8 @@ function selectTones(
   // symbol is a promise about what sounds, and root–3rd–♭7 under a
   // heading reading G13 breaks it — which is also how a pianist voices a
   // 13th shell: the guide tones and the 13 on top, no fifth and no 9th.
-  const named = q.intervals.filter((i) => i >= 12);
-  if (style === 'shell' && named.length) {
-    intervals = [...intervals, named[named.length - 1]];
-  }
+  const named = style === 'shell' ? shellExtensions(chord) : [];
+  if (named.length) intervals = [...intervals, ...named];
 
   if (tensions) {
     // A shell takes one colour at most, and none where the chord's own

@@ -13,6 +13,7 @@ import {
   shellIntervals, voiceChord, voiceProgression, VOICING_STYLES, type VoicingStyle,
 } from '../music/voicing';
 import { PITCH_CLASSES, VOICING_FLOOR, REGISTER } from '../music/pitch';
+import { memberName } from '../music/degrees';
 import { BASS_INSTRUMENT } from '../audio/instruments';
 import { applyAttempt, newSkill, weakVoicings } from '../learning/model';
 import { mod } from '../lib/util';
@@ -170,10 +171,14 @@ describe('tensions are a cheat-sheet thing, not an exercise thing', () => {
       built += 1;
       // The three guide tones, plus whatever the chord's own symbol put
       // above the seventh: a G13 shell is root, 3rd, ♭7 and the 13, which
-      // is both how it is played and what the symbol promised.
+      // is both how it is played and what the symbol promised. Where the
+      // extensions are altered it is those that are kept, because the
+      // alterations are what make an altered chord that chord — a 13♭9
+      // shell keeps its ♭9 and leaves the 13 to the soloist.
       const named = q.intervals.filter((i) => i >= 12);
+      const altered = named.filter((i) => /[♭♯]/.test(memberName(q, i)));
       const wanted = new Set(
-        [...shell, ...named.slice(-1)].map((i) => mod(i, 12)),
+        [...shell, ...(altered.length ? altered : named.slice(-1))].map((i) => mod(i, 12)),
       );
       const own = new Set(q.intervals.map((i) => mod(i, 12)));
       for (const tensions of [false, true]) {
@@ -198,6 +203,13 @@ describe('tensions are a cheat-sheet thing, not an exercise thing', () => {
     const g13 = makeChord(7, '13');
     expect(chordDegrees(g13, voiceChord(g13, { style: 'shell', maxNotes: 5 }).notes).sort())
       .toEqual(['1', '13', '3', '♭7']);
+    // And an altered chord keeps what makes it altered. A 7alt needs two
+    // of them, which is five notes and as big as the close voicing it
+    // would have to be told apart from, so it has no shell at all.
+    const g7b9 = makeChord(7, '7b9');
+    expect(chordDegrees(g7b9, voiceChord(g7b9, { style: 'shell', maxNotes: 5 }).notes).sort())
+      .toEqual(['1', '3', '♭7', '♭9']);
+    expect(shellIntervals(makeChord(7, '7alt')), 'a 7alt has no shell').toBeNull();
     const m13 = makeChord(0, 'm13');
     const spread = voiceChord(m13, { style: 'spread', maxNotes: 5, tensions: true });
     for (const degree of ['9', '13']) {

@@ -7,6 +7,7 @@ import { makeRng } from '../lib/rng';
 import { FakePerformer, soundingOf } from '../test-support';
 import { PROGRESSIONS, realiseProgression } from '../music/progressions';
 import { octaveOf } from '../music/pitch';
+import { chordDegrees } from '../music/chords';
 import { mod } from '../lib/util';
 
 const settings = defaultSettings();
@@ -132,6 +133,40 @@ describe('each chord of a progression says what was under it', () => {
       // an ordinal there would be a row's note gone astray.
       expect(q.reveal.notes, `${id}@${d}#${seed}`).not.toMatch(/\d(?:st|nd|rd|th) on the bottom/);
     }
+  });
+
+  it('sounds every degree its symbol names, or does not name it', () => {
+    // Reported from use: a row read "13" over a chord that was not one.
+    // The thinning shed a chord's own 9th to make room for an 11th the
+    // voicing had added — 288 of 710 rows named a degree that was not
+    // there. A symbol is a promise about what sounds.
+    // Three things a chord symbol does not actually promise, so a degree
+    // missing in one of these is playing rather than a defect: an altered
+    // dominant names six tones and nobody plays all six at once; a 13th
+    // shell is the guide tones and the 13, with the 9 left to the soloist;
+    // and a stack of fourths takes the fourths that fit.
+    const allowed = new Set(['7alt', '13 as shell', 'm11 as quartal']);
+    let extended = 0;
+    const broken: string[] = [];
+    for (const { id, d, seed, q, perf, realised } of played()) {
+      q.reveal.rows!.forEach((row, i) => {
+        const chord = realised[i].chord;
+        const named = chord.quality.intervals.filter((x) => x >= 12);
+        if (!named.length) return;
+        extended += 1;
+        if (allowed.has(chord.quality.id)) return;
+        if (allowed.has(`${chord.quality.id} as ${q.voicing}`)) return;
+        const sounding = new Set(perf.chords[i].notes.map((m) => mod(m, 12)));
+        for (const interval of named) {
+          if (sounding.has(mod(chord.rootPc + interval, 12))) continue;
+          broken.push(`${id}@${d}#${seed} ${row.symbol} as ${q.voicing}: no ${
+            chordDegrees(chord, [60 + chord.rootPc + interval])[0]
+          }`);
+        }
+      });
+    }
+    expect(extended, 'rows whose symbol names an extension').toBeGreaterThan(100);
+    expect(broken.slice(0, 5), `${broken.length} of ${extended}`).toEqual([]);
   });
 
   it('keeps every row short enough to read on one line', () => {

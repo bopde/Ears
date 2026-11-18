@@ -210,14 +210,115 @@ export function bottomTone(chord: Chord, voicing: Voicing): string | undefined {
  * does not know about and which `namedInversion` reports separately.
  */
 export function handsLabel(chord: Chord, voicing: Voicing): string {
-  const family = CLOSE_FAMILY.has(voicing.style)
-    ? 'Close'
-    : voicingLabelFor(voicing.style, voicing.form);
+  const close = CLOSE_FAMILY.has(voicing.style);
+  const family = close ? 'Close' : voicingLabelFor(voicing.style, voicing.form);
+  if (close) {
+    // A close voicing's name is about its lowest note, so it names the note
+    // that is really there. It used to say "root on the bottom" whenever it
+    // could not find one — including when the hands had shed the root and
+    // started on the 5th, where the label was not merely vague but false,
+    // and "Rootless" was a second true answer to the same question.
+    const lowest = bottomName(chordDegrees(chord, [voicing.notes[0]])[0]);
+    if (lowest === 'root') return `${family}, root on the bottom`;
+    return lowest === null ? family : `${family}  ·  ${lowest} on the bottom`;
+  }
+  // The other families name themselves, and add the tone only where the
+  // root is in the voicing for it to be measured against.
   const tone = bottomTone(chord, voicing);
-  if (tone) return `${family}  ·  ${tone} on the bottom`;
-  // A close voicing says so, because "Close" alone would leave a reader
-  // wondering what was underneath. The others do not need it.
-  return CLOSE_FAMILY.has(voicing.style) ? `${family}, root on the bottom` : family;
+  return tone ? `${family}  ·  ${tone} on the bottom` : family;
+}
+
+/**
+ * How the chord's own tones sit in these hands.
+ *
+ * `run` is how many of them are there, `span` how far apart, and `gaps`
+ * how many of the chord's tones they step over on the way up. The stack
+ * is the chord's own tones under the octave, rotated to start wherever
+ * the hands start — an eleventh chord has no third to step over, so its
+ * own intervals are what it is measured against rather than the plain
+ * seventh chord underneath it.
+ */
+function stackShape(
+  chord: Chord,
+  sorted: readonly number[],
+): { run: number; span: number; gaps: number; onRoot: boolean } | null {
+  const stack = [...new Set(chord.quality.intervals.filter((i) => i < 12))]
+    .sort((a, b) => a - b)
+    .map((i) => mod(chord.rootPc + i, 12));
+  const own = new Set(stack);
+  const tones = sorted.filter((m) => own.has(mod(m, 12)));
+  if (tones.length < 2) return null;
+  const from = stack.indexOf(mod(tones[0], 12));
+  if (from < 0) return null;
+  const rotated = [...stack.slice(from), ...stack.slice(0, from)];
+  let at = 0;
+  let gaps = 0;
+  for (const midi of tones) {
+    while (at < rotated.length && rotated[at] !== mod(midi, 12)) {
+      gaps += 1;
+      at += 1;
+    }
+    if (at >= rotated.length) return null;
+    at += 1;
+  }
+  return {
+    run: tones.length,
+    span: tones[tones.length - 1] - tones[0],
+    gaps,
+    onRoot: mod(sorted[0] - chord.rootPc, 12) === 0,
+  };
+}
+
+/** The chord's own tones, in its own order, inside an octave, none missed. */
+function isCloseVoicing(chord: Chord, sorted: readonly number[]): boolean {
+  const shape = stackShape(chord, sorted);
+  return shape !== null && shape.run >= 3 && shape.span <= 12 && shape.gaps === 0
+    && sorted.some((m) => mod(m - chord.rootPc, 12) === 0);
+}
+
+/**
+ * Every nameable shape whose label is true of these hands.
+ *
+ * The shapes overlap more than their names suggest. A seventh chord voiced
+ * close with its 5th shed is root, 3rd and 7th in a row — a shell and, on
+ * a looser reading, a close voicing too, and a question offering both has
+ * two right answers. It was reported from use: "it answered shell, but had
+ * all the notes present." The quiz asks this of the voicing that will
+ * sound, and throws the chord away unless one label fits it.
+ */
+export function labelsTrueOf(chord: Chord, notes: readonly number[]): VoicingStyle[] {
+  const sorted = [...notes].sort((a, b) => a - b);
+  if (!sorted.length) return [];
+  const rootPc = mod(chord.rootPc, 12);
+  const pcs = sorted.map((m) => mod(m, 12));
+  const degree = (midi: number) => mod(midi - chord.rootPc, 12);
+  const third = (s: number) => s >= 2 && s <= 5;
+  const seventh = (s: number) => s >= 9 && s <= 11;
+  const has = (test: (s: number) => boolean) => pcs.some((pc) => test(mod(pc - rootPc, 12)));
+  const close = isCloseVoicing(chord, sorted);
+  const found: VoicingStyle[] = [];
+
+  // Both close answers are about the note underneath, and both hold the
+  // root: a voicing that has shed it is rootless, whatever else it is.
+  if (close) found.push(degree(sorted[0]) === 0 ? 'close' : 'spread');
+  // Drop 2 is a close voicing with one voice an octave down, so putting a
+  // voice back an octave up has to give a close voicing with that voice
+  // second from its top.
+  if (!close && sorted.length >= 3 && sorted.some((midi, i) => {
+    const lifted = sorted.map((m, k) => (k === i ? m + 12 : m)).sort((a, b) => a - b);
+    return isCloseVoicing(chord, lifted) && lifted[lifted.length - 2] === midi + 12;
+  })) found.push('drop2');
+  if (!pcs.includes(rootPc) && has(third) && has(seventh)) found.push('rootless');
+
+  const own = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+  const tones = sorted.filter((m) => own.has(mod(m, 12)));
+  const onlyGuides = tones.every((m) => degree(m) === 0 || third(degree(m)) || seventh(degree(m)));
+  // Three chord tones and no more, because a shell is a skeleton: root,
+  // third and seventh. One note above them is a tension on top, which any
+  // shape may carry; two is a fuller voicing than a shell.
+  if (pcs.includes(rootPc) && has(third) && has(seventh) && onlyGuides
+    && tones.length <= 3 && sorted.length - tones.length <= 1) found.push('shell');
+  return found;
 }
 
 /** The styles a question can be asked about — the ones the curve can produce. */

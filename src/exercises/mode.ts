@@ -3,7 +3,7 @@ import {
   buildOptions, chooseKey, chooseTarget, optionCount, pickDistractors, questionId,
 } from './support';
 import {
-  SCALES, nearestScales, scaleConceptId, type ScaleDef,
+  SCALES, nearestScales, scaleConceptId, scalePitchClasses, type ScaleDef,
 } from '../music/scales';
 import { generatePhrase, phraseDurationBeats, scaleRun, type PhraseNote } from '../music/phrase';
 import { makeChord } from '../music/chords';
@@ -45,19 +45,57 @@ export const modeExercise: ExerciseType = {
     const level = clamp(Math.round(ctx.difficulty), 1, 5);
     const tonicMidi = 60 + (tonic > 6 ? tonic - 12 : tonic);
 
+    const n = optionCount(ctx.difficulty, pool.length);
+    const distractors = pickDistractors(ctx.rng, scale, pool, n - 1, ctx.difficulty, nearestScales);
+
     // Low levels hear the scale itself; higher levels only ever get a line, so
     // the mode has to be recognised from its colour rather than counted out.
     const useScaleRun = level <= 2;
-    const line: PhraseNote[] = useScaleRun
+    const buildLine = (): PhraseNote[] => (useScaleRun
       ? scaleRun(tonicMidi, scale, { descend: level === 1 })
       : generatePhrase({
-          tonicMidi,
-          scale,
-          rng: ctx.rng,
-          length: ctx.rng.range(7, 10),
-          colour: level >= 5 ? 0.55 : level >= 4 ? 0.7 : 0.9,
-          resolve: level <= 3 ? true : ctx.rng.chance(0.6),
-        });
+        tonicMidi,
+        scale,
+        rng: ctx.rng,
+        length: ctx.rng.range(7, 10),
+        colour: level >= 5 ? 0.55 : level >= 4 ? 0.7 : 0.9,
+        resolve: level <= 3 ? true : ctx.rng.chance(0.6),
+      }));
+
+    /**
+     * Whether this line puts the mode beyond the ones it is offered against.
+     *
+     * A phrase that never touches a degree separating them leaves two right
+     * answers: a line in G that plays neither C nor C♯ is Ionian and Lydian
+     * at once, and a minor line that avoids the second is Aeolian and
+     * Phrygian at once. 27 of 1,250 questions were one or the other.
+     *
+     * Everything else the question sounds is inside the mode by
+     * construction — the vamp is built from its own degrees — so the line
+     * is what has to do the separating.
+     */
+    const separates = (notes: PhraseNote[]) => {
+      const pcs = [...new Set(notes.map((x) => mod(x.midi, 12)))];
+      return distractors.every((other) => {
+        const scalePcs = new Set(scalePitchClasses(tonic, other));
+        return pcs.some((pc) => !scalePcs.has(pc));
+      });
+    };
+
+    let line = buildLine();
+    for (let tries = 0; tries < 12 && !separates(line); tries += 1) line = buildLine();
+    // A line that still cannot separate them is a line that never will:
+    // the modes that close are the ones differing in one degree, and some
+    // phrases simply do not reach it. The option goes rather than the
+    // question, because a question with two right answers is worse than a
+    // question with one fewer wrong one.
+    const offered = separates(line)
+      ? distractors
+      : distractors.filter((other) => {
+        const scalePcs = new Set(scalePitchClasses(tonic, other));
+        return [...new Set(line.map((x) => mod(x.midi, 12)))].some((pc) => !scalePcs.has(pc));
+      });
+    if (!offered.length) return null;
 
     // The vamp pins the tonic down without naming the mode.
     const vampDefs = level >= 5 ? scale.vamp.slice(0, 1) : scale.vamp;
@@ -88,9 +126,6 @@ export const modeExercise: ExerciseType = {
       return ((lineStart + lineBeats + 1.5) * 60) / perf.tempo;
     };
 
-    const n = optionCount(ctx.difficulty, pool.length);
-    const distractors = pickDistractors(ctx.rng, scale, pool, n - 1, ctx.difficulty, nearestScales);
-
     const characteristic = scale.characteristic
       .map((d) => scale.spelling.split(' ')[scale.degrees.indexOf(d)])
       .filter(Boolean)
@@ -117,7 +152,7 @@ export const modeExercise: ExerciseType = {
         {
           key: 'mode',
           label: 'Mode',
-          options: buildOptions(ctx.rng, scale, distractors, (s) => ({
+          options: buildOptions(ctx.rng, scale, offered, (s) => ({
             id: s.id,
             label: s.name,
             sub: s.spelling,

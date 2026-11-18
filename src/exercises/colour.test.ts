@@ -11,6 +11,7 @@ import {
   ALT_SET, BASIC_QUALITIES, COLOUR_IDS, COLOUR_ID_OF, COLOUR_NAMES, coloursFor,
   isBasicQuality,
 } from '../music/degrees';
+import { VOICING_STYLES, voiceChord } from '../music/voicing';
 import { colourConceptId } from '../music/catalog';
 import { mod } from '../lib/util';
 
@@ -127,15 +128,38 @@ describe('the colour question asks about what was added', () => {
     }
   });
 
-  it('offers wrong answers of the same shape as the right one', () => {
-    for (const { q, where } of asked(5, 60)) {
-      const pair = q.correct.colour.includes('+');
+  it('offers wrong answers of the same size as the right one', () => {
+    const sizeOf = (id: string) => (id === 'alt' ? ALT_SET.length : id.split('+').length);
+    const sizes = new Set<number>();
+    for (const { q, where } of asked(5, 80)) {
+      const size = sizeOf(q.correct.colour);
+      sizes.add(size);
       for (const option of q.fields[0].options) {
-        expect(option.id.includes('+'), `${where}: ${option.label}`).toBe(pair);
+        // A single offered against a three-note answer is a free
+        // elimination, and for the altered sound it was worse than free:
+        // the singles were its own members, each of which had sounded.
+        expect(sizeOf(option.id), `${where}: ${option.label}`).toBe(size);
       }
-      // The prompt says how many, so a pair among singles would be free.
-      expect(q.prompt.sub, where).toBe(pair ? 'Two notes above the chord' : 'One note above the chord');
+      // The prompt says how many, counted rather than assumed.
+      expect(q.prompt.sub, where)
+        .toBe(`${['', 'One', 'Two', 'Three'][size]} note${size === 1 ? '' : 's'} above the chord`);
     }
+    expect([...sizes].sort(), 'questions of one, two and three notes').toEqual([1, 2, 3]);
+  });
+
+  it('never offers the altered sound its own tones to choose from', () => {
+    let alt = 0;
+    for (const { q, where } of asked(5, 120)) {
+      if (q.correct.colour !== 'alt') continue;
+      alt += 1;
+      expect(q.prompt.sub, where).toBe('Three notes above the chord');
+      for (const option of q.fields[0].options) {
+        for (const member of ALT_SET) {
+          expect(option.label, `${where}: ${option.label}`).not.toBe(member);
+        }
+      }
+    }
+    expect(alt, 'altered questions came up').toBeGreaterThan(10);
   });
 
   it('never offers two readings of one degree together', () => {
@@ -226,5 +250,26 @@ describe('the colour question records what it trained', () => {
     expect(coloursFor(requireChordQuality('maj7')), 'because ∆7 has no ♭13')
       .not.toContain(COLOUR_NAMES.b13);
     expect(COLOUR_ID_OF['♭13']).toBe('b13');
+  });
+});
+
+describe('an altered dominant sounds altered', () => {
+  it('always sounds an altered 9th and an altered 5th or 13th', () => {
+    // 3 ♭7 1 ♭13 is a 7♯5 and nothing else: one alteration is not an
+    // altered chord. Twelve of the eighty-four 7alt voicings sounded only
+    // one, all of them shells.
+    for (const root of [0, 3, 7, 10]) {
+      const chord = makeChord(root, '7alt');
+      for (const style of VOICING_STYLES) {
+        for (const tensions of [false, true]) {
+          const degrees = chordDegrees(chord, voiceChord(chord, {
+            style, maxNotes: 5, tensions,
+          }).notes);
+          const where = `${style} on ${root}: ${degrees.join(' ')}`;
+          expect(degrees.some((d) => d === '♭9' || d === '♯9'), where).toBe(true);
+          expect(degrees.some((d) => d === '♭5' || d === '♯5' || d === '♭13'), where).toBe(true);
+        }
+      }
+    }
   });
 });

@@ -72,6 +72,15 @@ export interface RevealRow {
    * possible puts a different tone underneath almost every bar.
    */
   bottom?: string;
+  /**
+   * Which chord tone the bass has, where it is not the root — "3rd".
+   *
+   * On the row rather than in the numeral. A numeral's slash means "of":
+   * V7/IV is the five of the four, and writing I/3 for a first inversion
+   * put a second meaning on the same mark. The chord symbol carries the
+   * bass the way a chart does, as C/E.
+   */
+  bass?: string;
   /** True for the chord a "name this one" question asked about. */
   target?: boolean;
   played: SoundedChord;

@@ -45,6 +45,15 @@ export function bassLandings<T extends { midi: number; beat: number }>(
  * line plays four notes to a chord and the first of them is the one that
  * states the root.
  */
+/** A chord degree as it reads in prose: "♭3" is the 3rd of the chord. */
+function ordinal(degree: string): string | undefined {
+  const n = Number(degree.replace(/[^0-9]/g, ''));
+  if (!Number.isInteger(n) || n <= 0) return undefined;
+  const teen = n % 100;
+  if (teen >= 11 && teen <= 13) return `${n}th`;
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
+}
+
 export function revealRows(
   realised: readonly RealisedChord[],
   voicings: readonly Voicing[],
@@ -57,14 +66,16 @@ export function revealRows(
     const landing = landings[i];
     const bassPc = landing === undefined ? r.chord.rootPc : mod(landing.midi, 12);
     const onRoot = bassPc === mod(r.chord.rootPc, 12);
-    // Which inversion the chord is in is the bass's business. While it lands
-    // on the root the numeral stands as written; when it does not, the
-    // numeral says so — I/3 — and the symbol becomes a slash chord.
+    // Which inversion the chord is in is the bass's business, and it is
+    // said where the bass is: the symbol becomes a slash chord and the row
+    // names the tone. The numeral stands as written either way, so its own
+    // slash keeps one meaning — "of", as in V7/IV.
     const figure = onRoot
       ? undefined
-      : chordDegrees(r.chord, [landing!.midi])[0].replace(/[^0-9]/g, '');
+      : ordinal(chordDegrees(r.chord, [landing!.midi])[0]);
     return {
-      roman: figure ? `${r.roman}/${figure}` : r.roman,
+      roman: r.roman,
+      bass: figure,
       symbol: onRoot
         ? chordSymbol(r.chord, settings.accidental)
         : slashSymbol(r.chord, bassPc, settings.accidental),

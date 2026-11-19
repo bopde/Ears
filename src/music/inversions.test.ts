@@ -6,22 +6,27 @@ import {
   CHORD_QUALITIES, makeChord, requireChordQuality, romanSuffix, slashSymbol,
 } from './chords';
 import { PROGRESSIONS, romanLabel, romanLine } from './progressions';
+import { BASIC_OF } from './degrees';
 import { inversionIndex, voiceChord } from './voicing';
 import { PITCH_CLASSES, pcName } from './pitch';
 import { requireProgression } from './progressions';
 import { mod } from '../lib/util';
 
 describe('roman numerals state what is played', () => {
-  it('never writes a seventh where an extension sounds', () => {
+  it('names the basic chord, never the tensions above it', () => {
     for (const progression of PROGRESSIONS) {
       for (const chord of progression.chords) {
-        const quality = requireChordQuality(chord.quality);
+        const basic = requireChordQuality(BASIC_OF[chord.quality] ?? chord.quality);
         const label = romanLabel(chord);
-        expect(label, `${progression.id}: ${chord.quality}`).toContain(romanSuffix(quality));
-        // Anything that distinguishes the chord has to survive into the label.
-        for (const token of ['13', '11', '9', 'alt', 'ø', '°', '♯5', '♭5', 'sus']) {
-          if (quality.symbol.includes(token)) {
-            expect(label, `${progression.id}: ${chord.quality} must say ${token}`).toContain(token);
+        const where = `${progression.id}: ${chord.quality}`;
+        expect(label, where).toContain(romanSuffix(basic));
+        // A numeral is a function, and no function is named by a 13th.
+        // What the voicing added is said beside it, in the row's tag.
+        expect(label, `${where} writes an extension`).not.toMatch(/9|11|13|alt/);
+        // What makes the chord the kind of chord it is does survive.
+        for (const token of ['ø', '°', '♯5', '♭5', 'sus', '∆']) {
+          if (basic.symbol.includes(token)) {
+            expect(label, `${where} must say ${token}`).toContain(token);
           }
         }
       }
@@ -45,15 +50,15 @@ describe('roman numerals state what is played', () => {
     expect(romanLine(modulation)).not.toContain('ii/IV7');
   });
 
-  it('corrects the labels that used to understate the chord', () => {
-    // The ii-V-I's V is a plain dominant 7th, and reads as one. It sounds a
-    // 9th in every voicing on the cheat sheet — so do the ii and the I, and
-    // the symbol names the chord rather than the voicing.
-    expect(romanLine(requireProgression('ii-V-I'))).toBe('ii7  –  V7  –  I∆7');
-    expect(romanLine(requireProgression('blues-opening'))).toContain('IV13');
-    expect(romanLine(requireProgression('blues-opening'))).not.toContain('IV7');
-    expect(romanLine(requireProgression('tritone-sub'))).toContain('♭II9♯11');
-    expect(romanLine(requireProgression('blues-turnaround'))).toContain('ii9');
+  it('writes the blues as sevenths, whatever the voicing sounds', () => {
+    // These used to read IV13, ♭II9♯11 and ii9, because the numeral was
+    // taken from the chord as written. The chords are still written that
+    // way and still sound their colour; the numeral names the function.
+    expect(romanLine(requireProgression('blues-opening'))).toContain('IV7');
+    expect(romanLine(requireProgression('blues-opening'))).not.toContain('13');
+    expect(romanLine(requireProgression('tritone-sub'))).toContain('♭II7');
+    expect(romanLine(requireProgression('blues-turnaround'))).toContain('ii7');
+    expect(romanLine(requireProgression('so-what'))).toContain('i7');
   });
 });
 

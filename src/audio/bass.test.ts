@@ -300,6 +300,8 @@ describe('the root-motion line describes what played', () => {
   });
 
   it('is in the reveal of every changes question', () => {
+    // On the notes line rather than the detail: the detail is now the
+    // functional analysis, which is what a chart would be marked up with.
     for (const id of ['progression']) {
       const type = getExerciseType(id)!;
       for (let d = 1; d <= 5; d++) {
@@ -308,7 +310,7 @@ describe('the root-motion line describes what played', () => {
             rng: makeRng(seed * 13 + d * 3), difficulty: d, settings, targetConcepts: [],
           });
           if (!q) continue;
-          expect(q.reveal.detail, `${id}@${d}`).toMatch(/Bass (falls|rises|stays)/);
+          expect(q.reveal.notes, `${id}@${d}`).toMatch(/Bass (falls|rises|stays)/);
         }
       }
     }
@@ -326,7 +328,7 @@ describe('the root-motion line describes what played', () => {
         const scheduled = rootMotionLine(
           perf.bass.map((b) => ({ ...b, beats: 1, velocity: 0.7 })),
         );
-        expect(q.reveal.detail, `@${d}#${seed}`).toContain(scheduled);
+        expect(q.reveal.notes, `@${d}#${seed}`).toContain(scheduled);
       }
     }
   });

@@ -1,6 +1,6 @@
 import type { RevealRow } from './types';
 import { bottomTone } from './voicing-plan';
-import { chordDegrees, chordSymbol, slashSymbol } from '../music/chords';
+import { chordDegrees, chordSymbol, colourSounded, slashSymbol } from '../music/chords';
 import type { RealisedChord } from '../music/progressions';
 import type { Voicing } from '../music/voicing';
 import { soundedChord } from '../audio/reference';
@@ -73,8 +73,19 @@ export function revealRows(
     const figure = onRoot
       ? undefined
       : ordinal(chordDegrees(r.chord, [landing!.midi])[0]);
+    // What the comping put on top of the basic chord. The numeral says
+    // ♭II7 whatever the voicing takes, so the row is where a listener
+    // finds out it took a 9 and a ♯11.
+    const colour = colourSounded(r.chord, voicings[i].all);
     return {
-      roman: r.roman,
+      // The numeral in the key centre in force here, which is what the
+      // label above it counts from.
+      roman: r.localRoman,
+      ...(r.keyLabel ? { key: r.keyLabel } : {}),
+      ...(r.marks.pair ? { pair: true } : {}),
+      ...(r.marks.arrow ? { arrow: r.marks.arrow } : {}),
+      ...(r.marks.note ? { note: r.marks.note } : {}),
+      ...(colour.length ? { tag: colour.join(', ') } : {}),
       bass: figure,
       symbol: onRoot
         ? chordSymbol(r.chord, settings.accidental)

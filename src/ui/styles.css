@@ -727,6 +727,56 @@ p { margin: 0; }
   border-color: var(--accent);
 }
 
+/*
+ * The ii–V bracket: one line drawn down the left of the two rows it joins,
+ * the way it is drawn over a chart. It sits outside the row's own border,
+ * in the gutter the rows leave for it, so it reads as a mark on the music
+ * rather than as part of either row.
+ */
+.revrows { padding-left: 0.55rem; }
+
+.revrow--pairTop,
+.revrow--pairEnd {
+  position: relative;
+}
+
+.revrow--pairTop::before,
+.revrow--pairEnd::before {
+  content: '';
+  position: absolute;
+  left: -0.55rem;
+  width: 0.35rem;
+  border-left: 1.5px solid var(--accent-line);
+}
+
+/* The top half turns in at the top and runs down past the gap between the
+   rows; the bottom half starts in that gap, so the line is continuous and
+   only the two ends are rounded. */
+.revrow--pairTop::before {
+  top: 0.35rem;
+  bottom: -0.21rem;
+  border-top: 1.5px solid var(--accent-line);
+  border-top-left-radius: 3px;
+}
+
+.revrow--pairEnd::before {
+  top: -0.2rem;
+  bottom: 0.35rem;
+  border-bottom: 1.5px solid var(--accent-line);
+  border-bottom-left-radius: 3px;
+}
+
+/* Where a key centre starts. Said once, with the rows below counted from it. */
+.revkey {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  padding: 0.3rem 0 0.05rem;
+}
+
+.revkey:first-child { padding-top: 0; }
+
 /* The head never wraps: a numeral that falls onto a second line stops
    reading as a label for the symbol beside it. */
 .revrow__head {
@@ -777,6 +827,36 @@ p { margin: 0; }
   color: var(--fg-faint);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The tensions the comping added above the basic chord. It gives way
+   before the symbol does: the chord is the thing, the colour is a note on
+   it. */
+.revrow__tag {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.68rem;
+  color: var(--fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* What this chord is doing, where a word says it better than a mark. */
+.revrow__note {
+  flex: none;
+  font-size: 0.68rem;
+  color: var(--fg-faint);
+  font-style: italic;
+}
+
+/* Resolves into the row below: solid down a fifth, dashed down a half step.
+   Fixed width whether or not there is an arrow, so the + stays in a column. */
+.revrow__arrow {
+  flex: none;
+  width: 0.85rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--accent);
 }
 
 .revrow__more {
@@ -1440,4 +1520,79 @@ details.disclosure > div { padding-bottom: 1rem; }
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--fg-dim);
+}
+
+/* ── Functional analysis on the cheat sheet ──────────────────────────────── */
+
+/* The one-line analysis, with each ii–V underlined instead of bracketed. */
+.refanalysis__pair {
+  border-bottom: 1.5px solid var(--accent-line);
+  padding-bottom: 1px;
+}
+
+.refanalysis__note { font-style: italic; }
+.refanalysis__join { color: var(--accent); }
+
+/*
+ * A ii–V across two chord cards, bracketed the way a chart is marked up:
+ * a line along the top of both, turning down at each outer end.
+ */
+.refchord--pairStart,
+.refchord--pairEnd { position: relative; }
+
+.refchord--pairStart::before,
+.refchord--pairEnd::before {
+  content: '';
+  position: absolute;
+  top: -0.3rem;
+  height: 0.3rem;
+  border-top: 1.5px solid var(--accent-line);
+}
+
+.refchord--pairStart::before {
+  left: 0.6rem;
+  right: -0.3rem;
+  border-left: 1.5px solid var(--accent-line);
+  border-top-left-radius: 3px;
+}
+
+.refchord--pairEnd::before {
+  left: -0.3rem;
+  right: 0.6rem;
+  border-right: 1.5px solid var(--accent-line);
+  border-top-right-radius: 3px;
+}
+
+/* The cards need the room for it, and the row needs the room for them. */
+.refchords { padding-top: 0.35rem; }
+
+.refchord__key {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.refchord__arrow { color: var(--accent); }
+.refchord__note { font-style: italic; }
+
+.reflegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.8rem;
+  font-size: 0.7rem;
+  color: var(--fg-faint);
+  padding-top: 0.15rem;
+}
+
+.reflegend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+.reflegend__mark { color: var(--accent); }
+
+/* The bracket, drawn small enough to sit in a line of text. */
+.reflegend__mark--pair {
+  width: 0.9rem;
+  height: 0.4rem;
+  border: 1.5px solid var(--accent-line);
+  border-bottom: none;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
 }

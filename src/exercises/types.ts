@@ -2,6 +2,7 @@ import type { Rng } from '../lib/rng';
 import type { Performer } from '../audio/performer';
 import type { PracticeSettings } from '../session/settings';
 import type { VoicingStyle } from '../music/voicing';
+import type { ArrowKind, ChordNote } from '../music/progressions';
 
 export interface AnswerOption {
   id: string;
@@ -58,6 +59,21 @@ export interface SoundedChord {
 
 /** One chord of a progression, as the reveal lists it. */
 export interface RevealRow {
+  /** "A♭" where a new key centre starts here; the numerals below count from it. */
+  key?: string;
+  /** Bracketed with the row below as a ii–V pair. */
+  pair?: boolean;
+  /** Resolves into the row below, down a fifth or down a half step. */
+  arrow?: ArrowKind;
+  /** A word worth saying about this chord: "passing", "backdoor". */
+  note?: ChordNote;
+  /**
+   * What the voicing sounded above the basic chord — "9, ♯11".
+   *
+   * The numeral names the function and the symbol names the chord; this is
+   * where the colour went when the numerals stopped carrying it.
+   */
+  tag?: string;
   /**
    * The roman numeral, carrying the quality that played — and the bass, where
    * the bass is not on the root: I/3 says the third is underneath.

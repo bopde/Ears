@@ -4,7 +4,7 @@ import {
 } from './support';
 import {
   CHORD_QUALITIES, chordConceptId, chordFullName, makeChord, nearestQualities,
-  addedTensions, qualityLabel, slashSymbol,
+  addedTensions, slashSymbol,
   type Chord, type ChordQuality,
 } from '../music/chords';
 import { soundedChord } from '../audio/reference';
@@ -150,8 +150,18 @@ function materialFor(
   return { material: last!.material, offered: pool };
 }
 
+/**
+ * An answer button for a chord quality: the chart symbol, named under it.
+ *
+ * What a player reads is "∆7", not "maj7" and certainly not "maj" — and
+ * the name belongs under it rather than instead of it, so the button is
+ * both the thing you would see and the thing you would say. A major triad
+ * has no symbol on a chart, so there it is the name that stands alone.
+ */
 function qualityOption(q: ChordQuality) {
-  return { id: q.id, label: qualityLabel(q), sub: q.name, group: q.group };
+  return q.symbol
+    ? { id: q.id, label: q.symbol, sub: q.name, group: q.group }
+    : { id: q.id, label: q.name, group: q.group };
 }
 
 interface ChordMaterial {
@@ -335,7 +345,7 @@ export const chordQualityExercise: ExerciseType = {
 
 export const chordFullExercise: ExerciseType = {
   id: 'chord-full',
-  name: 'Chord — root and quality',
+  name: 'Chord (root and quality)',
   short: 'Root + quality',
   description: 'Name both the root and the quality of the chord.',
   baseSeconds: 18,

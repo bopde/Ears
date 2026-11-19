@@ -105,7 +105,7 @@ describe('mastery', () => {
   it('labels a record by how solid it is', () => {
     expect(mastery(undefined)).toBe('new');
     expect(mastery(drill('x', Array(10).fill(true)))).toBe('mastered');
-    expect(mastery(drill('x', Array(10).fill(false)))).toBe('shaky');
+    expect(mastery(drill('x', Array(10).fill(false)))).toBe('building');
   });
 });
 

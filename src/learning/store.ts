@@ -157,7 +157,7 @@ function coloursRetiredWith(quality: string): string[] {
  * Folds one record into another, keeping the practice rather than the id.
  *
  * Attempts and corrects add up because they happened. Strength is their
- * weighted mean, so merging a solid record into a shaky one does not hand
+ * weighted mean, so merging a solid record into a weak one does not hand
  * the learner a level they have not earned. Everything about scheduling
  * comes from whichever record was seen more recently, which is the one
  * that knows when this is next due.

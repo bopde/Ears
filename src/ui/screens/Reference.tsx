@@ -26,7 +26,7 @@ import { groupBy } from '../../lib/util';
 type Tab = 'progressions' | 'voicings' | 'chords' | 'intervals' | 'modes';
 
 const TABS: Array<{ value: Tab; label: string }> = [
-  { value: 'progressions', label: 'Changes' },
+  { value: 'progressions', label: 'Progressions' },
   { value: 'voicings', label: 'Voicings' },
   { value: 'chords', label: 'Chords' },
   { value: 'intervals', label: 'Intervals' },

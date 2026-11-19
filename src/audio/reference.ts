@@ -125,7 +125,7 @@ export const REFERENCE_VOICINGS: VoicingLesson[] = LESSONS.map((lesson) => ({
  * would say nothing about which notes are in the chord.
  */
 export const VOICING_SHEET_NOTE =
-  'Every mode voice-leads: through a set of changes each chord takes the shape '
+  'Every mode voice-leads: through a progression each chord takes the voicing '
   + 'that moves least from the one before it.';
 
 /** The voicings the Voicings tab teaches — voice leading is a rule, not a shape. */

@@ -85,7 +85,7 @@ const labelOf = (id: string): string =>
 
 export const colourExercise: ExerciseType = {
   id: 'colour',
-  name: 'Which colour?',
+  name: 'Colour',
   short: 'Colour',
   description: 'A chord plays with a note added above it. Name what was added.',
   baseSeconds: 14,
@@ -294,6 +294,10 @@ export const colourOptionsFor = (chord: Chord, level: number): string[] => {
   return [1, 2, ALT_SET.length].flatMap((size) => setsOf(options, size));
 };
 
-/** "a 9", but "an 11" and "an ♯11". */
-const article = (tone: string): string =>
-  (/^[♭♯]?1/.test(tone) ? 'an ' : 'a ') + tone;
+/**
+ * "a 9", "a 13", "a ♯11" — but "an 11".
+ *
+ * How they are read aloud rather than how they are spelled: an accidental
+ * in front is a word, and nobody says "an sharp eleven".
+ */
+const article = (tone: string): string => `${tone === '11' ? 'an' : 'a'} ${tone}`;

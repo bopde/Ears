@@ -127,7 +127,7 @@ export interface Question {
   /** Concepts this question exercises — the key the learning model tracks on. */
   conceptIds: string[];
   difficulty: number;
-  /** Tonal centre, where the question has one. Recorded against each attempt. */
+  /** Key centre, where the question has one. Recorded against each attempt. */
   keyPc: number | null;
   prompt: { title: string; sub?: string };
   fields: AnswerField[];

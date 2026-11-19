@@ -171,10 +171,10 @@ export function Setup({ onBack, onStart }: { onBack: () => void; onStart: () => 
 
         <div className="field">
           <div className="field__label">
-            <span>Difficulty</span>
+            <span>Level</span>
           </div>
           <Segmented
-            ariaLabel="Difficulty"
+            ariaLabel="Level"
             value={settings.difficulty === 'adaptive' ? 'adaptive' : String(settings.difficulty)}
             options={[
               { value: 'adaptive', label: 'Adaptive' },

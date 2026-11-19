@@ -185,9 +185,9 @@ const chordLabel = (chord: Chord, settings: PracticeSettings) => chordSymbol(cho
 
 export const progressionExercise: ExerciseType = {
   id: 'progression',
-  name: 'Chord changes',
-  short: 'Changes',
-  description: 'A progression plays. Name the harmonic movement.',
+  name: 'Progressions',
+  short: 'Progressions',
+  description: 'A progression plays. Say which one it is.',
   baseSeconds: 28,
   pool: (settings) => enabledProgressions(settings).map((p) => progressionConceptId(p.id)),
   generate(ctx): Question | null {
@@ -208,7 +208,7 @@ export const progressionExercise: ExerciseType = {
       difficulty: ctx.difficulty,
       keyPc: tonic,
       prompt: {
-        title: 'What movement is this?',
+        title: 'Which progression is this?',
         sub: ctx.difficulty <= 2 ? `In ${keyName(tonic, keyTonality(def))}` : undefined,
       },
       fields: [

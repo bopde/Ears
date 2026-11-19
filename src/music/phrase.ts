@@ -19,7 +19,7 @@ export interface PhraseOptions {
   length?: number;
   /** 0–1: how insistently the phrase lands on the mode's characteristic degrees. */
   colour?: number;
-  /** End on the tonic. Turning this off makes the tonal centre much harder to hear. */
+  /** End on the tonic. Turning this off makes the key centre much harder to hear. */
   resolve?: boolean;
   /** Start the phrase on the tonic. */
   startOnTonic?: boolean;

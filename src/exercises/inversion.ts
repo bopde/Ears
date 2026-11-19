@@ -5,7 +5,7 @@ import {
   spellInChord, type ChordQuality,
 } from '../music/chords';
 import {
-  bassToneOf, inversionConceptId, inversionsFor, type InversionDef,
+  bassToneOf, inversionConceptId, inversionsOf, type InversionDef,
 } from '../music/inversions';
 import { voiceChord, type VoicingStyle } from '../music/voicing';
 import { pcName } from '../music/pitch';
@@ -61,8 +61,13 @@ export const inversionExercise: ExerciseType = {
   description: 'A chord sounds with one of its notes in the bass. Which inversion is it?',
   baseSeconds: 12,
   pool: (settings) => {
-    const tones = Math.max(...invertibleQualities(settings).map((q) => q.intervals.length));
-    return inversionsFor(tones).map((i) => inversionConceptId(i.id));
+    // The union over the chords that are on, because what a chord can be
+    // asked is about its tones rather than how many it has: a sixth chord
+    // has four and only three of them can go underneath it.
+    const ids = new Set(
+      invertibleQualities(settings).flatMap((q) => inversionsOf(q).map((i) => i.id)),
+    );
+    return [...ids].map(inversionConceptId);
   },
   generate(ctx): Question | null {
     const qualities = invertibleQualities(ctx.settings);
@@ -70,8 +75,8 @@ export const inversionExercise: ExerciseType = {
 
     // Choose the inversion first so the adaptive model can ask for one, then a
     // chord with enough tones to actually have it.
-    const widest = Math.max(...qualities.map((q) => q.intervals.length));
-    const available = inversionsFor(widest);
+    const byId = new Map(qualities.flatMap((q) => inversionsOf(q).map((i) => [i.id, i] as const)));
+    const available = [...byId.values()].sort((a, b) => a.index - b.index);
     if (available.length < 2) return null;
     const inversion = chooseTarget(
       ctx,
@@ -81,7 +86,7 @@ export const inversionExercise: ExerciseType = {
     );
     if (!inversion) return null;
 
-    const fitting = qualities.filter((q) => q.intervals.length > inversion.index);
+    const fitting = qualities.filter((q) => inversionsOf(q).some((i) => i.id === inversion.id));
     if (!fitting.length) return null;
     // Triads first while the ear is learning the shape; sevenths once it is not.
     const quality = ctx.rng.weighted(fitting, (q) => {
@@ -101,7 +106,7 @@ export const inversionExercise: ExerciseType = {
       maxNotes: 4,
     });
 
-    const options = inversionsFor(quality.intervals.length);
+    const options = inversionsOf(quality);
     const slash = asksForSlash(ctx.difficulty);
     // The same chord over each bass note it holds: C7, C7/E, C7/G, C7/B♭.
     // The bass is spelled against the chord, so a C♯m7's third is written E

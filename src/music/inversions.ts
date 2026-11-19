@@ -1,6 +1,7 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
-import { chordDegrees, type Chord } from './chords';
+import { chordDegrees, type Chord, type ChordQuality } from './chords';
+import { degreeNumber, memberName } from './degrees';
 import type { Voicing } from './voicing';
 import { mod } from '../lib/util';
 
@@ -115,6 +116,23 @@ export function namedInversion(chord: Chord, voicing: Voicing): InversionDef | u
 /** The inversions a chord of this many tones actually has. */
 export function inversionsFor(toneCount: number): InversionDef[] {
   return INVERSIONS.filter((i) => i.index < toneCount);
+}
+
+/**
+ * The inversions this chord can actually be asked about.
+ *
+ * All of its tones but the 6th. A sixth chord over its 6th is not an
+ * inversion of that chord at all — it is another chord in root position.
+ * Dm6/B is a Bø7 and C6/A is an Am7, note for note, and a listener who
+ * names it that way is right; the exercise was marking them wrong and
+ * telling them "the 6th of D Minor 6 is in the bass".
+ */
+export function inversionsOf(quality: ChordQuality): InversionDef[] {
+  return INVERSIONS.filter((inversion) => {
+    const interval = quality.intervals[inversion.index];
+    if (interval === undefined) return false;
+    return degreeNumber(memberName(quality, interval)) !== 6;
+  });
 }
 
 /** Neighbouring inversions are the believable wrong answers. */

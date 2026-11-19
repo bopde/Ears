@@ -18,6 +18,11 @@ import { CHORD_QUALITIES } from '../music/chords';
 import { COLOUR_IDS } from '../music/degrees';
 import { VOICING_MODES } from '../exercises/voicing-plan';
 import { makeRng } from '../lib/rng';
+import { INVERSIONS } from '../music/inversions';
+import { PROGRESSIONS } from '../music/progressions';
+import { VOICING_STYLES } from '../music/voicing';
+import { defaultSettings } from '../session/settings';
+import { importProfile } from '../learning/store';
 import type { AnswerOption } from '../exercises/types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -244,6 +249,85 @@ describe('the names themselves', () => {
     expect(said.some((d) => d.endsWith('a 9')), '"a 9"').toBe(true);
     for (const detail of said) {
       expect(detail, detail).not.toMatch(/ an [♭♯]/);
+    }
+  });
+});
+
+describe('renaming what a reader sees, not what a profile stores', () => {
+  /**
+   * The ids a saved profile is written in.
+   *
+   * None of them changed with the names on the screen, and none of them
+   * may: a concept id is the key a learner's history is stored under, a
+   * quality id is what a settings list holds, and renaming one silently
+   * drops the work somebody did. The settings key `difficulty` is the
+   * plainest case — the control says "Level" now and the stored field is
+   * what it always was.
+   */
+  it('keeps every stored id exactly as it was', () => {
+    expect(EXERCISE_TYPES.map((t) => t.id)).toEqual([
+      'chord-quality', 'chord-full', 'colour', 'chord-inversion', 'interval', 'key',
+      'mode', 'progression', 'progression-chord', 'voicing', 'guide-tones',
+    ]);
+    expect(CHORD_QUALITIES.map((q) => q.id)).toEqual([
+      'maj', 'min', 'dim', 'aug', 'sus4', 'sus2', 'maj7', 'm7', '7', 'm7b5', 'dim7',
+      'mMaj7', '7sus4', 'maj7#5', '6', 'm6', '69', 'add9', 'madd9', 'maj9', 'm9', '9',
+      'm11', '11', '13', 'maj13', 'm13', 'maj7#11', '9#11', '7b9', '7#9', '7b5', '7#5',
+      '7b13', '13b9', '7alt',
+    ]);
+    expect(INVERSIONS.map((i) => i.id)).toEqual(['root', '1st', '2nd', '3rd']);
+    expect([...COLOUR_IDS]).toEqual(['9', 'b9', '#9', '11', '#11', '13', 'b13', 'alt']);
+    expect([...VOICING_STYLES]).toEqual([
+      'close', 'spread', 'drop2', 'rootless', 'shell', 'quartal', 'upperStructure',
+    ]);
+    expect(PROGRESSIONS.map((p) => p.id)).toEqual([
+      'ii-V-I', 'I-IV-V-I', 'I-vi-ii-V', 'I-VI7-ii-V', 'iii-VI-ii-V', 'deceptive',
+      'ii-V-i-minor', 'minor-ii-V-i-alt', 'line-cliche', 'minor-plagal', 'tritone-sub',
+      'backdoor', 'dim-passing', 'V-of-V', 'V-of-IV', 'bVI-bVII-I',
+      'descending-turnaround', 'diatonic-cycle', 'rhythm-changes-a', 'blues-opening',
+      'blues-turnaround', 'minor-blues', 'so-what', 'constant-structure', 'coltrane-cell',
+      'coltrane-substitution', 'giant-steps-head', 'dominant-cycle', 'rhythm-changes-b',
+      'stella-opening', 'modulation-up-tone', 'modulation-to-IV', 'rapid-ii-V',
+    ]);
+    expect(Object.keys(defaultSettings()).sort()).toEqual([
+      'accidental', 'adaptive', 'answerDelay', 'autoAdvance', 'chordQualities', 'colours',
+      'difficulty', 'durationMinutes', 'exerciseTypes', 'hintsEnabled', 'instrument',
+      'intervalDirections', 'intervals', 'keys', 'modes', 'progressions', 'questionLimit',
+      'referenceKey', 'referenceVoicing', 'reverb', 'swing', 'tempo', 'theme',
+      'voicingMode', 'volume',
+    ]);
+  });
+
+  it('loads a profile written before the renaming, with its history intact', () => {
+    const saved = {
+      version: 3,
+      createdAt: 1,
+      skills: {
+        'chord:maj7': {
+          conceptId: 'chord:maj7', attempts: 12, correct: 9, strength: 0.74,
+          lastSeen: 2, level: 3, streak: 2, history: [],
+        },
+        'progression:rhythm-changes-a': {
+          conceptId: 'progression:rhythm-changes-a', attempts: 4, correct: 1,
+          strength: 0.2, lastSeen: 2, level: 1, streak: 0, history: [],
+        },
+      },
+      sessions: [],
+      attempts: [],
+      settings: { difficulty: 4, exerciseTypes: ['progression', 'key'], voicingMode: 'curve' },
+      streak: { count: 3, lastDay: '2026-11-18' },
+      dailyResults: {},
+    };
+    const loaded = importProfile(JSON.stringify(saved))!;
+    expect(loaded, 'it loaded at all').not.toBeNull();
+    expect(loaded.skills['chord:maj7'].strength).toBe(0.74);
+    expect(loaded.skills['progression:rhythm-changes-a'].attempts).toBe(4);
+    expect(loaded.settings.difficulty, 'the level the control sets').toBe(4);
+    expect(loaded.settings.exerciseTypes).toEqual(['progression', 'key']);
+    expect(loaded.streak.count).toBe(3);
+    // And the exercises those ids name are still there to practise.
+    for (const id of loaded.settings.exerciseTypes!) {
+      expect(EXERCISE_TYPES.map((t) => t.id), id).toContain(id);
     }
   });
 });

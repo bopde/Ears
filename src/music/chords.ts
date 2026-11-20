@@ -4,7 +4,9 @@ import {
   FLAT_NAMES, SHARP_NAMES, letterIndexOf, octaveOf, pcName, pcOf, pcSetSimilarity, spellOnLetter,
   type Accidental, type Midi, type PitchClass,
 } from './pitch';
-import { BASIC_OF, degreeIn, degreeNumber, memberName, memberNameOf } from './degrees';
+import {
+  BASIC_OF, colourInterval, degreeIn, degreeNumber, memberName, memberNameOf,
+} from './degrees';
 import { mod } from '../lib/util';
 
 /**
@@ -529,5 +531,8 @@ export function addedTensions(chord: Chord, notes: readonly Midi[]): string[] {
     if (own.has(pcOf(midi))) continue;
     seen.add(chordDegrees(chord, [midi])[0]);
   }
-  return [...seen];
+  // Up the stack, not up the keyboard: a drop-2 voicing happens to play its
+  // 13 under its 9, and "13, 9" reads as a mistake where "9, 13" reads as
+  // a chord. The order the notes came in says nothing a reader wants.
+  return [...seen].sort((a, b) => (colourInterval(a) ?? 0) - (colourInterval(b) ?? 0));
 }

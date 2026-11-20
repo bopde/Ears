@@ -33,7 +33,7 @@ export const modeExercise: ExerciseType = {
   id: 'mode',
   name: 'Modes',
   short: 'Modes',
-  description: 'A tonal centre is established, then a line is played over it. Name the mode.',
+  description: 'A key centre is established, then a line is played over it. Name the mode.',
   baseSeconds: 24,
   pool: (settings) => enabledModes(settings).map((s) => scaleConceptId(s.id)),
   generate(ctx): Question | null {

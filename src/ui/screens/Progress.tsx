@@ -17,7 +17,7 @@ const KIND_TITLE: Record<ConceptKind, string> = {
   interval: 'Intervals',
   mode: 'Modes',
   progression: 'Progressions',
-  key: 'Tonal centres',
+  key: 'Key centres',
   inversion: 'Inversions',
   voicing: 'Voicings',
   colour: 'Colour',
@@ -97,7 +97,7 @@ export function Progress({ onBack, onStart }: { onBack: () => void; onStart: () 
 
       {weak.length > 0 && (
         <section className="card stack stack--tight">
-          <div className="eyebrow">Needs work</div>
+          <div className="eyebrow">Next to practise</div>
           <div className="list">
             {weak.map(({ concept, skill }) => (
               <div className="list__row" key={concept.id}>
@@ -177,7 +177,7 @@ export function Progress({ onBack, onStart }: { onBack: () => void; onStart: () 
             ))}
           </div>
           <p className="small faint">
-            Counts every question with a root or tonal centre, not only key recognition.
+            Counts every question with a root or key centre, not only key recognition.
           </p>
         </section>
       )}

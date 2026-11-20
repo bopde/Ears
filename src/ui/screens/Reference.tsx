@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../state';
 import { Button, Chip, Segmented, TopBar, clsx } from '../components/ui';
 import { PlayIcon } from '../components/Icons';
@@ -9,7 +9,7 @@ import {
 import {
   REFERENCE_VOICINGS, VOICING_LESSONS, VOICING_SHEET_NOTE, modeForStyle, playComparison, playReference,
   playReferenceChord, referenceBassCaption, referenceDegrees, referenceNoteNames,
-  referenceVoicings, rootMotionLine,
+  referenceVoicings,
   type ReferenceChord, type ReferenceVoicing, type VoicingLesson,
 } from '../../audio/reference';
 import {
@@ -17,14 +17,16 @@ import {
 } from '../../music/chords';
 import { INTERVALS, intervalNoteNames } from '../../music/intervals';
 import { SCALES, scaleNoteNames } from '../../music/scales';
-import { PROGRESSIONS, romanLine } from '../../music/progressions';
+import {
+  PROGRESSIONS, analysisTokens, type AnalysisToken, type ProgressionDef,
+} from '../../music/progressions';
 import { PITCH_CLASSES, keyName, pcName } from '../../music/pitch';
 import { groupBy } from '../../lib/util';
 
 type Tab = 'progressions' | 'voicings' | 'chords' | 'intervals' | 'modes';
 
 const TABS: Array<{ value: Tab; label: string }> = [
-  { value: 'progressions', label: 'Changes' },
+  { value: 'progressions', label: 'Progressions' },
   { value: 'voicings', label: 'Voicings' },
   { value: 'chords', label: 'Chords' },
   { value: 'intervals', label: 'Intervals' },
@@ -49,6 +51,58 @@ const PARENT_LABEL: Record<string, string> = {
 };
 
 /** One playable entry. The whole row is the button; nothing else is clickable. */
+/** Solid down a fifth, dashed down a half step. */
+const ARROW = { fifth: '\u2192', half: '\u21e2' } as const;
+
+/**
+ * The one-line analysis, with each ii–V underlined rather than bracketed.
+ *
+ * A bracket is a drawn mark, and on one line of running text an underline
+ * is the drawing that fits: it joins the two chords without needing two
+ * characters' worth of room between them.
+ */
+function AnalysisLine({ def }: { def: ProgressionDef }) {
+  const tokens = analysisTokens(def);
+  // Grouped before it is drawn: the underline has to run under both chords
+  // of a ii–V and the dash between them, or it reads as two marks.
+  const groups: AnalysisToken[][] = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (tokens[i].pair && tokens[i + 1]) {
+      groups.push([tokens[i], tokens[i + 1]]);
+      i += 1;
+    } else {
+      groups.push([tokens[i]]);
+    }
+  }
+  const chord = (token: AnalysisToken) => (
+    <>
+      {token.roman}
+      {token.note && <span className="refanalysis__note"> ({token.note})</span>}
+    </>
+  );
+  return (
+    <span className="refanalysis">
+      {groups.map((group, i) => (
+        <Fragment key={i}>
+          <span className={clsx(group.length > 1 && 'refanalysis__pair')}>
+            {group.map((token, k) => (
+              <Fragment key={k}>
+                {chord(token)}
+                {k < group.length - 1 && (
+                  <span className="refanalysis__join"> {token.join} </span>
+                )}
+              </Fragment>
+            ))}
+          </span>
+          {group[group.length - 1].join && (
+            <span className="refanalysis__join"> {group[group.length - 1].join} </span>
+          )}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
 function Row({
   title,
   concrete,
@@ -59,7 +113,7 @@ function Row({
 }: {
   title: string;
   concrete: string;
-  detail?: string;
+  detail?: ReactNode;
   blurb?: string;
   active: boolean;
   onPlay: () => void;
@@ -94,11 +148,14 @@ function Row({
 function ChordCard({
   item,
   accidental,
+  pair,
   active,
   onPlay,
 }: {
   item: ReferenceChord;
   accidental: 'sharp' | 'flat' | 'both';
+  /** Which half of a bracketed ii–V this card is, where it is one. */
+  pair?: 'start' | 'end';
   active: boolean;
   onPlay: () => void;
 }) {
@@ -106,12 +163,24 @@ function ChordCard({
   return (
     <button
       type="button"
-      className={clsx('refchord', active && 'refchord--on')}
+      className={clsx(
+        'refchord',
+        active && 'refchord--on',
+        pair === 'start' && 'refchord--pairStart',
+        pair === 'end' && 'refchord--pairEnd',
+      )}
       onClick={onPlay}
       aria-label={`Play ${item.symbol} alone`}
     >
       <span className="refchord__symbol">{item.symbol}</span>
-      <span className="refchord__roman">{item.roman}</span>
+      <span className="refchord__roman">
+        {item.keyLabel && <span className="refchord__key">{item.keyLabel}: </span>}
+        {item.roman}
+        {item.marks.arrow && (
+          <span className="refchord__arrow" aria-hidden>{` ${ARROW[item.marks.arrow]}`}</span>
+        )}
+        {item.marks.note && <span className="refchord__note"> {item.marks.note}</span>}
+      </span>
       {/* Highest first, the way the stack is read off a keyboard, with the
           degree each note is playing beside it. */}
       <span className="refchord__notes">
@@ -312,6 +381,14 @@ export function Reference({ onBack }: { onBack: () => void }) {
             />
             <span>Roll a single chord from the bass</span>
           </label>
+          {/* Said once, at the top of the tab the marks appear on. Three
+              marks is the whole system, and a reader who has met them
+              before does not need the line again under every card. */}
+          <div className="reflegend">
+            <span><span className="reflegend__mark reflegend__mark--pair" /> ii–V pair</span>
+            <span><span className="reflegend__mark">→</span> resolves down a 5th</span>
+            <span><span className="reflegend__mark">⇢</span> resolves down a half step</span>
+          </div>
         </section>
       )}
 
@@ -328,8 +405,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
                     <Row
                       title={def.name}
                       concrete={chords.map((c) => c.symbol).join('  |  ')}
-                      detail={`${romanLine(def)}   ·   ${
-                        rootMotionLine(chords.flatMap((c) => c.bass))}`}
+                      detail={<AnalysisLine def={def} />}
                       blurb={def.blurb}
                       active={playing === def.id}
                       onPlay={() =>
@@ -364,6 +440,7 @@ export function Reference({ onBack }: { onBack: () => void }) {
                           key={`${def.id}-${i}`}
                           item={item}
                           accidental={accidental}
+                          pair={item.marks.pair ? 'start' : chords[i - 1]?.marks.pair ? 'end' : undefined}
                           active={playing === `${def.id}-${i}`}
                           onPlay={() =>
                             void play(`${def.id}-${i}`, (perf) =>

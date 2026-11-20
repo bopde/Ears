@@ -73,7 +73,7 @@ describe('the tonal centre question shows the changes it gave you', () => {
       q.reveal.rows.forEach((row, i) => {
         // A figured bass would add "/3"; nothing here inverts, so the numeral
         // is the library's own.
-        expect(row.roman, `${where} row ${i}`).toBe(realised[i].roman);
+        expect(row.roman, `${where} row ${i}`).toBe(realised[i].localRoman);
         expect(row.symbol.length, `${where} row ${i} has a symbol`).toBeGreaterThan(0);
         checked += 1;
       });

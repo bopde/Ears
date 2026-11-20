@@ -36,7 +36,7 @@ export interface PracticeSettings {
   durationMinutes: number;
   /** A fixed level, or 'adaptive' to let the learning model set it per concept. */
   difficulty: number | 'adaptive';
-  /** Restrict roots and tonal centres, or 'all' for the full chromatic set. */
+  /** Restrict roots and key centres, or 'all' for the full chromatic set. */
   keys: PitchClass[] | 'all';
   hintsEnabled: boolean;
   /** Stop after this many questions rather than on the clock. */

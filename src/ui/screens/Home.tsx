@@ -218,7 +218,7 @@ export function Home({
                     <div className="list__sub">
                       {item.skill
                         ? `${REASON_LABEL[item.reason]} · level ${item.skill.level}`
-                        : `${concept.kind} · difficulty ${concept.tier}`}
+                        : `${concept.kind} · level ${concept.tier}`}
                     </div>
                   </div>
                   {item.skill ? (

@@ -11,7 +11,7 @@ export type Reason = 'new' | 'weak' | 'due' | 'retention' | 'rotation';
 
 export const REASON_LABEL: Record<Reason, string> = {
   new: 'Not yet practised',
-  weak: 'Needs work',
+  weak: 'Next to practise',
   due: 'Due for review',
   retention: 'Retention check',
   rotation: 'Keeping it turning over',

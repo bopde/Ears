@@ -1,9 +1,16 @@
 import type { Concept } from './concept';
 import { conceptId } from './concept';
 import { makeChord, requireChordQuality, romanSuffix, type Chord } from './chords';
+import { BASIC_OF } from './degrees';
 import { keyName, letterIndexOf, spellOnLetter, type PitchClass } from './pitch';
 import type { VoicingStyle } from './voicing';
 import { mod } from '../lib/util';
+
+/** A dominant resolving down a fifth, or down a half step. */
+export type ArrowKind = 'fifth' | 'half';
+
+/** A word the analysis puts beside a chord, where one is worth saying. */
+export type ChordNote = 'passing' | 'backdoor' | 'deceptive';
 
 export interface ProgressionChord {
   /** Semitones above the tonic. */
@@ -11,12 +18,38 @@ export interface ProgressionChord {
   /** Chord quality id, resolved against the chord registry. */
   quality: string;
   /**
-   * The numeral alone — "ii", "V", "♭II", "V/IV". The quality suffix is
-   * derived from `quality`, so the label can never understate what sounds.
+   * The numeral alone — "ii", "V", "♭II", "V/ii". The quality suffix is
+   * derived from the chord's basic quality, so a numeral names a function
+   * rather than a voicing's tensions.
+   *
+   * A slash means "of", and only that: V/ii is the five of the two. What
+   * the bass has underneath is said on the row, never here.
    */
   numeral: string;
   /** Overrides the progression's default length for this chord. */
   beats?: number;
+
+  // ── Analysis marks ──────────────────────────────────────────────────────
+  // Most of these are worked out from the chords by `derivedMarks`. What a
+  // progression writes down is the handful that cannot be: the judgement
+  // calls, where the same two chords mean different things in different
+  // places. A blues I7 moves to IV7 without being its dominant.
+
+  /** Bracketed with the next chord as a ii–V pair. */
+  pair?: boolean;
+  /** `'none'` where the chords would suggest an arrow and the music does not. */
+  arrow?: ArrowKind | 'none';
+  /** The numeral of a key centre that starts here: "♭VI" for the A♭ of C. */
+  key?: string;
+  note?: ChordNote;
+}
+
+/** The marks as they end up, derivation and overrides together. */
+export interface ChordMarks {
+  pair: boolean;
+  arrow?: ArrowKind;
+  key?: string;
+  note?: ChordNote;
 }
 
 export interface ProgressionDef {
@@ -42,8 +75,12 @@ export interface ProgressionDef {
   voicing?: VoicingStyle;
 }
 
-const C = (degree: number, quality: string, numeral: string, beats?: number): ProgressionChord =>
-  beats === undefined ? { degree, quality, numeral } : { degree, quality, numeral, beats };
+const C = (
+  degree: number,
+  quality: string,
+  numeral: string,
+  marks?: Omit<ProgressionChord, 'degree' | 'quality' | 'numeral'>,
+): ProgressionChord => ({ degree, quality, numeral, ...marks });
 
 const P = (p: ProgressionDef) => p;
 
@@ -68,14 +105,14 @@ export const PROGRESSIONS: ProgressionDef[] = [
   P({ id: 'I-VI7-ii-V', name: 'I–VI7–ii–V turnaround', short: 'I VI7 ii V', tonality: 'major',
       tier: 3, beatsPerChord: 4, core: true, devices: ['turnaround', 'secondary-dominant'],
       tags: ['turnaround', 'major-key'],
-      chords: [C(0, 'maj7', 'I'), C(9, '7b9', 'VI'), C(2, 'm7', 'ii'), C(7, '7', 'V')],
+      chords: [C(0, 'maj7', 'I'), C(9, '7b9', 'V/ii'), C(2, 'm7', 'ii'), C(7, '7', 'V')],
       blurb: 'The vi is made dominant so it pulls harder to ii.' }),
   P({ id: 'iii-VI-ii-V', name: 'iii–VI–ii–V', short: 'iii VI ii V', tonality: 'major', tier: 3,
       beatsPerChord: 4, core: true, devices: ['turnaround'], tags: ['turnaround', 'major-key'],
-      chords: [C(4, 'm7', 'iii'), C(9, '7b9', 'VI'), C(2, 'm7', 'ii'), C(7, '7', 'V')] }),
+      chords: [C(4, 'm7', 'iii'), C(9, '7b9', 'V/ii'), C(2, 'm7', 'ii'), C(7, '7', 'V')] }),
   P({ id: 'deceptive', name: 'Deceptive cadence', short: 'ii V vi', tonality: 'major', tier: 3,
       beatsPerChord: 4, core: true, devices: ['deceptive'], tags: ['cadence', 'major-key'],
-      chords: [C(2, 'm7', 'ii'), C(7, '7', 'V'), C(9, 'm7', 'vi')],
+      chords: [C(2, 'm7', 'ii'), C(7, '7', 'V'), C(9, 'm7', 'vi', { note: 'deceptive' })],
       blurb: 'The V resolves to vi instead of I — the floor drops out.' }),
 
   // ── Minor-key harmony ────────────────────────────────────────────────────
@@ -106,22 +143,26 @@ export const PROGRESSIONS: ProgressionDef[] = [
   P({ id: 'backdoor', name: 'Backdoor dominant', short: 'iv ♭VII7 I', tonality: 'major',
       tier: 4, beatsPerChord: 4, core: true, voicing: 'rootless', devices: ['backdoor', 'modal-interchange'],
       tags: ['substitution', 'borrowed'],
-      chords: [C(5, 'm7', 'iv'), C(10, '7', '♭VII'), C(0, 'maj7', 'I')],
+      // A iv–♭VII is a ii–V of nothing: it brackets like one and arrives
+      // somewhere else, which is the whole point of the back door.
+      chords: [C(5, 'm7', 'iv', { pair: true }), C(10, '7', '♭VII'),
+               C(0, 'maj7', 'I', { note: 'backdoor' })],
       blurb: 'Arriving at I from ♭VII7 instead of V7 — borrowed from the parallel minor.' }),
   P({ id: 'dim-passing', name: 'Diminished passing chord', short: 'I ♯i°7 ii V', tonality: 'major',
       tier: 4, beatsPerChord: 4, core: true, devices: ['diminished-passing'],
       tags: ['passing', 'major-key'],
-      chords: [C(0, 'maj7', 'I'), C(1, 'dim7', '♯i'), C(2, 'm7', 'ii'), C(7, '7', 'V')],
+      chords: [C(0, 'maj7', 'I'), C(1, 'dim7', '♯i', { note: 'passing' }),
+               C(2, 'm7', 'ii'), C(7, '7', 'V')],
       blurb: 'A chromatic bass step from I up to ii, harmonised as a °7.' }),
   P({ id: 'V-of-V', name: 'Secondary dominant (V7/V)', short: 'I II7 V7 I', tonality: 'major',
       tier: 3, beatsPerChord: 4, core: true, devices: ['secondary-dominant'],
       tags: ['secondary-dominant', 'major-key'],
-      chords: [C(0, 'maj7', 'I'), C(2, '7', 'II'), C(7, '7', 'V'), C(0, 'maj7', 'I')],
+      chords: [C(0, 'maj7', 'I'), C(2, '7', 'V/V'), C(7, '7', 'V'), C(0, 'maj7', 'I')],
       blurb: 'The ii is made dominant: a V of the V.' }),
   P({ id: 'V-of-IV', name: 'Secondary dominant (V7/IV)', short: 'I I7 IV ivm6', tonality: 'major',
       tier: 4, beatsPerChord: 4, core: true, devices: ['secondary-dominant', 'modal-interchange'],
       tags: ['secondary-dominant', 'major-key'],
-      chords: [C(0, 'maj7', 'I'), C(0, '7', 'I'), C(5, 'maj7', 'IV'), C(5, 'm6', 'iv')],
+      chords: [C(0, 'maj7', 'I'), C(0, '7', 'V/IV'), C(5, 'maj7', 'IV'), C(5, 'm6', 'iv')],
       blurb: 'The tonic turns dominant to push to IV, then IV darkens to minor.' }),
   P({ id: 'bVI-bVII-I', name: 'Modal interchange ♭VI–♭VII–I', short: '♭VI ♭VII I',
       tonality: 'major', tier: 4, beatsPerChord: 4, core: true, devices: ['modal-interchange'],
@@ -132,7 +173,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       tonality: 'major', tier: 4, beatsPerChord: 2, core: true,
       devices: ['turnaround', 'tritone-sub', 'diminished-passing'],
       tags: ['turnaround', 'major-key'],
-      chords: [C(4, 'm7', 'iii'), C(3, 'dim7', '♭iii'), C(2, 'm7', 'ii'),
+      chords: [C(4, 'm7', 'iii'), C(3, 'dim7', '♭iii', { note: 'passing' }), C(2, 'm7', 'ii'),
                C(1, '9#11', '♭II'), C(0, 'maj7', 'I')],
       blurb: 'The bass walks down in half steps from the iii to the tonic.' }),
   P({ id: 'diatonic-cycle', name: 'Diatonic cycle of fourths', short: 'Diatonic cycle',
@@ -145,20 +186,25 @@ export const PROGRESSIONS: ProgressionDef[] = [
       tonality: 'major', tier: 4, beatsPerChord: 2, core: true, voicing: 'rootless',
       devices: ['turnaround', 'secondary-dominant', 'diminished-passing'],
       tags: ['form', 'major-key'],
-      chords: [C(0, 'maj7', 'I'), C(9, '7b9', 'VI'), C(2, 'm7', 'ii'), C(7, '7', 'V'),
-               C(0, 'maj7', 'I'), C(0, '7', 'I'), C(5, 'maj7', 'IV'), C(6, 'dim7', '♯iv')],
+      chords: [C(0, 'maj7', 'I'), C(9, '7b9', 'V/ii'), C(2, 'm7', 'ii'), C(7, '7', 'V'),
+               C(0, 'maj7', 'I'), C(0, '7', 'V/IV'), C(5, 'maj7', 'IV'),
+               C(6, 'dim7', '♯iv', { note: 'passing' })],
       blurb: 'The first eight bars of the most-played form in jazz.' }),
 
   // ── Blues ────────────────────────────────────────────────────────────────
   P({ id: 'blues-opening', name: 'Jazz blues — opening', short: 'Blues 1–4', tonality: 'major',
       tier: 3, beatsPerChord: 4, core: true, voicing: 'shell', devices: ['blues'], tags: ['blues', 'form'],
-      chords: [C(0, '9', 'I'), C(5, '13', 'IV'), C(0, '9', 'I'), C(7, 'm7', 'v')],
+      // The I7 of a blues is where the music lives, not a dominant pointing
+      // at the IV. It acts as V7/IV in bar 4 of a full chorus, which these
+      // four bars do not reach.
+      chords: [C(0, '9', 'I', { arrow: 'none' }), C(5, '13', 'IV'), C(0, '9', 'I'),
+               C(7, 'm7', 'v')],
       blurb: 'Bars 1–4 of a jazz blues, ending on the ii of IV.' }),
   P({ id: 'blues-turnaround', name: 'Jazz blues — turnaround', short: 'Blues 7–12',
       tonality: 'major', tier: 4, beatsPerChord: 2, core: true, voicing: 'shell',
       devices: ['blues', 'turnaround', 'diminished-passing'], tags: ['blues', 'form'],
-      chords: [C(5, '13', 'IV'), C(6, 'dim7', '♯iv'), C(0, '9', 'I'), C(9, '7b9', 'VI'),
-               C(2, 'm9', 'ii'), C(7, '13', 'V')],
+      chords: [C(5, '13', 'IV'), C(6, 'dim7', '♯iv', { note: 'passing' }), C(0, '9', 'I'),
+               C(9, '7b9', 'V/ii'), C(2, 'm9', 'ii'), C(7, '13', 'V')],
       blurb: 'The back half of a blues chorus, with the °7 passing chord.' }),
   P({ id: 'minor-blues', name: 'Minor blues — opening', short: 'Min blues', tonality: 'minor',
       tier: 4, beatsPerChord: 4, core: true, voicing: 'shell', devices: ['blues', 'minor-ii-V'],
@@ -181,21 +227,24 @@ export const PROGRESSIONS: ProgressionDef[] = [
   P({ id: 'coltrane-cell', name: 'Coltrane changes', short: 'Coltrane', tonality: 'major',
       tier: 5, beatsPerChord: 2, core: true, voicing: 'drop2', devices: ['coltrane', 'modulation'],
       tags: ['advanced', 'symmetrical'],
-      chords: [C(0, 'maj7', 'I'), C(3, '7', '♭III'), C(8, 'maj7', '♭VI'),
-               C(11, '7', 'VII'), C(4, 'maj7', 'III')],
+      chords: [C(0, 'maj7', 'I', { key: 'I' }), C(3, '7', 'V/♭VI', { key: '♭VI' }),
+               C(8, 'maj7', '♭VI'), C(11, '7', 'V/III', { key: 'III' }),
+               C(4, 'maj7', 'III')],
       blurb: 'Tonic centres a major third apart, each reached by its own dominant.' }),
   P({ id: 'coltrane-substitution', name: 'Coltrane substitution over ii–V–I', short: 'Countdown',
       tonality: 'major', tier: 5, beatsPerChord: 2, core: true, voicing: 'drop2',
       devices: ['coltrane', 'substitution'], tags: ['advanced', 'substitution'],
-      chords: [C(2, 'm7', 'ii'), C(3, '7', '♭III'), C(8, 'maj7', '♭VI'), C(11, '7', 'VII'),
-               C(4, 'maj7', 'III'), C(7, '7', 'V'), C(0, 'maj7', 'I')],
+      chords: [C(2, 'm7', 'ii', { key: 'I' }), C(3, '7', 'V/♭VI', { key: '♭VI' }),
+               C(8, 'maj7', '♭VI'), C(11, '7', 'V/III', { key: 'III' }),
+               C(4, 'maj7', 'III'), C(7, '7', 'V', { key: 'I' }), C(0, 'maj7', 'I')],
       blurb: 'A two-bar ii–V filled in with two extra key centres before it lands.' }),
   P({ id: 'giant-steps-head', name: 'Giant Steps opening', short: 'Giant Steps',
       tonality: 'major', tier: 5, beatsPerChord: 2, core: true, voicing: 'drop2',
       devices: ['coltrane', 'modulation', 'ii-V-I'], tags: ['advanced', 'symmetrical', 'form'],
-      chords: [C(0, 'maj7', 'I'), C(3, '7', '♭III'), C(8, 'maj7', '♭VI'),
-               C(11, '7', 'VII'), C(4, 'maj7', 'III'), C(10, 'm7', '♭vii'),
-               C(3, '7', '♭III')],
+      chords: [C(0, 'maj7', 'I', { key: 'I' }), C(3, '7', 'V/♭VI', { key: '♭VI' }),
+               C(8, 'maj7', '♭VI'), C(11, '7', 'V/III', { key: 'III' }),
+               C(4, 'maj7', 'III'), C(10, 'm7', 'ii/♭VI', { key: '♭VI' }),
+               C(3, '7', 'V/♭VI')],
       blurb: 'The Coltrane cell, then a ii–V setting up the next turn of it.' }),
   P({ id: 'dominant-cycle', name: 'Cycle of dominants', short: 'Dom. cycle',
       tonality: 'major', tier: 5, beatsPerChord: 2, core: true,
@@ -213,25 +262,27 @@ export const PROGRESSIONS: ProgressionDef[] = [
       tonality: 'major', tier: 5, beatsPerChord: 2, core: true,
       devices: ['modulation', 'modal-interchange', 'backdoor'],
       tags: ['advanced', 'form', 'borrowed'],
-      chords: [C(6, 'm7b5', '♯iv'), C(11, '7alt', 'VII'), C(2, 'm7', 'ii'),
-               C(7, '7', 'V'), C(7, 'm7', 'v'), C(0, '7', 'I'), C(5, 'maj7', 'IV'),
-               C(10, '7', '♭VII')],
+      chords: [C(6, 'm7b5', 'ii/iii'), C(11, '7alt', 'V/iii'), C(2, 'm7', 'ii'),
+               C(7, '7', 'V'), C(7, 'm7', 'ii/IV'), C(0, '7', 'V/IV'),
+               C(5, 'maj7', 'IV'), C(10, '7', '♭VII')],
       blurb: 'Opens on a ♯ivø7 that belongs to no key yet, then cadences away from the tonic.' }),
   P({ id: 'modulation-up-tone', name: 'Modulation up a whole tone', short: 'Mod +2',
       tonality: 'major', tier: 4, beatsPerChord: 2, core: true, devices: ['modulation'],
       tags: ['modulation'],
-      chords: [C(2, 'm7', 'ii'), C(7, '7', 'V'), C(0, 'maj7', 'I'),
-               C(4, 'm7', 'ii/II'), C(9, '7', 'V/II'), C(2, 'maj7', 'I/II')],
+      chords: [C(2, 'm7', 'ii', { key: 'I' }), C(7, '7', 'V'), C(0, 'maj7', 'I'),
+               C(4, 'm7', 'ii/II', { key: 'II' }), C(9, '7', 'V/II'), C(2, 'maj7', 'II')],
       blurb: 'A complete cadence, then the same cadence a whole tone higher.' }),
   P({ id: 'modulation-to-IV', name: 'Modulation to IV', short: 'Mod to IV', tonality: 'major',
       tier: 4, beatsPerChord: 2, core: true, devices: ['modulation'], tags: ['modulation'],
-      chords: [C(2, 'm7', 'ii'), C(7, '7', 'V'), C(0, 'maj7', 'I'),
-               C(7, 'm7', 'ii/IV'), C(0, '7', 'V/IV'), C(5, 'maj7', 'IV')] }),
+      chords: [C(2, 'm7', 'ii', { key: 'I' }), C(7, '7', 'V'), C(0, 'maj7', 'I'),
+               C(7, 'm7', 'ii/IV', { key: 'IV' }), C(0, '7', 'V/IV'),
+               C(5, 'maj7', 'IV')] }),
   P({ id: 'rapid-ii-V', name: 'Descending ii–Vs', short: 'Rapid ii–V', tonality: 'major',
       tier: 5, beatsPerChord: 2, core: true, devices: ['rapid-movement', 'ii-V-I'],
       tags: ['advanced'],
-      chords: [C(2, 'm7', 'ii'), C(7, '7', 'V'), C(0, 'm7', 'ii/♭VII'), C(5, '7', 'V/♭VII'),
-               C(10, 'm7', 'ii/♭VI'), C(3, '7', 'V/♭VI')],
+      chords: [C(2, 'm7', 'ii', { key: 'I' }), C(7, '7', 'V'),
+               C(0, 'm7', 'ii/♭VII', { key: '♭VII' }), C(5, '7', 'V/♭VII'),
+               C(10, 'm7', 'ii/♭VI', { key: '♭VI' }), C(3, '7', 'V/♭VI')],
       blurb: 'ii–V pairs stepping down in whole tones without ever resolving.' }),
 ];
 
@@ -255,17 +306,18 @@ export function requireProgression(id: string): ProgressionDef {
 }
 
 /**
- * Roman numeral with the quality written out: IV13 rather than IV7 when a
- * thirteenth is what the chord *is*.
+ * Roman numeral with the chord's basic quality written out: IV7, not IV13.
  *
- * The distinction is between the chord and the voicing. A chord written as a
- * 13th has the 13th in its definition and would be a different chord without
- * it; a plain V7 comped rootless sounds a 9th as well, and is still a V7. The
- * numeral follows the quality, so it can never understate the chord, and the
- * cheat sheet prints the degrees the voicing actually sounds beside it.
+ * A numeral is a function, and the function of a thirteenth chord is the
+ * function of the dominant inside it. Writing IV13 beside ii9 and V13 said
+ * the three were doing three different things, when the difference was only
+ * which tensions each voicing happened to take. The quality is kept as
+ * written so the voicing still sounds the colour, and the row beside the
+ * numeral names it: "♭II7 · D♭7 · 9, ♯11".
  */
 export function romanLabel(chord: ProgressionChord): string {
-  const suffix = romanSuffix(requireChordQuality(chord.quality));
+  const basic = BASIC_OF[chord.quality] ?? chord.quality;
+  const suffix = romanSuffix(requireChordQuality(basic));
   // Secondary-function notation takes the suffix on the numeral itself, so
   // V7/IV rather than V/IV7.
   const slash = chord.numeral.indexOf('/');
@@ -324,7 +376,19 @@ export function rootNames(def: ProgressionDef, tonic: PitchClass): Array<string 
 
 export interface RealisedChord {
   chord: Chord;
+  /** The numeral in the home key, which is what the summary counts in. */
   roman: string;
+  /**
+   * The numeral in the key centre in force here.
+   *
+   * The same as `roman` until a progression modulates. Under A♭, Coltrane's
+   * V7/♭VI is a V7 and its ♭VI∆7 is the I∆7 — what the rows show, once the
+   * key label above them has said where the counting starts.
+   */
+  localRoman: string;
+  /** "A♭" where a new key centre starts at this chord. */
+  keyLabel?: string;
+  marks: ChordMarks;
   beats: number;
   /** Semitones above the tonic, kept for root-motion analysis. */
   degree: number;
@@ -333,19 +397,187 @@ export interface RealisedChord {
 /** Puts a progression into a concrete key. */
 export function realiseProgression(def: ProgressionDef, tonic: PitchClass): RealisedChord[] {
   const names = rootNames(def, tonic);
-  return def.chords.map((c, i) => ({
-    chord: makeChord(mod(tonic + c.degree, 12), c.quality, names[i]),
-    roman: romanLabel(c),
-    beats: c.beats ?? def.beatsPerChord,
-    degree: mod(c.degree, 12),
-  }));
+  const marks = progressionMarks(def);
+  const tonality = def.tonality === 'minor' ? 'minor' : 'major';
+  const letter = letterIndexOf(keyName(tonic, tonality));
+  let key: string | undefined;
+  return def.chords.map((c, i) => {
+    if (marks[i].key) key = marks[i].key;
+    const keyDegree = key === undefined ? null : numeralDegree(key);
+    const keySteps = key === undefined ? null : numeralSteps(key);
+    const label = marks[i].key === undefined || keyDegree === null || keySteps === null
+      || letter < 0
+      ? undefined
+      : spellOnLetter(mod(tonic + keyDegree, 12), letter + keySteps) ?? undefined;
+    return {
+      chord: makeChord(mod(tonic + c.degree, 12), c.quality, names[i]),
+      roman: romanLabel(c),
+      localRoman: key === undefined
+        ? romanLabel(c)
+        : romanLabel({ ...c, numeral: numeralIn(c.numeral, c.degree, key) }),
+      ...(label ? { keyLabel: label } : {}),
+      marks: marks[i],
+      beats: c.beats ?? def.beatsPerChord,
+      degree: mod(c.degree, 12),
+    };
+  });
 }
 
 export const progressionBeats = (def: ProgressionDef): number =>
   def.chords.reduce((n, c) => n + (c.beats ?? def.beatsPerChord), 0);
 
-export const romanLine = (def: ProgressionDef): string =>
-  def.chords.map(romanLabel).join('  –  ');
+/**
+ * The progression on one line, as a jazz book marks it up.
+ *
+ * Arrows where a dominant resolves — solid down a fifth, dashed down a half
+ * step — and a plain dash where one chord merely follows another. Brackets
+ * are drawn rather than written, as an underline under the two chords of a
+ * ii–V, so a line of text leaves them out; `brackets` puts them in for a
+ * test, which is the one place the pairs have to be read back.
+ *
+ * Home-key numerals throughout, with no key labels: a modulation is marked
+ * in the rows, where there is room to say it once and count from it.
+ */
+export function romanLine(def: ProgressionDef, opts: { brackets?: boolean } = {}): string {
+  const tokens = analysisTokens(def);
+  let out = '';
+  tokens.forEach((token, i) => {
+    const open = opts.brackets && token.pair;
+    const close = opts.brackets && i > 0 && tokens[i - 1].pair;
+    out += (open ? '\u230a' : '') + token.roman + (token.note ? ` (${token.note})` : '')
+      + (close ? '\u230b' : '');
+    if (token.join) out += ` ${token.join} `;
+  });
+  return out;
+}
+
+// ── Functional analysis ─────────────────────────────────────────────────────
+
+/** The function part of a numeral: the "V" of "V/ii". */
+const head = (numeral: string): string => numeral.split('/')[0];
+
+/** What it is the five (or the two) of: the "ii" of "V/ii", else "". */
+const target = (numeral: string): string => {
+  const at = numeral.indexOf('/');
+  return at === -1 ? '' : numeral.slice(at + 1);
+};
+
+const isDominant = (quality: string): boolean => (BASIC_OF[quality] ?? quality) === '7';
+const isMinorSeventh = (quality: string): boolean => {
+  const basic = BASIC_OF[quality] ?? quality;
+  return basic === 'm7' || basic === 'm7b5';
+};
+
+/**
+ * The marks the chords themselves imply.
+ *
+ * An arrow is root motion under a dominant: a dominant-quality chord whose
+ * next chord's root is a fifth below gets a solid one, a half step below a
+ * dashed one. A bracket joins a ii (or a iiø) to the V or ♭II7 of the same
+ * thing — "the same thing" being what makes a ii–V of IV a pair and a ii of
+ * the home key followed by the V of somewhere else two separate chords.
+ *
+ * Everything the chords cannot say is written down in the library instead,
+ * and `progressionMarks` lays one over the other.
+ */
+export function derivedMarks(def: ProgressionDef): ChordMarks[] {
+  return def.chords.map((c, i) => {
+    const next = def.chords[i + 1];
+    const marks: ChordMarks = { pair: false };
+    if (next && isDominant(c.quality)) {
+      const step = mod(next.degree - c.degree, 12);
+      if (step === 5) marks.arrow = 'fifth';
+      else if (step === 11) marks.arrow = 'half';
+    }
+    if (next
+      && isMinorSeventh(c.quality) && head(c.numeral) === 'ii'
+      && isDominant(next.quality) && ['V', '♭II'].includes(head(next.numeral))
+      && target(c.numeral) === target(next.numeral)) {
+      marks.pair = true;
+    }
+    return marks;
+  });
+}
+
+/** The marks as they are read: derived, with the library's overrides over them. */
+export function progressionMarks(def: ProgressionDef): ChordMarks[] {
+  return derivedMarks(def).map((derived, i) => {
+    const c = def.chords[i];
+    const arrow = c.arrow ?? derived.arrow;
+    return {
+      pair: c.pair ?? derived.pair,
+      ...(arrow && arrow !== 'none' ? { arrow } : {}),
+      ...(c.key ? { key: c.key } : {}),
+      ...(c.note ? { note: c.note } : {}),
+    };
+  });
+}
+
+const DIATONIC = [0, 2, 4, 5, 7, 9, 11];
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+/** How many semitones above the tonic a numeral sits. */
+export function numeralDegree(numeral: string): number | null {
+  let semitones = 0;
+  for (const part of numeral.split('/')) {
+    const bare = part.replace(/[♭♯]/g, '').toLowerCase();
+    const step = NUMERAL_STEPS[bare];
+    if (step === undefined) return null;
+    const flats = (part.match(/♭/g) ?? []).length;
+    const sharps = (part.match(/♯/g) ?? []).length;
+    semitones += DIATONIC[step] + sharps - flats;
+  }
+  return mod(semitones, 12);
+}
+
+/**
+ * The same chord, read against another key centre.
+ *
+ * What a modulation does to a numeral: under A♭, the V7/♭VI of C is just a
+ * V7 and the ♭VI∆7 is the I∆7. The rows say the key once and then count
+ * from it, which is how a chart is marked up and how the passage is heard
+ * — two bars of ii–V–I, not a secondary function pointing sideways.
+ *
+ * Returns the numeral unchanged where the result would need a double
+ * accidental, which no key centre in the library reaches.
+ */
+export function numeralIn(numeral: string, degree: number, key: string): string {
+  const steps = numeralSteps(numeral);
+  const keySteps = numeralSteps(key);
+  const keyDegree = numeralDegree(key);
+  if (steps === null || keySteps === null || keyDegree === null) return numeral;
+  const step = mod(steps - keySteps, 7);
+  const accidental = mod(degree - keyDegree, 12) - DIATONIC[step];
+  const mark = accidental === 0 ? '' : accidental === -1 ? '♭' : accidental === 1 ? '♯' : null;
+  if (mark === null) return numeral;
+  const upper = head(numeral) !== head(numeral).toLowerCase();
+  return mark + (upper ? ROMAN[step] : ROMAN[step].toLowerCase());
+}
+
+/** One chord of the analysis, with what joins it to the next. */
+export interface AnalysisToken {
+  roman: string;
+  note?: ChordNote;
+  /** Underlined, or bracketed, with the token after it. */
+  pair: boolean;
+  /** How it reaches the next chord; absent on the last. */
+  join?: '→' | '⇢' | '–';
+}
+
+/** The whole progression as functional analysis, in its home key. */
+export function analysisTokens(def: ProgressionDef): AnalysisToken[] {
+  const marks = progressionMarks(def);
+  return def.chords.map((c, i) => ({
+    roman: romanLabel(c),
+    ...(marks[i].note ? { note: marks[i].note } : {}),
+    pair: marks[i].pair,
+    ...(i === def.chords.length - 1
+      ? {}
+      : { join: marks[i].arrow === 'fifth' ? '→' as const
+        : marks[i].arrow === 'half' ? '⇢' as const
+          : '–' as const }),
+  }));
+}
 
 /** Progressions a listener could plausibly mix up with `target`. */
 export function nearestProgressions(

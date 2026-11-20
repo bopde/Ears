@@ -3,7 +3,9 @@ import {
   BASS_STYLE_CAPTION, Performer, bassLine, polyphonyGain,
   type BassNote, type BassRole, type BassStyle,
 } from './performer';
-import { realiseProgression, type ProgressionDef } from '../music/progressions';
+import {
+  realiseProgression, type ChordMarks, type ProgressionDef,
+} from '../music/progressions';
 import {
   voiceChord, voiceProgression, type Voicing, type VoicingOptions, type VoicingStyle,
 } from '../music/voicing';
@@ -123,7 +125,7 @@ export const REFERENCE_VOICINGS: VoicingLesson[] = LESSONS.map((lesson) => ({
  * would say nothing about which notes are in the chord.
  */
 export const VOICING_SHEET_NOTE =
-  'Every mode voice-leads: through a set of changes each chord takes the shape '
+  'Every mode voice-leads: through a progression each chord takes the voicing '
   + 'that moves least from the one before it.';
 
 /** The voicings the Voicings tab teaches — voice leading is a rule, not a shape. */
@@ -134,8 +136,16 @@ export const REFERENCE_VOICING_IDS = REFERENCE_VOICINGS.map((v) => v.id);
 /** One chord of a reference progression: what is shown and what sounds. */
 export interface ReferenceChord {
   chord: Chord;
-  /** Roman numeral carrying the quality that actually plays. */
+  /**
+   * The numeral in the key centre in force here, which is what a card
+   * shows — the same one the exercise reveals show, from the same
+   * realisation, so the sheet and the questions cannot drift apart.
+   */
   roman: string;
+  /** "A♭" where a new key centre starts at this chord. */
+  keyLabel?: string;
+  /** Bracket, arrow and note, as the analysis works them out. */
+  marks: ChordMarks;
   /** Chord symbol, written as a slash chord whenever the bass is not the root. */
   symbol: string;
   beats: number;
@@ -221,7 +231,9 @@ export function referenceVoicings(
     const bassPc = mod(bass[0]?.midi ?? voicing.notes[0], 12);
     const out: ReferenceChord = {
       chord: r.chord,
-      roman: r.roman,
+      roman: r.localRoman,
+      ...(r.keyLabel ? { keyLabel: r.keyLabel } : {}),
+      marks: r.marks,
       // A rootless voicing over a root bass is still that chord; it is only a
       // slash chord when the lowest sounding note is not the root.
       symbol: bassPc === r.chord.rootPc

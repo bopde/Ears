@@ -7,7 +7,7 @@ import { soundingOf } from '../test-support';
 import {
   CHORD_QUALITIES, chordSymbol, makeChord, slashSymbol, spellInChord,
 } from '../music/chords';
-import { INVERSIONS, bassToneOf, inversionsFor, requireInversion } from '../music/inversions';
+import { INVERSIONS, bassToneOf, inversionsOf, requireInversion } from '../music/inversions';
 import { mod } from '../lib/util';
 
 const settings = {
@@ -39,7 +39,7 @@ describe('the top levels ask for the slash chord', () => {
         expect(q.prompt.title, where).toBe('Which slash chord is this?');
         const [rootPc, qualityId] = [q.keyPc!, q.conceptIds[1].split(':')[1]];
         const chord = makeChord(rootPc, qualityId);
-        const inversions = inversionsFor(chord.quality.intervals.length);
+        const inversions = inversionsOf(chord.quality);
         // Exactly the chord over each of its own tones, nothing else.
         expect(q.fields[0].options.map((o) => o.label).sort(), where).toEqual(
           inversions
@@ -120,8 +120,8 @@ describe('the top levels ask for the slash chord', () => {
         expect(INVERSIONS.map((i) => i.id), where).toContain(q.correct.inversion);
         expect(q.conceptIds[0], where).toBe(`inversion:${q.correct.inversion}`);
         expect(q.fields[0].options.map((o) => o.id).sort(), where)
-          .toEqual(inversionsFor(makeChord(q.keyPc!, q.conceptIds[1].split(':')[1])
-            .quality.intervals.length).map((i) => i.id).sort());
+          .toEqual(inversionsOf(makeChord(q.keyPc!, q.conceptIds[1].split(':')[1]).quality)
+            .map((i) => i.id).sort());
       }
     }
   });

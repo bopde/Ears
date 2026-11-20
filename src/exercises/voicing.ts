@@ -161,7 +161,7 @@ function honoursLabel(chord: Chord, style: VoicingStyle, v: Voicing): boolean {
 
 export const voicingExercise: ExerciseType = {
   id: 'voicing',
-  name: 'Name the voicing',
+  name: 'Voicing',
   short: 'Voicing',
   description: 'One chord sounds. Say how it is voiced, not what it is.',
   baseSeconds: 16,
@@ -244,12 +244,12 @@ export const voicingExercise: ExerciseType = {
       keyPc: rootPc,
       prompt: {
         title: 'How is this chord voiced?',
-        sub: `${chordSymbol(chord, ctx.settings.accidental)} — the shape, not the chord`,
+        sub: `${chordSymbol(chord, ctx.settings.accidental)} — the voicing, not the chord`,
       },
       fields: [
         {
           key: 'voicing',
-          label: 'Shape',
+          label: 'Voicing',
           options: buildOptions(ctx.rng, target, distractors, (s) => ({
             id: s,
             label: voicingAnswerLabel(s),

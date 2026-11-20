@@ -140,7 +140,10 @@ describe('a reveal describes what was played', () => {
           q.play(perf.asPerformer());
           rows!.forEach((row, i) => {
             const chord = realised[i].chord;
-            expect(row.roman, `${id}@${d}#${seed} row ${i}`).toBe(realised[i].roman);
+            // The numeral in the key centre in force, which is the one a
+            // row shows: under the A♭ of a Coltrane cell, the V7/♭VI of C
+            // is a V7 and the label above the rows says where to count from.
+            expect(row.roman, `${id}@${d}#${seed} row ${i}`).toBe(realised[i].localRoman);
             expect(row.played.notes.length).toBe(row.played.degrees.length);
             // The notes are the ones that were scheduled for that chord.
             expect(row.played.notes).toEqual(

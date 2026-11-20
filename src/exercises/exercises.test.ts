@@ -8,7 +8,7 @@ import { CONCEPTS } from '../music/catalog';
 import {
   CHORD_QUALITIES, isSymmetrical, qualitySimilarity, requireChordQuality,
 } from '../music/chords';
-import { inversionsFor, requireInversion } from '../music/inversions';
+import { inversionsOf, requireInversion } from '../music/inversions';
 import { invertibleQualities } from './inversion';
 import { mod } from '../lib/util';
 import { SCALES, requireScale } from '../music/scales';
@@ -347,7 +347,7 @@ describe('inversion questions sound what they claim', () => {
       const { question, quality, inversion } = dissect(type.generate(context(3, seed * 97 + 5)));
       const offered = question.fields[0].options.map((o) => o.id);
       expect(offered.sort()).toEqual(
-        inversionsFor(quality.intervals.length)
+        inversionsOf(quality)
           .map((i) => i.id)
           .sort(),
       );

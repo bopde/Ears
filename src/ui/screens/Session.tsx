@@ -8,7 +8,7 @@ import {
   CheckIcon, ChevronIcon, CrossIcon, HintIcon, NextIcon, ReplayIcon,
 } from '../components/Icons';
 import { formatClock } from '../../lib/util';
-import type { RevealRow, SoundedChord } from '../../exercises/types';
+import { RevealRows, Sounded } from '../components/AnalysisRows';
 
 export function SessionScreen({
   daily,
@@ -376,64 +376,3 @@ function isControl(target: EventTarget | null): boolean {
     && !!target.closest('button, a, input, select, textarea, [tabindex]');
 }
 
-/**
- * One chord as it sounded: the bass apart, then the stack with its degrees.
- *
- * The degrees sit under the names rather than beside them so the two lines
- * line up column by column, which is the only way to read which degree
- * belongs to which note without counting.
- */
-function Sounded({ played }: { played: SoundedChord }) {
-  return (
-    <div className="sounded">
-      {played.bass && (
-        <span className="sounded__bass">
-          <span className="sounded__label">Bass</span>
-          {played.bass}
-        </span>
-      )}
-      <span className="sounded__stack">
-        {played.notes.map((name, i) => (
-          <span
-            key={`${name}-${i}`}
-            className={clsx('sounded__note', played.added?.includes(i) && 'sounded__note--added')}
-          >
-            <span className="sounded__name">{name}</span>
-            <span className="sounded__degree">{played.degrees[i]}</span>
-          </span>
-        ))}
-      </span>
-    </div>
-  );
-}
-
-/**
- * The chords of a progression, one per row, each opening to show its notes.
- *
- * Folded away by default because the answer is the progression, not the
- * notes: someone who got it right wants the numerals and nothing else, and
- * someone who did not wants to open the chord they lost.
- */
-function RevealRows({ rows }: { rows: RevealRow[] }) {
-  const [open, setOpen] = useState<number | null>(null);
-  return (
-    <div className="revrows">
-      {rows.map((row, i) => (
-        <div key={i} className={clsx('revrow', row.target && 'revrow--target')}>
-          <button
-            type="button"
-            className="revrow__head"
-            onClick={() => setOpen(open === i ? null : i)}
-            aria-expanded={open === i}
-          >
-            <span className="revrow__roman">{row.roman}</span>
-            <span className="revrow__symbol">{row.symbol}</span>
-            {row.bottom && <span className="revrow__bottom">{row.bottom} on the bottom</span>}
-            <span className="revrow__more">{open === i ? '−' : '+'}</span>
-          </button>
-          {open === i && <Sounded played={row.played} />}
-        </div>
-      ))}
-    </div>
-  );
-}

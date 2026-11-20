@@ -185,9 +185,9 @@ const chordLabel = (chord: Chord, settings: PracticeSettings) => chordSymbol(cho
 
 export const progressionExercise: ExerciseType = {
   id: 'progression',
-  name: 'Chord changes',
-  short: 'Changes',
-  description: 'A progression plays. Name the harmonic movement.',
+  name: 'Progressions',
+  short: 'Progressions',
+  description: 'A progression plays. Say which one it is.',
   baseSeconds: 28,
   pool: (settings) => enabledProgressions(settings).map((p) => progressionConceptId(p.id)),
   generate(ctx): Question | null {
@@ -208,7 +208,7 @@ export const progressionExercise: ExerciseType = {
       difficulty: ctx.difficulty,
       keyPc: tonic,
       prompt: {
-        title: 'What movement is this?',
+        title: 'Which progression is this?',
         sub: ctx.difficulty <= 2 ? `In ${keyName(tonic, keyTonality(def))}` : undefined,
       },
       fields: [
@@ -238,11 +238,14 @@ export const progressionExercise: ExerciseType = {
       },
       reveal: {
         heading: def.name,
-        // What to listen for next time: the motion between the roots, read off
-        // the bass notes that were actually scheduled rather than off the
-        // numerals, so it cannot describe something other than what played.
-        detail: changes.motion,
-        notes: voicingLabel(changes.voicingStyle),
+        // The analysis on one line, in the home key — what a chart would
+        // be marked up with. Brackets are a drawn mark rather than a
+        // written one, so a line of text leaves them to the rows.
+        detail: romanLine(def),
+        // Then what to listen for next time: the motion between the roots,
+        // read off the bass notes that were actually scheduled rather than
+        // off the numerals, so it cannot describe something else.
+        notes: `${changes.motion}  ·  ${voicingLabel(changes.voicingStyle)}`,
         rows: revealRows(changes.realised, changes.voicings, changes.bass, ctx.settings),
       },
       estimatedSeconds: Math.round(changes.seconds(tempoFor(ctx, 118))) + 12,

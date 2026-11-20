@@ -2,6 +2,7 @@ import type { Rng } from '../lib/rng';
 import type { Performer } from '../audio/performer';
 import type { PracticeSettings } from '../session/settings';
 import type { VoicingStyle } from '../music/voicing';
+import type { ArrowKind, ChordNote } from '../music/progressions';
 
 export interface AnswerOption {
   id: string;
@@ -58,6 +59,21 @@ export interface SoundedChord {
 
 /** One chord of a progression, as the reveal lists it. */
 export interface RevealRow {
+  /** "A♭" where a new key centre starts here; the numerals below count from it. */
+  key?: string;
+  /** Bracketed with the row below as a ii–V pair. */
+  pair?: boolean;
+  /** Resolves into the row below, down a fifth or down a half step. */
+  arrow?: ArrowKind;
+  /** A word worth saying about this chord: "passing", "backdoor". */
+  note?: ChordNote;
+  /**
+   * What the voicing sounded above the basic chord — "9, ♯11".
+   *
+   * The numeral names the function and the symbol names the chord; this is
+   * where the colour went when the numerals stopped carrying it.
+   */
+  tag?: string;
   /**
    * The roman numeral, carrying the quality that played — and the bass, where
    * the bass is not on the root: I/3 says the third is underneath.
@@ -72,6 +88,15 @@ export interface RevealRow {
    * possible puts a different tone underneath almost every bar.
    */
   bottom?: string;
+  /**
+   * Which chord tone the bass has, where it is not the root — "3rd".
+   *
+   * On the row rather than in the numeral. A numeral's slash means "of":
+   * V7/IV is the five of the four, and writing I/3 for a first inversion
+   * put a second meaning on the same mark. The chord symbol carries the
+   * bass the way a chart does, as C/E.
+   */
+  bass?: string;
   /** True for the chord a "name this one" question asked about. */
   target?: boolean;
   played: SoundedChord;
@@ -102,7 +127,7 @@ export interface Question {
   /** Concepts this question exercises — the key the learning model tracks on. */
   conceptIds: string[];
   difficulty: number;
-  /** Tonal centre, where the question has one. Recorded against each attempt. */
+  /** Key centre, where the question has one. Recorded against each attempt. */
   keyPc: number | null;
   prompt: { title: string; sub?: string };
   fields: AnswerField[];

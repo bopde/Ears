@@ -74,7 +74,7 @@ export function buildOptions<T>(
   return rng.shuffle([target, ...distractors]).map(toOption);
 }
 
-/** The chromatic answer grid, used for roots and tonal centres. */
+/** The chromatic answer grid, used for roots and key centres. */
 export function pitchClassField(key: string, label: string): {
   key: string;
   label: string;

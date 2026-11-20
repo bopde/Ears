@@ -126,7 +126,9 @@ describe('each chord of a progression says what was under it', () => {
   it('names the voicing family once, below the rows', () => {
     for (const { id, d, seed, q } of played(10)) {
       expect(isVoicingStyle(q.voicing), `${id}@${d}#${seed}`).toBe(true);
-      expect(q.reveal.notes, `${id}@${d}#${seed}`).toBe(voicingLabel(q.voicing!));
+      // After the root motion, on the same line: both are about the set of
+      // changes as a whole, and the rows below say everything per chord.
+      expect(q.reveal.notes, `${id}@${d}#${seed}`).toContain(voicingLabel(q.voicing!));
       // The family line is about the set of changes, so it never names one
       // chord's bottom tone: that belongs on that chord's row. "Close, root
       // on the bottom" is the family's own name and says nothing per chord;

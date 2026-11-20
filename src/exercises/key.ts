@@ -61,14 +61,14 @@ function chooseMaterial(ctx: GenContext): ProgressionDef | null {
 
 export const keyExercise: ExerciseType = {
   id: 'key',
-  name: 'Tonal centre',
+  name: 'Key centre',
   short: 'Key',
   description: 'Music plays. Find the note that feels like home.',
   baseSeconds: 20,
   pool: (settings) => allowedKeysFor(settings).map(keyConceptId),
   generate(ctx): Question | null {
     const keys = allowedKeys(ctx);
-    // Favour tonal centres the selector flagged, so weak keys come round again.
+    // Favour key centres the selector flagged, so weak keys come round again.
     const wanted = keys.filter((pc) => ctx.targetConcepts.includes(keyConceptId(pc)));
     const tonic = ctx.rng.pick(wanted.length ? wanted : keys);
 
@@ -141,12 +141,12 @@ export const keyExercise: ExerciseType = {
       difficulty: ctx.difficulty,
       keyPc: tonic,
       prompt: {
-        title: 'Which note is the tonal centre?',
+        title: 'Which note is the tonic?',
         sub: givesReference
           ? `Reference ${pcName(REFERENCE_PC, ctx.settings.accidental)} sounds first`
           : 'No reference pitch — use the hint if you need one',
       },
-      fields: [pitchClassField('key', 'Tonal centre')],
+      fields: [pitchClassField('key', 'Tonic')],
       correct: { key: String(tonic) },
       play,
       playReveal: (perf) => {

@@ -250,20 +250,20 @@ export function weakVoicings(skill: SkillRecord | undefined, minAttempts = 3): s
     .map(([style]) => style);
 }
 
-export type Mastery = 'new' | 'shaky' | 'developing' | 'solid' | 'mastered';
+export type Mastery = 'new' | 'building' | 'developing' | 'solid' | 'mastered';
 
 export function mastery(skill: SkillRecord | undefined): Mastery {
   if (!skill || skill.attempts === 0) return 'new';
-  if (skill.attempts < 3) return skill.strength >= 0.7 ? 'developing' : 'shaky';
+  if (skill.attempts < 3) return skill.strength >= 0.7 ? 'developing' : 'building';
   if (skill.strength >= 0.88) return 'mastered';
   if (skill.strength >= 0.68) return 'solid';
   if (skill.strength >= 0.42) return 'developing';
-  return 'shaky';
+  return 'building';
 }
 
 export const MASTERY_LABEL: Record<Mastery, string> = {
   new: 'Not yet practised',
-  shaky: 'Needs work',
+  building: 'Building',
   developing: 'Developing',
   solid: 'Solid',
   mastered: 'Mastered',

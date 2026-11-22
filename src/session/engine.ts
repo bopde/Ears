@@ -111,6 +111,12 @@ export class SessionEngine {
   private marks: string[] = [];
   private ticker: number | null = null;
   private playTimer: number | null = null;
+  /**
+   * Set once the screen has gone. Nothing may sound after it: the session
+   * handed the device's audio back on its way out, and a stray call would
+   * schedule into a suspended context for the next resume to blurt out.
+   */
+  private disposed = false;
 
   constructor(deps: SessionDeps) {
     this.settings = deps.settings;
@@ -186,11 +192,14 @@ export class SessionEngine {
   }
 
   dispose(): void {
+    this.disposed = true;
     if (this.ticker !== null) window.clearInterval(this.ticker);
     if (this.playTimer !== null) window.clearTimeout(this.playTimer);
     this.ticker = null;
     this.playTimer = null;
-    this.performer.stop();
+    // The session is over, so the app gives the device's audio back rather
+    // than waiting out the idle timer with the lock screen still showing it.
+    this.performer.release();
     this.listeners.clear();
   }
 
@@ -328,7 +337,7 @@ export class SessionEngine {
 
   private play(): void {
     const question = this.state.question;
-    if (!question) return;
+    if (this.disposed || !question) return;
     this.performer.stop();
     this.performer.configure({ instrument: this.settings.instrument, swing: this.settings.swing });
     const seconds = question.play(this.performer);
@@ -348,13 +357,13 @@ export class SessionEngine {
   }
 
   replay(): void {
-    if (this.state.phase === 'finished' || !this.state.question) return;
+    if (this.disposed || this.state.phase === 'finished' || !this.state.question) return;
     this.play();
   }
 
   playReveal(): void {
     const question = this.state.question;
-    if (!question) return;
+    if (this.disposed || !question) return;
     this.performer.stop();
     const seconds = question.playReveal ? question.playReveal(this.performer) : question.play(this.performer);
     this.markPlaying(seconds);
@@ -363,14 +372,14 @@ export class SessionEngine {
   /** The same chords plain — what was underneath the voicing. */
   playPlain(): void {
     const question = this.state.question;
-    if (!question?.playPlain) return;
+    if (this.disposed || !question?.playPlain) return;
     this.performer.stop();
     this.markPlaying(question.playPlain(this.performer));
   }
 
   useHint(): void {
     const question = this.state.question;
-    if (!question?.hint || this.state.phase !== 'question') return;
+    if (this.disposed || !question?.hint || this.state.phase !== 'question') return;
     this.performer.stop();
     const seconds = question.hint.play(this.performer);
     this.markPlaying(seconds);

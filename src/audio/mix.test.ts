@@ -46,12 +46,16 @@ function rig(seconds: number, volume: number) {
   const chain = buildMasterChain(ctx as never, ctx.destination);
   chain.setVolume(volume);
   chain.setReverb(0.26);
-  // The Performer only ever asks an engine for these five things.
+  // Everything the Performer asks an engine for. `acquire` is the device's
+  // audio session, which an offline render does not have and does not need.
   const engine = {
+    live: true,
     ready: true,
     now: () => 0,
     context: ctx,
     destination: chain.input,
+    acquire: () => undefined,
+    release: () => undefined,
     track: (voice: unknown) => voice,
     stopAll: () => undefined,
   } as unknown as AudioEngine;

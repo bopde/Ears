@@ -345,13 +345,33 @@ export class Performer {
     return 60 / this.opts.tempo;
   }
 
-  /** Time at which a freshly started phrase should begin. */
+  /**
+   * Time at which a freshly started phrase should begin.
+   *
+   * Also where the app takes the device's audio back. Every phrase starts
+   * from an origin, and every origin is worked out inside the tap that
+   * asked for the sound — so this is the one place that is both before a
+   * note is scheduled and inside a user gesture, which is what iOS wants
+   * before it will let a suspended context start again.
+   */
   origin(): number {
+    this.engine.acquire();
     return this.engine.now() + LOOKAHEAD;
   }
 
   stop(): void {
     this.engine.stopAll();
+  }
+
+  /**
+   * Gives the device's audio back, for a caller that knows it has finished.
+   *
+   * The idle timer would get there on its own; a session that has ended
+   * knows sooner.
+   */
+  release(): void {
+    this.engine.stopAll();
+    this.engine.release();
   }
 
   /** Beat position → seconds, with a swing warp applied inside each beat. */
@@ -373,7 +393,7 @@ export class Performer {
     // Audio needs a user gesture to start. Until it has one, scheduling is a
     // no-op rather than an exception, so the session stays usable and the
     // "enable sound" prompt can recover it.
-    if (!this.engine.ready) return;
+    if (!this.engine.live) return;
     const inst = getInstrument(opts.instrument ?? this.opts.instrument);
     const v = clamp(velocity * (1 + (Math.random() - 0.5) * 0.12 * this.opts.humanize), 0.05, 1);
     const time = Math.max(at, this.engine.now());

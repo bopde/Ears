@@ -1,19 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AudioEngine } from './engine';
+import { AudioEngine, IDLE_RELEASE_MS } from './engine';
+import { Performer } from './performer';
 
 /**
- * The return from backgrounding, as iOS actually performs it.
+ * What the app does with the device's audio session, which on iOS is a
+ * thing you hold rather than a thing you use.
  *
- * Leaving the app pauses the keep-alive element and interrupts the context.
- * Nothing used to restart either, so the app came back with Web Audio routed
- * as ringer audio and muted until Notification Centre was opened, which is
- * what makes iOS reset its audio session.
+ * Holding it is what makes the mute switch not apply — the original fix,
+ * and it works. Holding it with nothing to play is what put the app on
+ * the lock screen with a dead play button and the orange dot in the
+ * status bar, all night, for anyone who left the tab open.
  *
  * jsdom has no Web Audio and no media playback, so both are stood in for.
- * What is under test is the engine's reaction, which is all that was
- * missing: whether it replays a paused element and resumes a context that
- * says it is interrupted.
+ * What is under test is which of the two the engine reaches for, and when
+ * it lets go.
  */
 
 type State = AudioContextState | 'interrupted';
@@ -23,11 +24,19 @@ class FakeContext extends EventTarget {
   sampleRate = 48000;
   destination = node() as unknown as AudioDestinationNode;
   resumed = 0;
+  suspended = 0;
   currentTime = 0;
 
   resume(): Promise<void> {
     this.resumed += 1;
     this.state = 'running';
+    this.dispatchEvent(new Event('statechange'));
+    return Promise.resolve();
+  }
+
+  suspend(): Promise<void> {
+    this.suspended += 1;
+    this.state = 'suspended';
     this.dispatchEvent(new Event('statechange'));
     return Promise.resolve();
   }
@@ -53,8 +62,8 @@ class FakeContext extends EventTarget {
  * connects to anything and remembers nothing.
  *
  * A proxy rather than a list, because the list is the chain's business: a
- * test of whether audio comes back after backgrounding should not have to
- * be edited every time the chain grows a filter.
+ * test of what the app does with the audio session should not have to be
+ * edited every time the chain grows a filter.
  */
 const fakeContext = (): FakeContext => {
   const real = new FakeContext();
@@ -98,6 +107,7 @@ class FakeAudio {
   volume = 1;
   paused = true;
   plays = 0;
+  pauses = 0;
   constructor(public src: string) {
     played.push(this);
   }
@@ -109,6 +119,25 @@ class FakeAudio {
     this.paused = false;
     return Promise.resolve();
   }
+
+  pause(): void {
+    this.pauses += 1;
+    this.paused = true;
+  }
+}
+
+/** Safari 17 and later. Absent by default, as on an older phone. */
+function withAudioSession(): { type: string } {
+  const session = { type: 'auto' };
+  Object.defineProperty(navigator, 'audioSession', { value: session, configurable: true });
+  return session;
+}
+
+/** The lock-screen entry, which is the thing a listener actually complains about. */
+function withMediaSession(): { playbackState: string; metadata: unknown } {
+  const media = { playbackState: 'playing', metadata: {} };
+  Object.defineProperty(navigator, 'mediaSession', { value: media, configurable: true });
+  return media;
 }
 
 function rig() {
@@ -121,111 +150,231 @@ function rig() {
   return { ctx, engine: new AudioEngine() };
 }
 
-const goAway = () => {
-  // What iOS does, not what the page does: the element is paused for it.
-  for (const el of played) el.paused = true;
-};
-
-const comeBack = () => {
-  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+const visibility = (value: 'visible' | 'hidden') => {
+  Object.defineProperty(document, 'visibilityState', { value, configurable: true });
   document.dispatchEvent(new Event('visibilitychange'));
 };
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  visibility('visible');
+  Reflect.deleteProperty(navigator, 'audioSession');
+  Reflect.deleteProperty(navigator, 'mediaSession');
 });
 
-describe('the sound comes back after the app has been away', () => {
-  it('replays the keep-alive element the system paused', async () => {
+describe('the app holds the audio session only while it is playing', () => {
+  it('says what the audio is for, and keeps nothing playing to say it', async () => {
+    const session = withAudioSession();
+    const { engine } = rig();
+    await engine.unlock();
+
+    // From Safari 17 this is the whole mechanism — the mute switch does
+    // not apply to playback audio. A looping element would say the same
+    // thing and charge the lock screen for it.
+    expect(session.type).toBe('playback');
+    expect(played, 'nothing had to be kept playing').toHaveLength(0);
+    expect(engine.holdingAudio).toBe(true);
+  });
+
+  it('falls back to the silent loop where Safari cannot be told', async () => {
     const { engine } = rig();
     await engine.unlock();
     expect(played, 'a keep-alive element exists').toHaveLength(1);
     expect(played[0].paused, 'and it is playing').toBe(false);
-    const before = played[0].plays;
-
-    goAway();
-    comeBack();
-    expect(played[0].paused, 'it is playing again').toBe(false);
-    expect(played[0].plays, 'because it was told to').toBeGreaterThan(before);
+    expect(engine.holdingAudio).toBe(true);
   });
 
-  it('resumes a context the system interrupted', async () => {
+  it('gives it back when the page goes away', async () => {
+    const session = withAudioSession();
+    const media = withMediaSession();
     const { ctx, engine } = rig();
     await engine.unlock();
-    const before = ctx.resumed;
 
-    ctx.state = 'interrupted';
-    goAway();
-    comeBack();
-    expect(ctx.resumed, 'resume was called').toBeGreaterThan(before);
-    expect(ctx.state).toBe('running');
+    visibility('hidden');
+    expect(engine.holdingAudio, 'released').toBe(false);
+    expect(ctx.suspended, 'the context was suspended').toBe(1);
+    expect(session.type, 'and the session handed back').toBe('auto');
+    expect(media.playbackState, 'the lock-screen entry cleared').toBe('none');
+    expect(media.metadata).toBeNull();
   });
 
-  it('recovers on a restore from the back/forward cache too', async () => {
+  it('gives it back on pagehide, and pauses the loop with it', async () => {
     const { ctx, engine } = rig();
     await engine.unlock();
-    ctx.state = 'suspended';
-    goAway();
 
+    window.dispatchEvent(new Event('pagehide'));
+    expect(played[0].paused, 'the keep-alive stopped').toBe(true);
+    expect(ctx.suspended).toBe(1);
+    expect(engine.holdingAudio).toBe(false);
+  });
+
+  it('gives it back after a minute with nothing to play', async () => {
+    vi.useFakeTimers();
+    const { ctx, engine } = rig();
+    await engine.unlock();
+
+    await vi.advanceTimersByTimeAsync(IDLE_RELEASE_MS - 1000);
+    expect(engine.holdingAudio, 'still held, a second short').toBe(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(engine.holdingAudio, 'let go').toBe(false);
+    expect(ctx.suspended).toBe(1);
+    expect(played[0].paused).toBe(true);
+  });
+
+  it('waits for a long progression to finish ringing out', async () => {
+    vi.useFakeTimers();
+    const { engine } = rig();
+    await engine.unlock();
+
+    // A voice that has not died away yet. The clock the engine reads is
+    // the context's, which the fake leaves at zero.
+    engine.track({ stop: () => {} }, 30);
+    await vi.advanceTimersByTimeAsync(IDLE_RELEASE_MS + 1000);
+    expect(engine.holdingAudio, 'something was still sounding').toBe(true);
+
+    engine.stopAll();
+    await vi.advanceTimersByTimeAsync(IDLE_RELEASE_MS + 1000);
+    expect(engine.holdingAudio, 'and now nothing is').toBe(false);
+  });
+
+  it('starts the minute again at each note, not at the first', async () => {
+    vi.useFakeTimers();
+    const { engine } = rig();
+    await engine.unlock();
+
+    for (let i = 0; i < 3; i += 1) {
+      await vi.advanceTimersByTimeAsync(IDLE_RELEASE_MS - 5000);
+      engine.track({ stop: () => {} }, 0);
+    }
+    expect(engine.holdingAudio, 'kept alive by the playing').toBe(true);
+    await vi.advanceTimersByTimeAsync(IDLE_RELEASE_MS + 1000);
+    expect(engine.holdingAudio).toBe(false);
+  });
+});
+
+describe('coming back does not take the audio again', () => {
+  it('resumes nothing when the page becomes visible', async () => {
+    const session = withAudioSession();
+    const { ctx, engine } = rig();
+    await engine.unlock();
+    visibility('hidden');
+    const resumed = ctx.resumed;
+
+    visibility('visible');
     window.dispatchEvent(new Event('pageshow'));
-    expect(played[0].paused).toBe(false);
+    ctx.interrupt();
+
+    // The app came back because somebody switched to it, not because they
+    // asked for a sound. Taking the audio session here is what put the app
+    // on the lock screen for the rest of the day.
+    expect(ctx.resumed, 'nothing resumed the context').toBe(resumed);
+    expect(session.type, 'and nothing claimed the session').toBe('auto');
+    expect(engine.holdingAudio).toBe(false);
+  });
+
+  it('leaves the loop paused until something wants to play', async () => {
+    const { engine } = rig();
+    await engine.unlock();
+    visibility('hidden');
+    const plays = played[0].plays;
+
+    visibility('visible');
+    window.dispatchEvent(new Event('pageshow'));
+    expect(played[0].paused, 'still paused').toBe(true);
+    expect(played[0].plays).toBe(plays);
+    expect(engine.holdingAudio).toBe(false);
+  });
+
+  it('spends no tap on it either', async () => {
+    vi.useFakeTimers();
+    const { engine } = rig();
+    await engine.unlock();
+    visibility('hidden');
+    visibility('visible');
+    await vi.advanceTimersByTimeAsync(500);
+
+    const spy = vi.spyOn(engine, 'unlock');
+    window.dispatchEvent(new Event('pointerdown'));
+    window.dispatchEvent(new Event('touchend'));
+    expect(spy, 'a tap on nothing in particular is not a request for sound')
+      .not.toHaveBeenCalled();
+  });
+});
+
+describe('the next tap on something that plays takes it back', () => {
+  it('restores playback after a release — the mute switch fix, kept', async () => {
+    const session = withAudioSession();
+    const media = withMediaSession();
+    const { ctx, engine } = rig();
+    await engine.unlock();
+    visibility('hidden');
+    expect(session.type).toBe('auto');
+    expect(ctx.state).toBe('suspended');
+
+    visibility('visible');
+    await engine.unlock();
+
+    // What the silent-switch fix needs, and all of it: the session is
+    // "playback" again before anything is scheduled, so the first tap
+    // sounds without a trip through Notification Centre.
+    expect(session.type).toBe('playback');
+    expect(ctx.state).toBe('running');
+    expect(engine.holdingAudio).toBe(true);
+    expect(media.playbackState, 'and it is playing again').toBe('none');
+  });
+
+  it('restarts the silent loop too, where that is the mechanism', async () => {
+    const { ctx, engine } = rig();
+    await engine.unlock();
+    visibility('hidden');
+    expect(played[0].paused).toBe(true);
+
+    visibility('visible');
+    await engine.unlock();
+    expect(played, 'the same element, not another one').toHaveLength(1);
+    expect(played[0].paused, 'playing again').toBe(false);
     expect(ctx.state).toBe('running');
   });
 
-  it('recovers when the context says its own state changed', async () => {
+  it('takes it back before the phrase it is taking it back for', async () => {
     const { ctx, engine } = rig();
     await engine.unlock();
-    goAway();
+    visibility('hidden');
 
-    // Safari reports "interrupted" here and nowhere else, and for some
-    // returns it is the only notice there is.
-    ctx.interrupt();
-    expect(played[0].paused, 'the element went back on').toBe(false);
-    expect(ctx.state, 'and the context came back').toBe('running');
-  });
+    // Every phrase the app plays starts from an origin, and the origin is
+    // worked out inside the tap that asked for it. So this is the moment
+    // the audio has to come back, and it is a gesture.
+    const perf = new Performer(engine);
+    const spy = vi.spyOn(engine, 'acquire');
+    const at = perf.origin();
 
-  it('leaves a healthy return costing nothing', async () => {
-    vi.useFakeTimers();
-    const { engine } = rig();
-    await engine.unlock();
-    goAway();
-    comeBack();
-    await vi.advanceTimersByTimeAsync(300);
+    expect(spy, 'the session was taken back').toHaveBeenCalled();
+    expect(ctx.state, 'and the context is running').toBe('running');
+    expect(engine.holdingAudio).toBe(true);
+    expect(at, 'the phrase starts a little after now').toBeGreaterThan(0);
 
-    // Everything recovered, so no gesture is waiting to be spent on it.
-    const spy = vi.spyOn(engine, 'unlock');
-    window.dispatchEvent(new Event('pointerdown'));
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it('asks the next tap for help when the system refused', async () => {
-    vi.useFakeTimers();
-    const { ctx, engine } = rig();
-    await engine.unlock();
-    // iOS refusing `play()` outside a gesture is exactly this: the calls
-    // happen, nothing changes.
-    for (const el of played) el.play = () => Promise.resolve();
-    ctx.resume = () => Promise.resolve();
+    // And a note scheduled right behind it is not dropped on the floor by
+    // a context that has not finished waking up. A suspended context that
+    // has been asked to resume is still suspended for a moment, and a
+    // player that waits for the clock loses the question that woke it.
+    expect(engine.live, 'there is somewhere to schedule').toBe(true);
+    const tracked = vi.spyOn(engine, 'track');
     ctx.state = 'suspended';
-    goAway();
-    comeBack();
-    await vi.advanceTimersByTimeAsync(300);
-
-    const spy = vi.spyOn(engine, 'unlock');
-    window.dispatchEvent(new Event('pointerdown'));
-    expect(spy, 'the first tap tries again, and that one is a gesture')
-      .toHaveBeenCalled();
+    perf.note(60, at, 1);
+    expect(tracked, 'the note was scheduled, not dropped').toHaveBeenCalled();
   });
 
-  it('tells Safari what the audio is for, where it can be told', async () => {
-    const session: { type: string } = { type: 'auto' };
-    Object.defineProperty(navigator, 'audioSession', { value: session, configurable: true });
-    const { engine } = rig();
+  it('gives it back again when the player says it has finished', async () => {
+    const session = withAudioSession();
+    const { ctx, engine } = rig();
     await engine.unlock();
-    // From Safari 17 this is the whole mechanism — the mute switch does not
-    // apply to playback audio, and nothing has to keep playing to say so.
-    expect(session.type).toBe('playback');
-    Reflect.deleteProperty(navigator, 'audioSession');
+    const perf = new Performer(engine);
+    perf.origin();
+
+    perf.release();
+    expect(engine.holdingAudio).toBe(false);
+    expect(session.type).toBe('auto');
+    expect(ctx.suspended).toBe(1);
   });
 });

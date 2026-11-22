@@ -190,12 +190,23 @@ interface NavigatorWithAudioSession extends Navigator {
   audioSession?: { type: string };
 }
 
+/**
+ * How long the app holds the device's audio with nothing to play.
+ *
+ * Long enough that reading a reveal, or thinking about an answer, does not
+ * cost a reacquisition; short enough that putting the phone down clears
+ * the lock screen while you are still looking at it.
+ */
+export const IDLE_RELEASE_MS = 60_000;
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private chain: MasterChain | null = null;
   private keepAlive: HTMLAudioElement | null = null;
   private listening = false;
-  private armed = false;
+  /** Whether the app currently holds the device's audio session. */
+  private holding = false;
+  private idleTimer: number | null = null;
   /** Sounding voices, mapped to the time they are expected to have died away. */
   private voices = new Map<Voice, number>();
   private opts: Required<EngineOptions>;
@@ -206,6 +217,24 @@ export class AudioEngine {
 
   get ready(): boolean {
     return this.ctx !== null && this.ctx.state === 'running' && this.chain !== null;
+  }
+
+  /**
+   * Whether there is somewhere to schedule a note.
+   *
+   * A context that has just been asked to resume is still suspended for a
+   * moment, and notes scheduled into it sound when it comes back. So the
+   * question a player asks is whether the chain exists, not whether the
+   * clock is already moving — otherwise the first tap after the app has
+   * let the audio go drops its own question on the floor.
+   */
+  get live(): boolean {
+    return this.ctx !== null && this.chain !== null;
+  }
+
+  /** Whether the app is currently holding the device's audio session. */
+  get holdingAudio(): boolean {
+    return this.holding;
   }
 
   get context(): AudioContext {
@@ -222,42 +251,44 @@ export class AudioEngine {
     return this.ctx ? this.ctx.currentTime : 0;
   }
 
+  private get session(): { type: string } | undefined {
+    return (navigator as NavigatorWithAudioSession).audioSession;
+  }
+
+  private build(): void {
+    if (this.ctx) return;
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return;
+    this.ctx = new Ctor({ latencyHint: 'interactive' });
+    this.chain = buildMasterChain(this.ctx, this.ctx.destination);
+    this.chain.setVolume(this.opts.volume);
+    this.chain.setReverb(this.opts.reverb);
+  }
+
   /**
-   * Must be called from inside a user gesture. Safari refuses to start audio
-   * otherwise, and on iOS it also needs a silent media element playing so that
-   * Web Audio is routed to the playback session rather than being killed by
-   * the hardware mute switch.
+   * Takes the device's audio session. Must be called inside a user gesture.
+   *
+   * Synchronous on purpose. Everything iOS will only allow inside a tap —
+   * resuming the context, starting a media element, declaring the session
+   * type — happens here, before a note is scheduled; the asynchronous half
+   * can finish in its own time. `unlock()` is this plus the waiting.
+   *
+   * Idempotent and cheap, so the player can call it on every phrase and
+   * the app never schedules sound it has not asked permission for.
    */
-  async unlock(): Promise<void> {
-    if (!this.ctx) {
-      const Ctor =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new Ctor({ latencyHint: 'interactive' });
-      this.chain = buildMasterChain(this.ctx, this.ctx.destination);
-      this.chain.setVolume(this.opts.volume);
-      this.chain.setReverb(this.opts.reverb);
-    }
-    if (this.ctx.state !== 'running') {
-      try {
-        await this.ctx.resume();
-      } catch {
-        /* resumed on the next gesture */
-      }
-    }
-    // A zero-length buffer is enough to convince older Safari the context is live.
-    const buf = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(this.ctx.destination);
-    src.start(0);
+  acquire(): void {
+    this.build();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    this.listen();
 
     // Tell Safari outright what kind of audio this is, where it will
     // listen. From Safari 17 this is the whole mechanism: the session is
     // "playback", so the hardware mute switch does not apply and nothing
-    // has to be kept playing to say so. Older versions have no such
-    // property and fall back on the silent loop below.
-    const session = (navigator as NavigatorWithAudioSession).audioSession;
+    // has to be kept playing to say so.
+    const session = this.session;
     if (session) {
       try {
         session.type = 'playback';
@@ -266,6 +297,93 @@ export class AudioEngine {
       }
     }
 
+    if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
+
+    // A zero-length buffer is enough to convince older Safari the context
+    // is live.
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch {
+      /* nothing to prime */
+    }
+
+    // Only where Safari cannot be told. A looping silent element says the
+    // same thing by never stopping, and iOS believes it the same way it
+    // believes a podcast: lock-screen entry, orange dot in the status bar,
+    // and both for as long as it plays. Where `audioSession` exists that
+    // price buys nothing.
+    if (!session) this.playKeepAlive();
+
+    this.holding = true;
+    this.touch();
+  }
+
+  /**
+   * `acquire()`, and then waits for the context to actually be running.
+   *
+   * What a "tap to enable sound" button calls, where the answer matters
+   * before anything is scheduled.
+   */
+  async unlock(): Promise<void> {
+    this.acquire();
+    if (this.ctx && this.ctx.state !== 'running') {
+      try {
+        await this.ctx.resume();
+      } catch {
+        /* resumed on the next gesture */
+      }
+    }
+  }
+
+  /**
+   * Gives the audio session back.
+   *
+   * Nothing is sounding, so the app has no business holding the device's
+   * audio. Held, it is a track that never ends: iOS keeps the app on the
+   * lock screen with a play button that does nothing, and the orange
+   * recording-ish indicator in the status bar, for as long as the page is
+   * open. That is what this app did between questions, between sessions,
+   * and all night with the tab left open.
+   *
+   * Idempotent, and safe before anything has been acquired.
+   */
+  release(): void {
+    this.clearIdle();
+    if (!this.holding) return;
+    this.holding = false;
+
+    this.keepAlive?.pause();
+
+    const session = this.session;
+    if (session) {
+      try {
+        session.type = 'auto';
+      } catch {
+        /* nothing else to give back */
+      }
+    }
+
+    // The now-playing entry outlives the sound that made it, so it is
+    // cleared by hand rather than left to expire.
+    const media = (navigator as Navigator & { mediaSession?: MediaSession }).mediaSession;
+    if (media) {
+      try {
+        media.playbackState = 'none';
+        media.metadata = null;
+      } catch {
+        /* not supported here */
+      }
+    }
+
+    if (this.ctx && this.ctx.state === 'running') {
+      void this.ctx.suspend().catch(() => undefined);
+    }
+  }
+
+  private playKeepAlive(): void {
     if (!this.keepAlive) {
       const el = new Audio(SILENT_WAV);
       el.loop = true;
@@ -273,73 +391,54 @@ export class AudioEngine {
       el.setAttribute('playsinline', '');
       this.keepAlive = el;
     }
-    // Replayed whenever it is paused, not only when it is first made. iOS
-    // pauses it when the app goes away, and until it is playing again the
-    // app's sound is ringer audio: silent under the mute switch, which is
-    // where the app came back silent from.
-    this.resumeKeepAlive();
-    this.listen();
+    if (this.keepAlive.paused) void this.keepAlive.play().catch(() => undefined);
   }
 
   /**
-   * Brings the audio back after the app has been away.
+   * Starts the clock on giving the audio back, from the last thing played.
    *
-   * On iOS, leaving the app pauses the keep-alive element and interrupts
-   * the context. Nothing restarted either, so the app came back with Web
-   * Audio routed as ringer audio and muted — and opening Notification
-   * Centre fixed it, because that makes iOS reset the audio session.
-   *
-   * Called on every way back in: the page becoming visible, a restore from
-   * the back/forward cache, and the context saying its own state changed.
-   * None of them is a user gesture, so `play()` may be refused; the next
-   * tap calls `unlock()`, which comes back through here, and that one is.
+   * Nothing here brings audio back. Coming out of the background used to:
+   * the page became visible, the element was replayed and the context
+   * resumed, and the app was holding the device's audio again without
+   * anybody asking for a sound. The way back in is a tap on something
+   * that plays, which goes through `acquire()` first.
    */
-  private recover(): void {
-    this.resumeKeepAlive();
-    const state = this.ctx?.state as AudioContextState | 'interrupted' | undefined;
-    if (this.ctx && (state === 'suspended' || state === 'interrupted')) {
-      void this.ctx.resume().catch(() => undefined);
+  private touch(): void {
+    this.clearIdle();
+    if (!this.holding) return;
+    this.idleTimer = window.setTimeout(() => {
+      this.idleTimer = null;
+      // Something is still ringing out — wait for it rather than cutting
+      // a long progression off at its last chord.
+      if (this.sounding()) {
+        this.touch();
+        return;
+      }
+      this.release();
+    }, IDLE_RELEASE_MS);
+  }
+
+  private sounding(): boolean {
+    const now = this.now();
+    for (const endsAt of this.voices.values()) {
+      if (endsAt > now) return true;
     }
-    // Neither of those is allowed to work outside a gesture, so if either
-    // is still wrong a moment later, the next tap anywhere does it again —
-    // and that one is a gesture. Armed rather than always on, because a
-    // return that fixed itself should cost the next tap nothing.
-    window.setTimeout(() => {
-      if (this.ready && !this.keepAlive?.paused) return;
-      this.armGesture();
-    }, 200);
+    return false;
   }
 
-  private armGesture(): void {
-    if (this.armed) return;
-    this.armed = true;
-    const once = () => {
-      this.armed = false;
-      window.removeEventListener('pointerdown', once);
-      window.removeEventListener('touchend', once);
-      void this.unlock();
-    };
-    window.addEventListener('pointerdown', once, { once: true });
-    window.addEventListener('touchend', once, { once: true });
+  private clearIdle(): void {
+    if (this.idleTimer !== null) window.clearTimeout(this.idleTimer);
+    this.idleTimer = null;
   }
 
-  private resumeKeepAlive(): void {
-    const el = this.keepAlive;
-    if (el && el.paused) void el.play().catch(() => undefined);
-  }
-
-  /** Registered once, on the first unlock, and left for the page's life. */
+  /** Registered once, on the first acquisition, and left for the page's life. */
   private listen(): void {
     if (this.listening) return;
     this.listening = true;
-    const back = () => this.recover();
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') back();
+      if (document.visibilityState === 'hidden') this.release();
     });
-    window.addEventListener('pageshow', back);
-    // Safari reports "interrupted" here and nowhere else, and it is the
-    // only notice some returns give.
-    this.ctx?.addEventListener('statechange', back);
+    window.addEventListener('pagehide', () => this.release());
   }
 
   setVolume(value: number): void {
@@ -362,6 +461,7 @@ export class AudioEngine {
   track(voice: Voice, endsAt: number): Voice {
     this.voices.set(voice, endsAt);
     if (this.voices.size > 48) this.prune();
+    this.touch();
     return voice;
   }
 

@@ -37,6 +37,7 @@ export class FakePerformer {
   bass: Array<{ midi: number; beat: number; time: number; role: BassRole }> = [];
   drones = 0;
   stops = 0;
+  released = 0;
   tempo = 120;
 
   get beatSeconds(): number {
@@ -53,6 +54,12 @@ export class FakePerformer {
 
   stop(): void {
     this.stops += 1;
+  }
+
+  /** Stands in for giving the device's audio back; there is none to give. */
+  release(): void {
+    this.stops += 1;
+    this.released += 1;
   }
 
   note(midi: number, time: number, seconds: number, velocity = 0.7, opts: NotePlayOptions = {}): void {

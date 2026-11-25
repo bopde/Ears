@@ -659,9 +659,13 @@ function promptChord(q: Question): Chord | null {
   // sub-line, the colour question in its title.
   for (const line of [q.prompt.sub ?? '', q.prompt.title]) {
     for (const symbol of line.match(/[A-G][♯♭]?[^\s—?]*/g) ?? []) {
-      const quality = CHORD_QUALITIES.find(
-        (x) => chordSymbol(makeChord(q.keyPc!, x.id), settings.accidental) === symbol,
-      );
+      // By the pitch the root names and the suffix after it, rather than
+      // by rebuilding the symbol: a chord whose altered form has to be
+      // spelled one way prints its plain form the same way, so a G♭7 and
+      // an F♯7 are both this question's chord.
+      const m = /^([A-G][♯♭]?)(.*)$/.exec(symbol);
+      if (!m || namePc(m[1]) !== mod(q.keyPc, 12)) continue;
+      const quality = CHORD_QUALITIES.find((x) => x.symbol === m[2]);
       if (quality) return makeChord(q.keyPc, quality.id);
     }
   }

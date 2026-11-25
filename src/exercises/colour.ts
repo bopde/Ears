@@ -157,6 +157,14 @@ export const colourExercise: ExerciseType = {
     const sounded = moved
       ? makeChord(chord.rootPc, alteredFifthQuality(basic, moved)!, chord.root)
       : chord;
+    // And how the chord is printed, which the altered one gets to decide.
+    // A D♭7 with its 5th lowered would want an A𝄫, which nothing prints,
+    // so the speller falls back to C♯ — and then the question said D♭7
+    // over notes spelled C♯ E♯ G B. One root name for the whole reveal.
+    const printed = moved
+      ? makeChord(chord.rootPc, chord.quality.id,
+        spellInChord(sounded, chord.rootPc + 60, ctx.settings.accidental).replace(/-?\d+$/, ''))
+      : chord;
 
     // At the top of the curve a second colour may sound with the first, and
     // then the answer is which two. Partners come from what the chord that
@@ -257,7 +265,7 @@ export const colourExercise: ExerciseType = {
         // chord's own tones moved — and it has to read the same whether it
         // is or not, or the wording gives the answer away.
         title: `What was added or changed on this ${
-          chordSymbol(chord, ctx.settings.accidental)}?`,
+          chordSymbol(printed, ctx.settings.accidental)}?`,
         // How many notes are the difference, counted rather than assumed:
         // the altered sound is three, and the prompt used to say one.
         sub: `${['', 'One', 'Two', 'Three'][tones.length] ?? tones.length} note${
@@ -309,8 +317,8 @@ export const colourExercise: ExerciseType = {
         },
       },
       reveal: {
-        heading: `${chordSymbol(chord, ctx.settings.accidental)}  ·  ${labelOf(answer)}`,
-        detail: `${chordSymbol(chord, ctx.settings.accidental)} played with ${
+        heading: `${chordSymbol(printed, ctx.settings.accidental)}  ·  ${labelOf(answer)}`,
+        detail: `${chordSymbol(printed, ctx.settings.accidental)} played with ${
           formatList(tones.map((name) => (name === moved
             ? `its 5th ${name === '♯5' ? 'raised' : 'lowered'}`
             : article(name))))
@@ -322,7 +330,7 @@ export const colourExercise: ExerciseType = {
           sounded, { notes: all, bass: bassMidi, added: marked }, ctx.settings.accidental,
         ),
         notes: tones
-          .map((name) => explain(name, sounded, chord, where.get(name)!, ctx.settings.accidental))
+          .map((name) => explain(name, sounded, printed, where.get(name)!, ctx.settings.accidental))
           .join('   '),
       },
       estimatedSeconds: 12 + level,

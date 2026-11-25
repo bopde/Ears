@@ -99,15 +99,29 @@ describe('question generation', () => {
         expect(positions.size, `${type.id} shuffles answers`).toBeGreaterThan(2);
       });
 
-      it('honours the concepts the selector asks for', () => {
+      it('leans towards the concepts the selector asks for', () => {
+        // Leans, not obeys. The wish list used to decide the question
+        // outright, which made the answer a function of the last few: a
+        // concept just practised drops off the list, so the next answer
+        // was never the one just heard. It is a weight now, and what a
+        // test can hold is that asking for something makes it markedly
+        // more likely than not asking.
         const pool = type.pool(settings);
         const wanted = pool[Math.floor(pool.length / 2)];
-        let hits = 0;
-        for (let seed = 0; seed < 25; seed++) {
-          const question = type.generate(context(3, seed * 101, [wanted]))!;
-          if (question.conceptIds.includes(wanted)) hits += 1;
-        }
-        expect(hits, `${type.id} targets ${wanted}`).toBeGreaterThan(18);
+        const RUNS = 600;
+        const rate = (targets: string[]) => {
+          let hits = 0;
+          for (let seed = 0; seed < RUNS; seed++) {
+            const question = type.generate(context(3, seed * 101 + 7, targets));
+            if (question?.conceptIds.includes(wanted)) hits += 1;
+          }
+          return hits / RUNS;
+        };
+        const asked = rate([wanted]);
+        const unasked = rate([]);
+        const where = `${type.id} targets ${wanted}: `
+          + `${(asked * 100).toFixed(0)}% asked, ${(unasked * 100).toFixed(0)}% not`;
+        expect(asked, where).toBeGreaterThan(unasked * 1.3);
       });
     });
   }
@@ -252,8 +266,11 @@ describe('progression options cannot be counted out', () => {
   it('covers every progression in the library, not just the common lengths', () => {
     const seen = new Set<string>();
     for (const target of CORE_PROGRESSIONS) {
-      // Drive the generator at the target directly so the long ones are tested.
-      for (let seed = 0; seed < 40 && !seen.has(target.id); seed++) {
+      // Drive the generator at the target directly so the long ones are
+      // tested. Many seeds, because asking for a progression now makes it
+      // likelier rather than certain: the wish list is a weight, so that
+      // a learner cannot read the next answer off the last few.
+      for (let seed = 0; seed < 300 && !seen.has(target.id); seed++) {
         const q = progressionType.generate({
           rng: makeRng(seed * 131 + 7),
           difficulty: target.tier,

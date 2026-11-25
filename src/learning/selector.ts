@@ -95,9 +95,22 @@ export function prioritiseConcepts(input: SelectionInput): Priority[] {
     }
 
     // Spread the session around rather than drilling one item to death.
+    //
+    // Gently. This used to divide by 1 + 1.7 per showing and take another
+    // 70% off anything heard in the last three quarters of a minute, which
+    // spread the session so thoroughly that a progression never once came
+    // round twice in 120 sessions of twenty questions — against a quarter
+    // of questions by chance — and a chord quality followed itself in 1.8%
+    // of questions against 5.6%. A learner who notices that can rule out
+    // every answer they have already heard, which is a better strategy
+    // than listening.
     const seen = sessionCounts[conceptId] ?? 0;
-    score /= 1 + seen * 1.7;
-    if (skill && now - skill.lastSeen < 45_000) score *= 0.3;
+    score /= 1 + seen * 0.4;
+    // And the recency factor barely at all. Three quarters left one
+    // exercise still repeating an answer in a row in 4.1% of questions
+    // against 5.8% by chance, which is outside the quarter this is held
+    // to; what remains is a tilt rather than a rule.
+    if (skill && now - skill.lastSeen < 45_000) score *= 0.85;
 
     // With a fixed difficulty, keep the material near that level.
     if (typeof settings.difficulty === 'number') {

@@ -21,7 +21,10 @@ function styles(
   progressionId: string,
   difficulty: number,
   mode: 'curve' | 'plain' | 'realistic' = 'curve',
-  runs = 240,
+  // Many runs for few questions: asking the selector for a progression
+  // makes it likelier rather than certain, so about one run in fourteen
+  // comes back as the one asked for.
+  runs = 1600,
 ): Map<VoicingStyle, number> {
   const type = getExerciseType('progression')!;
   const tuned = normaliseSettings({ ...settings, voicingMode: mode });

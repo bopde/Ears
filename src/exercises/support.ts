@@ -26,19 +26,44 @@ export function chooseTarget<T>(
   tierOf: (item: T) => number,
 ): T | null {
   if (!pool.length) return null;
-  const wanted = pool.filter((item) => ctx.targetConcepts.includes(conceptIdOf(item)));
-  if (wanted.length) {
-    // Honour the selector's priority order, with a little slack.
-    return ctx.rng.weighted(wanted, (item) => {
-      const rank = ctx.targetConcepts.indexOf(conceptIdOf(item));
-      return 1 / (1 + rank * 0.35);
-    });
-  }
+  // Three questions in ten ignore the wish list and take whatever the
+  // level offers. The adaptive model is right about what needs work and
+  // wrong about being the only thing that decides.
+  if (ctx.rng.chance(EXPLORE)) return ctx.rng.pick(pool);
+  // The rest lean on it rather than obey it. The wish list used to be a
+  // filter: whatever of it the exercise could serve *was* the question.
+  // Where a level offers a dozen things that is a nudge, but where it
+  // offers three it narrows to one — and since a concept just practised
+  // drops off the list, the one it narrows to is never the one just
+  // heard. That is how an exercise came to repeat an answer in 0% of
+  // questions where chance says a quarter, with the session penalty
+  // turned off entirely making no difference to it at all.
   return ctx.rng.weighted(pool, (item) => {
-    const gap = Math.abs(tierOf(item) - ctx.difficulty);
-    return 1 / (1 + gap * gap);
+    const rank = ctx.targetConcepts.indexOf(conceptIdOf(item));
+    const wish = rank === -1 ? 1 : WISH / (1 + rank * 0.35);
+    return wish * nearLevel(tierOf(item), ctx.difficulty);
   });
 }
+
+/** How often a question is drawn from the level rather than from the wish list. */
+const EXPLORE = 0.3;
+
+/** How much more likely the model's first choice is than something it did not ask for. */
+const WISH = 2.2;
+
+/**
+ * How much the level's own material is favoured over what sits away from it.
+ *
+ * Shallow on purpose, and this is the whole of the tier weighting that is
+ * left. It used to be 1/(1 + gap²), which at level 1 made a tier-5 chord
+ * one seventeenth as likely as a tier-1 one: too rare to practise and
+ * common enough to meet. Anything that can be the answer at a level has
+ * to come up often enough that its absence says nothing — the most
+ * frequent at most twice the least — and across the widest gap the
+ * catalogue holds this is 1.9 to 1.
+ */
+const nearLevel = (tier: number, difficulty: number): number =>
+  1 / (1 + Math.abs(tier - difficulty) * 0.22);
 
 /**
  * Chooses wrong answers.

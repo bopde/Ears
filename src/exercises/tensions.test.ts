@@ -77,7 +77,9 @@ describe('the exercises sound the chord a pianist would play', () => {
     const type = getExerciseType('progression')!;
     let checked = 0;
     for (let d = 1; d <= 5; d++) {
-      for (let seed = 0; seed < 50; seed++) {
+      // Many seeds for few questions: asking the selector for a
+      // progression makes it likelier rather than certain.
+      for (let seed = 0; seed < 400; seed++) {
         const q = type.generate({
           ...context(d, seed * 53 + d),
           targetConcepts: [progressionConceptId('ii-V-I')],

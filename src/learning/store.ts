@@ -89,6 +89,20 @@ function migrate(raw: Partial<Profile>): Profile {
     retireExtendedChords(profile);
   }
 
+  // Version 4 added the two colours that move a chord's own fifth. A
+  // profile that has saved its colour list once never sees a colour added
+  // after it, so they are switched on for anyone who was already here —
+  // the same as for anyone arriving today.
+  if ((raw.version ?? 1) < 4) {
+    const colours = (profile.settings as Partial<PracticeSettings>).colours;
+    if (Array.isArray(colours) && colours.length) {
+      (profile.settings as Partial<PracticeSettings>).colours = [
+        ...colours,
+        ...['#5', 'b5'].filter((id) => !colours.includes(id)),
+      ];
+    }
+  }
+
   // Drop malformed skill records rather than letting them poison selection.
   for (const [id, skill] of Object.entries(profile.skills)) {
     if (!skill || typeof skill.strength !== 'number' || Number.isNaN(skill.strength)) {

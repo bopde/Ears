@@ -1,13 +1,14 @@
 import type { ExerciseType, Question } from './types';
 import { buildOptions, chooseKey, chooseTarget, optionCount, questionId } from './support';
 import {
-  CHORD_QUALITIES, chordDegrees, chordSymbol, makeChord, spellInChord, type Chord,
+  CHORD_QUALITIES, chordSymbol, makeChord, spellInChord, type Chord,
 } from '../music/chords';
 import {
-  ALT_SET, COLOUR_IDS, COLOUR_ID_OF, COLOUR_NAMES, COLOUR_TIER, coloursFor, colourInterval,
-  isBasicQuality,
+  ALT_SET, BASIC_OF, COLOUR_IDS, COLOUR_ID_OF, COLOUR_NAMES, alteredFifthQuality,
+  alteredFifthsFor, coloursFor, colourInterval, isBasicQuality,
 } from '../music/degrees';
 import { colourConceptId } from '../music/catalog';
+import { formatList } from './chord';
 import { voiceChord } from '../music/voicing';
 import { polyphonyGain } from '../audio/performer';
 import { soundedChord } from '../audio/reference';
@@ -18,19 +19,28 @@ import { clamp, mod } from '../lib/util';
 /**
  * Which colours are on offer at each level, plainest first.
  *
- * The two a chord is most often comped with come first. The 11th and the
- * ♯11 need the third to tell them apart, so they wait for level 3. The
- * altered ones belong to a scale rather than to a chord, and they come last
- * — along with the pairs, where two colours sound at once and the question
- * is which two.
+ * The two a chord is most often comped with come first. The two
+ * darkenings follow at level 2: a ♭9 over a dominant is one of the first
+ * sounds anybody recognises in this music, and holding it to level 4 left
+ * the first two levels asking 9 or 13 and nothing else — a question with
+ * two answers, 35% of which were 9. Level 3 brings the ones that need a
+ * reference inside the chord: the 11th and the ♯11 against the third, and
+ * the altered fifths against the fifth. The top of the curve has
+ * everything, with the pairs and the altered sound.
  */
 const CURVE: Record<number, readonly string[]> = {
   1: ['9', '13'],
-  2: ['9', '13'],
-  3: ['9', '13', '11', '#11'],
+  2: ['9', '13', 'b9', 'b13'],
+  3: ['9', '13', 'b9', 'b13', '#9', '11', '#11', '#5', 'b5'],
   4: COLOUR_IDS,
   5: COLOUR_IDS,
 };
+
+/** From which level a colour may be one of the chord's own tones altered. */
+const FIFTHS_FROM = 3;
+
+/** From which level a dominant may be comped with its altered tensions. */
+const ALTERED_FROM = 2;
 
 /**
  * The chords the first levels use.
@@ -66,14 +76,30 @@ function enabledChords(settings: PracticeSettings, level: number): string[] {
  * rather than been given a free elimination.
  */
 function colourOptions(chord: Chord, level: number): string[] {
-  const altered = level >= PAIRS_FROM;
+  const altered = level >= ALTERED_FROM;
   const names = coloursFor(chord.quality, { altered });
   const ids = names.map((n) => COLOUR_ID_OF[n]).filter(Boolean);
+  // And the two that change the chord's own fifth rather than adding a
+  // note over it. They are offered beside the ♭13 and the ♯11 they share
+  // a pitch with, because the natural 5th is the whole of the difference
+  // and hearing it is the point of the question.
+  if (level >= FIFTHS_FROM) {
+    for (const name of alteredFifthsFor(BASIC_OF[chord.quality.id] ?? chord.quality.id)) {
+      const id = COLOUR_ID_OF[name];
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+  }
   // The altered set is one answer rather than three, so it stands in for
   // its members wherever a dominant can take all three.
-  if (altered && ALT_SET.every((n) => names.includes(n))) ids.push('alt');
+  if (level >= PAIRS_FROM && ALT_SET.every((n) => names.includes(n))) ids.push('alt');
   return ids;
 }
+
+/** Whether this answer changes one of the chord's tones instead of adding one. */
+const altersFifth = (id: string): boolean => id === '#5' || id === 'b5';
+
+/** And the two that are the same pitches added over a fifth still in place. */
+const aboveFifth = (id: string): boolean => id === 'b13' || id === '#11';
 
 /** The tones an answer stands for, as degree names. */
 const tonesOf = (id: string): string[] =>
@@ -98,12 +124,12 @@ export const colourExercise: ExerciseType = {
 
     // The colour first, so the selector can ask for one it wants practised,
     // then a chord that can actually take it.
-    const colour = chooseTarget(
-      ctx,
-      offered,
-      (id) => colourConceptId(id),
-      (id) => COLOUR_TIER[id] ?? 3,
-    );
+    //
+    // Evenly, whatever the tier says. The curve above has already decided
+    // what this level asks about, and anything it allows has to come up
+    // often enough that its absence from a session says nothing: 9 used
+    // to be 35% of every colour question and 13 another 29%.
+    const colour = chooseTarget(ctx, offered, colourConceptId, () => ctx.difficulty);
     if (!colour) return null;
 
     const chords = ctx.rng.shuffle(enabledChords(ctx.settings, level));
@@ -121,12 +147,40 @@ export const colourExercise: ExerciseType = {
     if (!chosen) return null;
     const { chord, options } = chosen;
 
+    // What the chord becomes, where the answer moves one of its own tones
+    // rather than adding a note over it: a G7 whose 5th is raised is a
+    // G7♯5, and the question plays exactly that. Everything downstream —
+    // the degrees in the reveal, what else may be stacked on top — then
+    // reads against the chord that sounded rather than the one printed.
+    const moved = altersFifth(colour) ? COLOUR_NAMES[colour] : undefined;
+    const basic = BASIC_OF[chord.quality.id] ?? chord.quality.id;
+    const sounded = moved
+      ? makeChord(chord.rootPc, alteredFifthQuality(basic, moved)!, chord.root)
+      : chord;
+
     // At the top of the curve a second colour may sound with the first, and
-    // then the answer is which two.
+    // then the answer is which two. Partners come from what the chord that
+    // sounds can take: a natural 13 is a semitone above a ♯5 and belongs
+    // over neither.
+    const open = moved ? colourOptions(sounded, level) : options;
+    // Never a moved fifth as the *second* of a pair: the chord that
+    // sounds is settled by the first, and a fifth cannot be moved by an
+    // afterthought — stacked on top it would be a ♭13 over a chord that
+    // still has its natural 5th, which is a different answer.
+    //
+    // And never a ♭13 or a ♯11 beside a moved fifth, which is the same
+    // point from the other end. The natural 5th is the only thing that
+    // separates those two names from these two, so once it is gone the
+    // ear cannot choose: ♯11 over a 7♯5 and ♭13 over a 7♭5 are the same
+    // four notes, and both would be true.
     const partners = level >= PAIRS_FROM && colour !== 'alt'
-      ? options.filter((id) => id !== colour && id !== 'alt' && degreeOf(id) !== degreeOf(colour))
+      ? open.filter((id) => id !== colour && id !== 'alt' && !altersFifth(id)
+        && !(moved && aboveFifth(id))
+        && degreeOf(id) !== degreeOf(colour) && pcOf(id) !== pcOf(colour))
       : [];
-    const wantPair = partners.length > 0 && ctx.rng.chance(0.4);
+    // A quarter of the questions at the top of the curve are more than one
+    // note, counting the altered sound, which is three of them.
+    const wantPair = partners.length > 0 && ctx.rng.chance(0.17);
     // Wrong answers of the same shape as the right one. Offering pairs
     // against a question whose prompt says one note were free eliminations,
     // and they crowded the grid besides. A pair with no rival pair is not a
@@ -135,21 +189,35 @@ export const colourExercise: ExerciseType = {
     const answer = second ? [colour, second].sort().join('+') : colour;
 
     const tones = tonesOf(answer);
-    const intervals = tones
-      .map((name) => colourInterval(name))
-      .filter((i): i is number => i !== undefined);
-
-    const voicing = voiceChord(chord, { style: 'close', rootPosition: true, maxNotes: 4 });
+    const voicing = voiceChord(sounded, { style: 'close', rootPosition: true, maxNotes: 4 });
     // The colour sits above the stack, which is where a pianist puts it and
     // where it can be heard as an addition rather than as part of the chord.
     // Just above the stack, not wherever the interval's own octave lands: a
     // 13th counted from the root sits two octaves over a close voicing, and
     // a note that far away stops sounding like part of the chord at all.
+    // A moved fifth is not stacked at all — it is already in the chord.
     const top = Math.max(...voicing.notes);
-    const added = intervals
-      .map((i) => pcAtOrAbove(mod(chord.rootPc + i, 12), top + 1))
+    const where = new Map<string, number>();
+    for (const name of tones) {
+      const interval = colourInterval(name);
+      if (interval === undefined) continue;
+      const pc = mod(chord.rootPc + interval, 12);
+      where.set(name, name === moved
+        ? voicing.notes.find((midi) => mod(midi, 12) === pc) ?? pcAtOrAbove(pc, top + 1)
+        : pcAtOrAbove(pc, top + 1));
+    }
+    const added = tones
+      .filter((name) => name !== moved)
+      .map((name) => where.get(name)!)
       .sort((a, b) => a - b);
     const all = [...voicing.notes, ...added];
+    // Every note the answer names, moved fifth included, for the reveal to
+    // mark out. And the chord as printed, for the renderings that offer it
+    // to measure the answer against — a G7♯5 is not "the chord alone".
+    const marked = tones.map((name) => where.get(name)!).sort((a, b) => a - b);
+    const plain = moved
+      ? voiceChord(chord, { style: 'close', rootPosition: true, maxNotes: 4 })
+      : voicing;
     const bassMidi = chord.rootPc + 36;
 
     // Wrong answers of the same size as the right one. Offering a single
@@ -185,12 +253,16 @@ export const colourExercise: ExerciseType = {
       keyPc: chord.rootPc,
       prompt: {
         // The chord is given, so the question is only about what is on it.
-        title: `What was added to this ${chordSymbol(chord, ctx.settings.accidental)}?`,
-        // How many notes were added, counted rather than assumed: the
-        // altered sound is three, and the prompt used to say one.
+        // "Or changed", because from level 3 the answer may be one of the
+        // chord's own tones moved — and it has to read the same whether it
+        // is or not, or the wording gives the answer away.
+        title: `What was added or changed on this ${
+          chordSymbol(chord, ctx.settings.accidental)}?`,
+        // How many notes are the difference, counted rather than assumed:
+        // the altered sound is three, and the prompt used to say one.
         sub: `${['', 'One', 'Two', 'Three'][tones.length] ?? tones.length} note${
           tones.length === 1 ? '' : 's'
-        } above the chord`,
+        }`,
       },
       fields: [
         {
@@ -209,47 +281,82 @@ export const colourExercise: ExerciseType = {
       playReveal: (perf) => {
         const origin = perf.origin();
         const gain = polyphonyGain(all.length + 1);
-        // The chord first, then the colour on top of it, so the ear has
-        // something to measure the addition against.
+        // The chord as printed first, then what the answer did to it, so
+        // the ear has something to measure against. A moved fifth cannot
+        // be demonstrated by adding a note — what changed is which note is
+        // there — so that one plays the whole chord again, altered.
         perf.note(bassMidi, origin, 3.6, 0.7, { instrument: 'bass', gain });
-        voicing.notes.forEach((midi, i) => perf.note(midi, origin + i * 0.012, 3.6, 0.66, { gain }));
-        added.forEach((midi, i) => perf.note(midi, origin + 1.4 + i * 0.3, 2.2, 0.7, { gain }));
+        plain.notes.forEach((midi, i) => perf.note(midi, origin + i * 0.012, 3.6, 0.66, { gain }));
+        const after = moved ? all : added;
+        after.forEach((midi, i) => perf.note(midi, origin + 1.4 + i * 0.03, 2.2, 0.7, { gain }));
         return 4;
       },
       playPlain: (perf) => {
         const origin = perf.origin();
-        const gain = polyphonyGain(voicing.notes.length + 1);
+        const gain = polyphonyGain(plain.notes.length + 1);
         perf.note(bassMidi, origin, 2.6, 0.7, { instrument: 'bass', gain });
-        voicing.notes.forEach((midi, i) => perf.note(midi, origin + i * 0.012, 2.6, 0.66, { gain }));
+        plain.notes.forEach((midi, i) => perf.note(midi, origin + i * 0.012, 2.6, 0.66, { gain }));
         return 2.8;
       },
       hint: {
         label: 'Chord alone',
-        description: 'Plays the chord without the note that was added, to measure it against.',
+        description: 'Plays the chord as it is written, to measure the answer against.',
         play: (perf) => {
           const origin = perf.origin();
-          const gain = polyphonyGain(voicing.notes.length);
-          voicing.notes.forEach((midi, i) => perf.note(midi, origin + i * 0.012, 2, 0.64, { gain }));
+          const gain = polyphonyGain(plain.notes.length);
+          plain.notes.forEach((midi, i) => perf.note(midi, origin + i * 0.012, 2, 0.64, { gain }));
           return 2.2;
         },
       },
       reveal: {
         heading: `${chordSymbol(chord, ctx.settings.accidental)}  ·  ${labelOf(answer)}`,
         detail: `${chordSymbol(chord, ctx.settings.accidental)} played with ${
-          tones.length === 1 ? article(tones[0]) : tones.join(' and ')
+          formatList(tones.map((name) => (name === moved
+            ? `its 5th ${name === '♯5' ? 'raised' : 'lowered'}`
+            : article(name))))
         }`,
-        // The degrees, with the added ones at the end where they sounded.
-        played: soundedChord(chord, { notes: all, bass: bassMidi, added }, ctx.settings.accidental),
-        notes: added
-          .map((midi) => `${chordDegrees(chord, [midi])[0]} = ${
-            spellInChord(chord, midi, ctx.settings.accidental)
-          }`)
+        // Read against the chord that sounded, so a raised fifth is named
+        // as the fifth it is rather than as a ♭13 sitting on a fifth that
+        // is not there.
+        played: soundedChord(
+          sounded, { notes: all, bass: bassMidi, added: marked }, ctx.settings.accidental,
+        ),
+        notes: tones
+          .map((name) => explain(name, sounded, chord, where.get(name)!, ctx.settings.accidental))
           .join('   '),
       },
       estimatedSeconds: 12 + level,
     };
   },
 };
+
+/**
+ * What a colour did to the chord, for the line under the reveal.
+ *
+ * The two that move the fifth say what they moved it from, because that
+ * is the whole of what tells them from the ♭13 and the ♯11 they share a
+ * pitch with — and those two say where they sit, for the same reason.
+ * Everything else is a note, and names itself.
+ */
+function explain(
+  name: string,
+  sounded: Chord,
+  printed: Chord,
+  midi: number,
+  accidental: 'sharp' | 'flat' | 'both',
+): string {
+  const plain = (chord: Chord, note: number) =>
+    spellInChord(chord, note, accidental).replace(/-?\d+$/, '');
+  if (name === '♯5' || name === '♭5') {
+    const natural = pcAtOrAbove(mod(printed.rootPc + 7, 12), midi - 6);
+    return `${name}: the 5th ${name === '♯5' ? 'raised' : 'lowered'} (${
+      plain(sounded, midi)} instead of ${plain(printed, natural)})`;
+  }
+  if (name === '♭13' || name === '♯11') {
+    return `${name}: added above the 5th (${plain(sounded, midi)})`;
+  }
+  return `${name} = ${spellInChord(sounded, midi, accidental)}`;
+}
 
 /**
  * Every answer of a given size this chord could be asked about.
@@ -273,7 +380,8 @@ function setsOf(options: readonly string[], size: number): string[] {
       return;
     }
     for (let i = from; i < singles.length; i += 1) {
-      if (taken.some((id) => degreeOf(id) === degreeOf(singles[i]))) continue;
+      if (taken.some((id) => degreeOf(id) === degreeOf(singles[i])
+        || pcOf(id) === pcOf(singles[i]))) continue;
       walk(i + 1, [...taken, singles[i]]);
     }
   };
@@ -287,6 +395,15 @@ const sizeOf = (id: string): number => (id === 'alt' ? ALT_SET.length : id.split
 
 /** Which degree a colour is an alteration of: ♭9, 9 and ♯9 are all ninths. */
 const degreeOf = (id: string): number => Number(COLOUR_NAMES[id]?.replace(/\D/g, '') ?? 0);
+
+/**
+ * Which key it is, which is not the same question.
+ *
+ * A ♯5 and a ♭13 are the same pitch and different degrees, and a chord
+ * cannot sound both: the pair that makes them worth telling apart makes
+ * them impossible to hear together.
+ */
+const pcOf = (id: string): number => mod(colourInterval(COLOUR_NAMES[id] ?? '') ?? -1, 12);
 
 /** Exported for the tests that check a question never offers a stray note. */
 export const colourOptionsFor = (chord: Chord, level: number): string[] => {

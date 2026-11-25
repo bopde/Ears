@@ -243,7 +243,36 @@ export const ALTERED_COLOURS: readonly string[] = ['♭9', '♯9', '♯11', '♭
 /** Where each colour sits above the root. */
 const COLOUR_INTERVALS: Record<string, number> = {
   '7': 11, '♭9': 13, '9': 14, '♯9': 15, '11': 17, '♯11': 18, '♭13': 20, '13': 21,
+  // The two that are not additions. They sit where the 5th sits, because
+  // they are the 5th: see ALTERED_FIFTHS.
+  '♭5': 6, '♯5': 8,
 };
+
+/**
+ * The two colours that change one of the chord's own tones rather than
+ * adding a note above it.
+ *
+ * A ♯5 is the chord's fifth raised. The natural 5th goes and what is left
+ * is a different chord, which is why each of these names a quality the
+ * catalogue already holds: a G7 whose 5th is raised is a G7♯5, and the
+ * exercise plays exactly that.
+ *
+ * They matter because ♭13 and ♯11 are the same two pitches *added over* a
+ * natural 5th. The natural 5th is the whole of the difference, which is
+ * what makes them worth telling apart by ear.
+ */
+export const ALTERED_FIFTHS: Record<string, Readonly<Record<string, string>>> = {
+  '♯5': { 7: '7#5', maj7: 'maj7#5' },
+  '♭5': { 7: '7b5' },
+};
+
+/** Which fifth alterations this basic chord can be asked about, as names. */
+export const alteredFifthsFor = (basicId: string): string[] =>
+  Object.keys(ALTERED_FIFTHS).filter((name) => ALTERED_FIFTHS[name][basicId] !== undefined);
+
+/** What the chord becomes when its fifth is altered this way. */
+export const alteredFifthQuality = (basicId: string, name: string): string | undefined =>
+  ALTERED_FIFTHS[name]?.[basicId];
 
 /**
  * The colours this chord may be played with, as degree names.
@@ -291,12 +320,14 @@ export const colourInterval = (name: string): number | undefined => COLOUR_INTER
  * single tone but the altered set a dominant is comped with, which is heard
  * as one colour rather than as three.
  */
-export const COLOUR_IDS: readonly string[] = ['9', 'b9', '#9', '11', '#11', '13', 'b13', 'alt'];
+export const COLOUR_IDS: readonly string[] = [
+  '9', 'b9', '#9', '11', '#11', '13', 'b13', '#5', 'b5', 'alt',
+];
 
 /** How each reads on a button and in a reveal. */
 export const COLOUR_NAMES: Record<string, string> = {
   9: '9', b9: '♭9', '#9': '♯9', 11: '11', '#11': '♯11', 13: '13', b13: '♭13',
-  alt: 'alt',
+  '#5': '♯5', b5: '♭5', alt: 'alt',
 };
 
 /** And back, for reading a degree off a voicing. */
@@ -307,12 +338,17 @@ export const COLOUR_ID_OF: Record<string, string> = Object.fromEntries(
 /**
  * How hard each is to hear, which is the order they are introduced in.
  *
- * The two a chord is most often comped with come first; the 11th and the
- * ♯11 next, because telling them apart needs the third; the altered ones
- * last, where they belong to one scale rather than to a chord.
+ * The two a chord is most often comped with come first. Then the two
+ * darkenings that need nothing but an ear for a semitone, which used to
+ * wait until level 4 and now arrive at 2: a ♭9 over a dominant is one of
+ * the first sounds anybody recognises in this music, and holding it back
+ * left the first two levels asking 9 or 13 and nothing else. Level 3
+ * brings the ones that need a reference inside the chord — the 11th and
+ * the ♯11 against the third, the altered fifths against the fifth — and
+ * the altered sound, which is three at once, comes last.
  */
 export const COLOUR_TIER: Record<string, number> = {
-  9: 1, 13: 2, 11: 3, '#11': 3, b9: 4, '#9': 4, b13: 5, alt: 5,
+  9: 1, 13: 1, b9: 2, b13: 2, '#9': 3, 11: 3, '#11': 3, '#5': 3, b5: 3, alt: 4,
 };
 
 /** The tones an "alt" answer stands for. */

@@ -45,8 +45,28 @@ trust the labels has to check every one against the sound.
    a. Six semitones above the root is the chord's own ♭5 where the chord
       declares one, and a ♯11 where it does not. Eight is its ♯5, or a ♭13.
 
-   b. So a 7♭5 and a 7 played with a ♯11 are told apart by the chord, which
-      is the only thing that can tell them apart: they are the same notes.
+   b. So a 7♭5 and a 7 played with a ♯11 are told apart by the natural 5th.
+      The altered fifth replaces it; the colour is added above it. Same
+      pitch, one note of difference, and that note is the whole of it.
+
+   c. Which is why the colour exercise can ask for either. A question whose
+      answer is "♯5" plays the chord its fifth makes — a G7 with its 5th
+      raised is a G7♯5 — and offers ♭13 beside it; a question whose answer
+      is "♭13" keeps the 5th and stacks the ♭13 over it. Neither is offered
+      beside the other where the fifth has already moved, because then
+      nothing is left to tell them apart.
+
+6. There is no ♭11 and no ♯13.
+
+   a. A ♭11 is four semitones above the root, which is the major 3rd. On a
+      chord that has one it is that 3rd; on a chord that has a minor 3rd it
+      is a ♯9 (rule 4b).
+
+   b. A ♯13 is ten semitones up, which is the ♭7. On a chord with a seventh
+      it is that seventh, and on one without it is the ♭7 the chord does not
+      have rather than a thirteenth raised.
+
+   c. So neither is a colour anywhere, and neither is an answer.
 
 ## 2. Spelling
 

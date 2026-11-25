@@ -170,16 +170,28 @@ function checkHint(q: Question, where: string) {
       flag('hint: "Bottom of the chord" is not the bottom of the chord', where);
     }
   } else if (label === 'Chord alone') {
-    // The point of it is that the colour is *not* in it: a hint that played
-    // the added note would be handing over the answer.
-    const whole = render((p) => q.play(p.asPerformer()));
-    const all = soundedPcs(whole.perf);
-    if (sounded.size >= all.size) {
-      flag('hint: "Chord alone" plays everything the question did',
-        `${where} hint ${[...sounded]}, question ${[...all]}`);
-    }
-    for (const pc of sounded) {
-      if (!all.has(pc)) flag('hint: "Chord alone" plays a note the chord did not', where);
+    // The chord as it is written, which is not the same as the question
+    // minus a note: where the answer moves the chord's own fifth, the
+    // hint is the only place the natural one is heard. So it is held to
+    // the chord rather than to what the question played — all of it, none
+    // of the answer, and nothing else.
+    const chord = promptChord(q);
+    if (chord) {
+      const answer = String(q.correct.colour ?? '');
+      const named = new Set(
+        (answer === 'alt' ? [...ALT_SET] : answer.split('+').map((id) => COLOUR_NAMES[id]))
+          .map((name) => colourInterval(name))
+          .filter((i): i is number => i !== undefined)
+          .map((i) => mod(chord.rootPc + i, 12)),
+      );
+      for (const pc of sounded) {
+        if (named.has(pc)) flag('hint: "Chord alone" gives the answer away', where);
+      }
+      const own = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
+      if (!samePitchClasses(sounded, own)) {
+        flag('hint: "Chord alone" is not the chord as it is written',
+          `${where} played ${[...sounded]}, chord ${[...own]}`);
+      }
     }
   } else if (label === 'First guide tone') {
     // It has to be the 3rd or the 7th of the chord the progression opens on,
@@ -719,15 +731,37 @@ function optionIsTrue(
     case 'colour': {
       const chord = promptChord(q);
       if (!chord) return null;
+      const names = colourTones(option.id);
+      const degree = (pc: number) => mod(pc - chord.rootPc, 12);
+      const sounds = (semitones: number) =>
+        [...sound.handPcs].some((pc) => degree(pc) === mod(semitones, 12));
+      const moves = names.includes('♯5') || names.includes('♭5');
+      // The two that move the chord's own fifth take its place, so the
+      // natural 5th has to be gone; the two that are the same pitches
+      // added over it need it there. That one note is the whole of the
+      // difference between them, and judging by pitch class alone called
+      // a ♯5 question a ♭13 question as well.
+      const fifth = chord.quality.intervals.some((i) => mod(i, 12) === 7);
+      for (const name of names) {
+        if (name === '♯5' || name === '♭5') {
+          if (sounds(7)) return false;
+        } else if (fifth && !moves && (name === '♭13' || name === '♯11')) {
+          if (!sounds(7)) return false;
+        }
+      }
       const own = new Set(chord.quality.intervals.map((i) => mod(chord.rootPc + i, 12)));
-      const added = new Set([...sound.handPcs].filter((pc) => !own.has(pc)));
-      const wanted = new Set(
-        colourTones(option.id)
-          .map((name) => colourInterval(name))
+      // A moved fifth is not in what the chord adds, because it is not an
+      // addition: what sounded is the chord's own tones with one of them
+      // somewhere else.
+      const changed = new Set(
+        names.map((name) => colourInterval(name))
           .filter((i): i is number => i !== undefined)
           .map((i) => mod(chord.rootPc + i, 12)),
       );
-      return added.size === wanted.size && [...wanted].every((pc) => added.has(pc));
+      const added = new Set(
+        [...sound.handPcs].filter((pc) => !own.has(pc) || changed.has(pc)),
+      );
+      return added.size === changed.size && [...changed].every((pc) => added.has(pc));
     }
     case 'voicing': {
       const chord = promptChord(q);

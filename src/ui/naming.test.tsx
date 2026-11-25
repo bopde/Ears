@@ -276,7 +276,15 @@ describe('renaming what a reader sees, not what a profile stores', () => {
       '7b13', '13b9', '7alt',
     ]);
     expect(INVERSIONS.map((i) => i.id)).toEqual(['root', '1st', '2nd', '3rd']);
-    expect([...COLOUR_IDS]).toEqual(['9', 'b9', '#9', '11', '#11', '13', 'b13', 'alt']);
+    // Additions are expected; what must never happen is a rename or a
+    // removal, because the id is the key a learner's history is under.
+    // So the list that has ever been written to a profile is frozen here
+    // and the current one is checked to still hold all of it.
+    for (const id of ['9', 'b9', '#9', '11', '#11', '13', 'b13', 'alt']) {
+      expect([...COLOUR_IDS], `colour ${id} was stored once`).toContain(id);
+    }
+    expect([...COLOUR_IDS])
+      .toEqual(['9', 'b9', '#9', '11', '#11', '13', 'b13', '#5', 'b5', 'alt']);
     expect([...VOICING_STYLES]).toEqual([
       'close', 'spread', 'drop2', 'rootless', 'shell', 'quartal', 'upperStructure',
     ]);

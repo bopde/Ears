@@ -9,6 +9,7 @@ import { importProfile } from './store';
 import { ANSWER_DELAY_OPTIONS, defaultSettings, normaliseSettings } from '../session/settings';
 import { chordConceptId } from '../music/chords';
 import { makeRng } from '../lib/rng';
+import { COLOUR_IDS } from '../music/degrees';
 
 const settings = defaultSettings();
 const HOUR = 3600_000;
@@ -257,6 +258,24 @@ describe('profile migration', () => {
       streak: { count: 2, lastDay: '2026-01-01' },
       settings: { durationMinutes: 20, autoAdvance: true, ...overrides },
     });
+
+  it('switches on the colours added after the profile was written', () => {
+    // A saved colour list is taken as the learner's choice, so a colour
+    // added later would never be asked about — switched off by nothing
+    // more than having been here first.
+    const saved = v1({ colours: ['9', '13', 'b9'] });
+    const migrated = importProfile(saved)!;
+    expect(migrated.settings.colours, 'the two that move a fifth').toEqual(
+      ['9', '13', 'b9', '#5', 'b5'],
+    );
+    // What was already chosen stays chosen, and nothing else arrives.
+    expect(migrated.settings.colours).not.toContain('11');
+  });
+
+  it('leaves a profile that never chose its colours with all of them', () => {
+    const migrated = importProfile(v1())!;
+    expect(migrated.settings.colours, 'the default is everything').toEqual([...COLOUR_IDS]);
+  });
 
   it('clears the old auto-advance default so feedback waits for a tap', () => {
     const migrated = importProfile(v1());

@@ -11,7 +11,8 @@ import {
   type RootlessForm, type Voicing, type VoicingStyle,
 } from '../music/voicing';
 import {
-  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, handsLabel, labelsTrueOf, voicingAnswerLabel, voicingBass,
+  NAMEABLE_VOICINGS, approachFromAbove, bassStyleFor, handsLabel, labelsTrueOf,
+  nameableVoicings, voicingAnswerLabel, voicingBass,
 } from './voicing-plan';
 import { Performer } from '../audio/performer';
 import { approachInto, chooseLever, playVoicing } from './levers';
@@ -29,9 +30,9 @@ import { clamp, mod } from '../lib/util';
  * sound enough like each other on some chords that the question would have
  * more than one defensible answer.
  */
-function shapesFor(settings: PracticeSettings): VoicingStyle[] {
+function shapesFor(settings: PracticeSettings, difficulty: number): VoicingStyle[] {
   void settings;
-  return NAMEABLE_VOICINGS;
+  return nameableVoicings(difficulty);
 }
 
 /** A quality wide enough that the shapes it is voiced in differ audibly. */
@@ -165,15 +166,16 @@ export const voicingExercise: ExerciseType = {
   short: 'Voicing',
   description: 'One chord sounds. Say how it is voiced, not what it is.',
   baseSeconds: 16,
-  pool: (settings) => shapesFor(settings).map((s) => voicingConceptId(s)),
+  // Every shape the question can ever ask about, which is what the
+  // learning model tracks against; which of them a level asks about is
+  // `nameableVoicings`.
+  pool: () => NAMEABLE_VOICINGS.map((s) => voicingConceptId(s)),
   generate(ctx): Question | null {
-    const shapes = shapesFor(ctx.settings);
-    const target = chooseTarget(
-      ctx,
-      shapes,
-      (s) => voicingConceptId(s),
-      (s) => (s === 'close' ? 1 : s === 'spread' ? 2 : s === 'shell' ? 3 : 4),
-    );
+    const shapes = shapesFor(ctx.settings, ctx.difficulty);
+    // Evenly across what the level asks about: the curve has already
+    // decided which shapes those are, and a shape it allows has to come
+    // up often enough that a guess from the base rate beats nothing.
+    const target = chooseTarget(ctx, shapes, voicingConceptId, () => ctx.difficulty);
     if (!target) return null;
 
     const qualities = voicableQualities(ctx.settings);

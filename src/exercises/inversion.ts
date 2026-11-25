@@ -78,12 +78,13 @@ export const inversionExercise: ExerciseType = {
     const byId = new Map(qualities.flatMap((q) => inversionsOf(q).map((i) => [i.id, i] as const)));
     const available = [...byId.values()].sort((a, b) => a.index - b.index);
     if (available.length < 2) return null;
-    const inversion = chooseTarget(
-      ctx,
-      available,
-      (i) => inversionConceptId(i.id),
-      (i) => i.tier,
-    );
+    // Evenly across the four. A tier weighting here favoured the third
+    // inversion at level 4 and root position at level 1, and an inversion
+    // is not harder to hear for being higher up the stack — what is left
+    // uneven is only which chords have one, since a sixth chord takes
+    // its triad inversions and no more.
+    const inversion = chooseTarget(ctx, available, (i) => inversionConceptId(i.id),
+      () => ctx.difficulty);
     if (!inversion) return null;
 
     const fitting = qualities.filter((q) => inversionsOf(q).some((i) => i.id === inversion.id));

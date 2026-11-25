@@ -49,6 +49,34 @@ const CURVE: VoicingStyle[][] = [
 const PLAIN: VoicingStyle[] = ['close'];
 const REALISTIC: VoicingStyle[] = ['rootless', 'drop2'];
 
+/**
+ * Which voicings the naming question asks about at each level.
+ *
+ * Not the same list as the one above, and for a reason: that one is how
+ * a chord is *comped* at a level, and this is which shapes a learner can
+ * be asked to tell apart. Comping at level 1 means close position and
+ * nothing else; a question with one answer is not a question.
+ *
+ * Each level's styles are drawn evenly, and a style not on a level's
+ * list is neither an answer nor an option there. The exercise used to
+ * offer all five at every level on a tier weighting, which made close
+ * voicings 53% of the answers at level 1 and drop 2 five per cent — and
+ * at levels 4 and 5 close came back the other way round, at 3%. Both
+ * ends are the same problem: a guess from the base rate beat listening.
+ */
+const NAMEABLE_CURVE: VoicingStyle[][] = [
+  ['close', 'spread', 'shell'],
+  ['close', 'spread', 'shell', 'rootless'],
+  ['close', 'spread', 'shell', 'rootless', 'drop2'],
+  ['spread', 'shell', 'rootless', 'drop2'],
+  ['shell', 'rootless', 'drop2'],
+];
+
+/** The shapes the naming question may ask about at this level. */
+export function nameableVoicings(difficulty: number): VoicingStyle[] {
+  return NAMEABLE_CURVE[clamp(Math.round(difficulty), 1, 5) - 1];
+}
+
 /** The styles a question may use at this level under this setting. */
 export function voicingChoices(mode: VoicingMode, difficulty: number): VoicingStyle[] {
   if (mode === 'plain') return PLAIN;
